@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/stackmathgame/db" VERSION="20250101" COMMENT="XMLDB file for local_stackmathgame"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+  <TABLES>
+
+    <!-- ================================================================
+         LABEL: Site-wide "game world" groupings for cross-quiz progress
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_label" COMMENT="Site-wide labels grouping quiz attempts for shared progress">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="name"         TYPE="char" LENGTH="100" NOTNULL="true"
+               COMMENT="Human-readable label name, e.g. 'Lineare Algebra WS25'"/>
+        <FIELD NAME="description"  TYPE="text"             NOTNULL="false"/>
+        <!-- Site-wide: contextid always = SYSCONTEXT; kept for future scope extension -->
+        <FIELD NAME="contextid"    TYPE="int"  LENGTH="10" NOTNULL="true"
+               COMMENT="Moodle context ID. Site-wide = SYSCONTEXT (1)."/>
+        <FIELD NAME="createdby"    TYPE="int"  LENGTH="10" NOTNULL="true"  COMMENT="userid of creator"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_name"      UNIQUE="true"  FIELDS="name"      COMMENT="Label names are globally unique"/>
+        <INDEX NAME="idx_contextid" UNIQUE="false" FIELDS="contextid"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ================================================================
+         GAMESTATE: One row per (user × label) — quiz-agnostic progress
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_gamestate" COMMENT="Player game state per label (cross-quiz)">
+      <FIELDS>
+        <FIELD NAME="id"              TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"          TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid"         TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <!-- JSON array of solved question IDs: ["q1","q3","world2_boss"] -->
+        <FIELD NAME="solved"          TYPE="text"             NOTNULL="false"
+               COMMENT="JSON array of solved question IDs"/>
+        <!-- JSON array of solved variant page numbers: [0,1,4,5] -->
+        <FIELD NAME="solved_variants" TYPE="text"             NOTNULL="false"
+               COMMENT="JSON array of solved variant page indices"/>
+        <FIELD NAME="timecreated"     TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"   TYPE="primary"  FIELDS="id"/>
+        <KEY NAME="fk_label"  TYPE="foreign"  FIELDS="labelid"
+             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="fk_user"   TYPE="foreign"  FIELDS="userid"
+             REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <!-- Primary lookup: one row per user per label -->
+        <INDEX NAME="idx_userid_labelid" UNIQUE="true" FIELDS="userid, labelid"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ================================================================
+         SCORE: Extensible score types per (user × label)
+         score types: 'fairies', 'mana', 'xp', 'gold', … (future)
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_score" COMMENT="Extensible score values per player per label">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"       TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="labelid"      TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="scoretype"    TYPE="char" LENGTH="50"  NOTNULL="true"
+               COMMENT="Score type key, e.g. fairies, mana, xp"/>
+        <FIELD NAME="value"        TYPE="int"  LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"  TYPE="primary"  FIELDS="id"/>
+        <KEY NAME="fk_label" TYPE="foreign"  FIELDS="labelid"
+             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_user_label_type" UNIQUE="true" FIELDS="userid, labelid, scoretype"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ================================================================
+         QUIZ: Per-quiz plugin configuration
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_quiz" COMMENT="Plugin configuration per Moodle quiz instance">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <!-- FK to mdl_quiz.id -->
+        <FIELD NAME="quizid"       TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <!-- null = plugin disabled for this quiz -->
+        <FIELD NAME="labelid"      TYPE="int"  LENGTH="10" NOTNULL="false"/>
+        <!-- FK to mdl_local_stackmathgame_theme.id; null = default theme -->
+        <FIELD NAME="themeid"      TYPE="int"  LENGTH="10" NOTNULL="false"/>
+        <!--
+          JSON structure for overrides:
+          {
+            "groups": { "sectionid_42": { "name": "Vektoren", "enemy": "IceGolem" } },
+            "mechanics": { "mana_start": 20, "mana_on_fail": -3, "fairies_on_win": 1 }
+          }
+        -->
+        <FIELD NAME="configjson"   TYPE="text"             NOTNULL="false"/>
+        <FIELD NAME="enabled"      TYPE="int"  LENGTH="1"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"  TYPE="primary"  FIELDS="id"/>
+        <KEY NAME="fk_label" TYPE="foreign"  FIELDS="labelid"
+             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="fk_theme" TYPE="foreign"  FIELDS="themeid"
+             REFTABLE="local_stackmathgame_theme" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_quizid" UNIQUE="true" FIELDS="quizid"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ================================================================
+         THEME: Visual design packs (player, enemies, backgrounds)
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_theme" COMMENT="Visual theme configurations">
+      <FIELDS>
+        <FIELD NAME="id"          TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="name"        TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="shortname"   TYPE="char" LENGTH="50"  NOTNULL="true"
+               COMMENT="Used as pix/ subdirectory key, e.g. 'fantasy'"/>
+        <!--
+          Full theme JSON:
+          {
+            "player": {
+              "class": "Elf",
+              "sprites": {
+                "idle":   { "file": "Elf_03__IDLE_spritesheet.png",   "w":450,"h":580,"frames":10,"interval":75 },
+                "attack": { "file": "Elf_03__ATTACK_spritesheet.png", "w":450,"h":580,"frames":10,"interval":75 },
+                "run":    { "file": "Elf_03__RUN_spritesheet.png",    "w":465,"h":580,"frames":10,"interval":75 }
+              }
+            },
+            "enemies": [
+              { "class": "Troll",       "weight": 1, "sprites": { … } },
+              { "class": "IceGolem",    "weight": 2, "sprites": { … } },
+              { "class": "ForestGolem", "weight": 2, "sprites": { … } }
+            ],
+            "backgrounds": {
+              "battle":   "bg-forest1.png",
+              "city":     "bg-elven_land4.png",
+              "clearing": "bg-forest4.png"
+            },
+            "ui": {
+              "fairy":         "fairy.svg",
+              "fairy_freed":   "fairy-black.svg",
+              "sign_post":     "sign-post.png",
+              "house":         "house-solid.svg",
+              "skull":         "skull.svg",
+              "flag":          "flag.svg",
+              "spiral":        "oily-spiral-svgrepo-com.svg"
+            }
+          }
+        -->
+        <FIELD NAME="configjson"  TYPE="text"             NOTNULL="true"/>
+        <FIELD NAME="enabled"     TYPE="int"  LENGTH="1"  NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="sortorder"   TYPE="int"  LENGTH="5"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int"  LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_shortname" UNIQUE="true" FIELDS="shortname"/>
+        <INDEX NAME="idx_enabled"   UNIQUE="false" FIELDS="enabled, sortorder"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ================================================================
+         INVENTORY: Future: items, boosters, avatar upgrades
+         ================================================================ -->
+    <TABLE NAME="local_stackmathgame_inventory" COMMENT="Player inventory for items and boosters (future use)">
+      <FIELDS>
+        <FIELD NAME="id"         TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"     TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <!-- e.g. 'potion_mana', 'booster_xp2', 'cosmetic_hat_wizard', 'avatar_sword_2' -->
+        <FIELD NAME="itemtype"   TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="itemid"     TYPE="int"  LENGTH="10"  NOTNULL="false"
+               COMMENT="FK to future mdl_local_stackmathgame_item table"/>
+        <FIELD NAME="quantity"   TYPE="int"  LENGTH="10"  NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="acquiredat" TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="expiresat"  TYPE="int"  LENGTH="10"  NOTNULL="false"
+               COMMENT="null = never expires"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"  TYPE="primary" FIELDS="id"/>
+        <KEY NAME="fk_label" TYPE="foreign" FIELDS="labelid"
+             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_user_label" UNIQUE="false" FIELDS="userid, labelid"/>
+        <INDEX NAME="idx_itemtype"   UNIQUE="false" FIELDS="userid, labelid, itemtype"/>
+      </INDEXES>
+    </TABLE>
+
+  </TABLES>
+</XMLDB>
