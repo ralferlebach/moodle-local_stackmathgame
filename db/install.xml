@@ -1,205 +1,364 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/stackmathgame/db" VERSION="20250101" COMMENT="XMLDB file for local_stackmathgame"
+<XMLDB PATH="local/stackmathgame/db" VERSION="2026032501" COMMENT="Install XMLDB file for local_stackmathgame"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
   <TABLES>
-
-    <!-- ================================================================
-         LABEL: Site-wide "game world" groupings for cross-quiz progress
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_label" COMMENT="Site-wide labels grouping quiz attempts for shared progress">
+    <TABLE NAME="local_stackmathgame_label" COMMENT="Global labels used to share progress across quizzes.">
       <FIELDS>
-        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
-        <FIELD NAME="name"         TYPE="char" LENGTH="100" NOTNULL="true"
-               COMMENT="Human-readable label name, e.g. 'Lineare Algebra WS25'"/>
-        <FIELD NAME="description"  TYPE="text"             NOTNULL="false"/>
-        <!-- Site-wide: contextid always = SYSCONTEXT; kept for future scope extension -->
-        <FIELD NAME="contextid"    TYPE="int"  LENGTH="10" NOTNULL="true"
-               COMMENT="Moodle context ID. Site-wide = SYSCONTEXT (1)."/>
-        <FIELD NAME="createdby"    TYPE="int"  LENGTH="10" NOTNULL="true"  COMMENT="userid of creator"/>
-        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="idnumber" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="timedeleted" TYPE="int" LENGTH="10" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="name_uix" UNIQUE="true" FIELDS="name"/>
+        <INDEX NAME="idnumber_uix" UNIQUE="true" FIELDS="idnumber"/>
+        <INDEX NAME="status_ix" UNIQUE="false" FIELDS="status"/>
+        <INDEX NAME="timedeleted_ix" UNIQUE="false" FIELDS="timedeleted"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_design" COMMENT="Design definitions bound to a mode subplugin component.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="150" NOTNULL="true"/>
+        <FIELD NAME="slug" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="modecomponent" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="thumbnailfilename" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="thumbnailfileitemid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="isbundled" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="isactive" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="versioncode" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="narrativejson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="uijson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="mechanicsjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="assetmanifestjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="importmetajson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="slug_uix" UNIQUE="true" FIELDS="slug"/>
+        <INDEX NAME="modename_uix" UNIQUE="true" FIELDS="modecomponent,name"/>
+        <INDEX NAME="modeactive_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_profile" COMMENT="User game profile per label.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="score" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="xp" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="levelno" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="softcurrency" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="hardcurrency" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="avatarconfigjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="progressjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="statsjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="flagsjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="lastquizid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="lastdesignid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="lastaccess" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="lastquizid_fk" TYPE="foreign" FIELDS="lastquizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="lastdesignid_fk" TYPE="foreign" FIELDS="lastdesignid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="userlabel_uix" UNIQUE="true" FIELDS="userid,labelid"/>
+        <INDEX NAME="label_score_ix" UNIQUE="false" FIELDS="labelid,score"/>
+        <INDEX NAME="label_xp_ix" UNIQUE="false" FIELDS="labelid,xp"/>
+        <INDEX NAME="label_level_ix" UNIQUE="false" FIELDS="labelid,levelno"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_quizcfg" COMMENT="Quiz specific game configuration.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="requiresbehaviour" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="teacherdisplayname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="courseid_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+        <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="quizid_uix" UNIQUE="true" FIELDS="quizid"/>
+        <INDEX NAME="labelid_ix" UNIQUE="false" FIELDS="labelid"/>
+        <INDEX NAME="designid_ix" UNIQUE="false" FIELDS="designid"/>
+        <INDEX NAME="enabled_ix" UNIQUE="false" FIELDS="enabled"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_design_asset" COMMENT="Design assets inventory.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="assetkey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="assettype" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="storagekind" TYPE="char" LENGTH="20" NOTNULL="true"/>
+        <FIELD NAME="filepath" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="filearea" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="mimetype" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="designasset_uix" UNIQUE="true" FIELDS="designid,assetkey"/>
+        <INDEX NAME="designasset_type_ix" UNIQUE="false" FIELDS="designid,assettype"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_questionmap" COMMENT="Maps quiz slots to mode-neutral game nodes.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="slotnumber" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="nodekey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="nodetype" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="questionid_fk" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="quizslot_uix" UNIQUE="true" FIELDS="quizid,slotnumber"/>
+        <INDEX NAME="quiznodekey_uix" UNIQUE="true" FIELDS="quizid,nodekey"/>
+        <INDEX NAME="quiznodetype_ix" UNIQUE="false" FIELDS="quizid,nodetype"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_eventlog" COMMENT="Event and transaction history.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="eventtype" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="source" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="valueint" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="valuechar" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="payloadjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userid_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+        <KEY NAME="questionid_fk" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="label_event_ix" UNIQUE="false" FIELDS="labelid,eventtype"/>
+        <INDEX NAME="user_label_time_ix" UNIQUE="false" FIELDS="userid,labelid,timecreated"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_inventory" COMMENT="Inventory items owned by a profile.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="itemkey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="quantity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="statejson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="profileitem_uix" UNIQUE="true" FIELDS="profileid,itemkey"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_booster" COMMENT="Boosters owned or active on a profile.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="boosterkey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="charges" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="expiresat" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="profilestatus_ix" UNIQUE="false" FIELDS="profileid,status"/>
+        <INDEX NAME="expiresat_ix" UNIQUE="false" FIELDS="expiresat"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_avatar_upgrade" COMMENT="Avatar progression per profile.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="upgradekey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="tierno" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="statejson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="profileupgrade_uix" UNIQUE="true" FIELDS="profileid,upgradekey"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_achievement" COMMENT="Achievement definitions.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="achievementkey" TYPE="char" LENGTH="100" NOTNULL="true"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="150" NOTNULL="true"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="labelscope" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="modecomponent" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="isactive" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_name"      UNIQUE="true"  FIELDS="name"      COMMENT="Label names are globally unique"/>
-        <INDEX NAME="idx_contextid" UNIQUE="false" FIELDS="contextid"/>
+        <INDEX NAME="achievementkey_uix" UNIQUE="true" FIELDS="achievementkey"/>
+        <INDEX NAME="modeactive_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
       </INDEXES>
     </TABLE>
 
-    <!-- ================================================================
-         GAMESTATE: One row per (user × label) — quiz-agnostic progress
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_gamestate" COMMENT="Player game state per label (cross-quiz)">
+    <TABLE NAME="local_stackmathgame_profile_achievement" COMMENT="Achievements earned by profiles.">
       <FIELDS>
-        <FIELD NAME="id"              TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="userid"          TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="labelid"         TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <!-- JSON array of solved question IDs: ["q1","q3","world2_boss"] -->
-        <FIELD NAME="solved"          TYPE="text"             NOTNULL="false"
-               COMMENT="JSON array of solved question IDs"/>
-        <!-- JSON array of solved variant page numbers: [0,1,4,5] -->
-        <FIELD NAME="solved_variants" TYPE="text"             NOTNULL="false"
-               COMMENT="JSON array of solved variant page indices"/>
-        <FIELD NAME="timecreated"     TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="timemodified"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary"   TYPE="primary"  FIELDS="id"/>
-        <KEY NAME="fk_label"  TYPE="foreign"  FIELDS="labelid"
-             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
-        <KEY NAME="fk_user"   TYPE="foreign"  FIELDS="userid"
-             REFTABLE="user" REFFIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <!-- Primary lookup: one row per user per label -->
-        <INDEX NAME="idx_userid_labelid" UNIQUE="true" FIELDS="userid, labelid"/>
-      </INDEXES>
-    </TABLE>
-
-    <!-- ================================================================
-         SCORE: Extensible score types per (user × label)
-         score types: 'fairies', 'mana', 'xp', 'gold', … (future)
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_score" COMMENT="Extensible score values per player per label">
-      <FIELDS>
-        <FIELD NAME="id"           TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="userid"       TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="labelid"      TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="scoretype"    TYPE="char" LENGTH="50"  NOTNULL="true"
-               COMMENT="Score type key, e.g. fairies, mana, xp"/>
-        <FIELD NAME="value"        TYPE="int"  LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary"  TYPE="primary"  FIELDS="id"/>
-        <KEY NAME="fk_label" TYPE="foreign"  FIELDS="labelid"
-             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="idx_user_label_type" UNIQUE="true" FIELDS="userid, labelid, scoretype"/>
-      </INDEXES>
-    </TABLE>
-
-    <!-- ================================================================
-         QUIZ: Per-quiz plugin configuration
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_quiz" COMMENT="Plugin configuration per Moodle quiz instance">
-      <FIELDS>
-        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <!-- FK to mdl_quiz.id -->
-        <FIELD NAME="quizid"       TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <!-- null = plugin disabled for this quiz -->
-        <FIELD NAME="labelid"      TYPE="int"  LENGTH="10" NOTNULL="false"/>
-        <!-- FK to mdl_local_stackmathgame_theme.id; null = default theme -->
-        <FIELD NAME="themeid"      TYPE="int"  LENGTH="10" NOTNULL="false"/>
-        <!--
-          JSON structure for overrides:
-          {
-            "groups": { "sectionid_42": { "name": "Vektoren", "enemy": "IceGolem" } },
-            "mechanics": { "mana_start": 20, "mana_on_fail": -3, "fairies_on_win": 1 }
-          }
-        -->
-        <FIELD NAME="configjson"   TYPE="text"             NOTNULL="false"/>
-        <FIELD NAME="enabled"      TYPE="int"  LENGTH="1"  NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary"  TYPE="primary"  FIELDS="id"/>
-        <KEY NAME="fk_label" TYPE="foreign"  FIELDS="labelid"
-             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
-        <KEY NAME="fk_theme" TYPE="foreign"  FIELDS="themeid"
-             REFTABLE="local_stackmathgame_theme" REFFIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="idx_quizid" UNIQUE="true" FIELDS="quizid"/>
-      </INDEXES>
-    </TABLE>
-
-    <!-- ================================================================
-         THEME: Visual design packs (player, enemies, backgrounds)
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_theme" COMMENT="Visual theme configurations">
-      <FIELDS>
-        <FIELD NAME="id"          TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="name"        TYPE="char" LENGTH="100" NOTNULL="true"/>
-        <FIELD NAME="shortname"   TYPE="char" LENGTH="50"  NOTNULL="true"
-               COMMENT="Used as pix/ subdirectory key, e.g. 'fantasy'"/>
-        <!--
-          Full theme JSON:
-          {
-            "player": {
-              "class": "Elf",
-              "sprites": {
-                "idle":   { "file": "Elf_03__IDLE_spritesheet.png",   "w":450,"h":580,"frames":10,"interval":75 },
-                "attack": { "file": "Elf_03__ATTACK_spritesheet.png", "w":450,"h":580,"frames":10,"interval":75 },
-                "run":    { "file": "Elf_03__RUN_spritesheet.png",    "w":465,"h":580,"frames":10,"interval":75 }
-              }
-            },
-            "enemies": [
-              { "class": "Troll",       "weight": 1, "sprites": { … } },
-              { "class": "IceGolem",    "weight": 2, "sprites": { … } },
-              { "class": "ForestGolem", "weight": 2, "sprites": { … } }
-            ],
-            "backgrounds": {
-              "battle":   "bg-forest1.png",
-              "city":     "bg-elven_land4.png",
-              "clearing": "bg-forest4.png"
-            },
-            "ui": {
-              "fairy":         "fairy.svg",
-              "fairy_freed":   "fairy-black.svg",
-              "sign_post":     "sign-post.png",
-              "house":         "house-solid.svg",
-              "skull":         "skull.svg",
-              "flag":          "flag.svg",
-              "spiral":        "oily-spiral-svgrepo-com.svg"
-            }
-          }
-        -->
-        <FIELD NAME="configjson"  TYPE="text"             NOTNULL="true"/>
-        <FIELD NAME="enabled"     TYPE="int"  LENGTH="1"  NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="sortorder"   TYPE="int"  LENGTH="5"  NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timecreated" TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="achievementid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="earnedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="progressvalue" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="statejson" TYPE="text" NOTNULL="false"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
+        <KEY NAME="achievementid_fk" TYPE="foreign" FIELDS="achievementid" REFTABLE="local_stackmathgame_achievement" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_shortname" UNIQUE="true" FIELDS="shortname"/>
-        <INDEX NAME="idx_enabled"   UNIQUE="false" FIELDS="enabled, sortorder"/>
+        <INDEX NAME="profileachievement_uix" UNIQUE="true" FIELDS="profileid,achievementid"/>
       </INDEXES>
     </TABLE>
 
-    <!-- ================================================================
-         INVENTORY: Future: items, boosters, avatar upgrades
-         ================================================================ -->
-    <TABLE NAME="local_stackmathgame_inventory" COMMENT="Player inventory for items and boosters (future use)">
+    <TABLE NAME="local_stackmathgame_shop_transaction" COMMENT="Shop and economy transaction log.">
       <FIELDS>
-        <FIELD NAME="id"         TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="userid"     TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="labelid"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
-        <!-- e.g. 'potion_mana', 'booster_xp2', 'cosmetic_hat_wizard', 'avatar_sword_2' -->
-        <FIELD NAME="itemtype"   TYPE="char" LENGTH="100" NOTNULL="true"/>
-        <FIELD NAME="itemid"     TYPE="int"  LENGTH="10"  NOTNULL="false"
-               COMMENT="FK to future mdl_local_stackmathgame_item table"/>
-        <FIELD NAME="quantity"   TYPE="int"  LENGTH="10"  NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="acquiredat" TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="expiresat"  TYPE="int"  LENGTH="10"  NOTNULL="false"
-               COMMENT="null = never expires"/>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="transactiontype" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="itemkey" TYPE="char" LENGTH="100" NOTNULL="false"/>
+        <FIELD NAME="currencytype" TYPE="char" LENGTH="20" NOTNULL="true"/>
+        <FIELD NAME="amount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="payloadjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
-        <KEY NAME="primary"  TYPE="primary" FIELDS="id"/>
-        <KEY NAME="fk_label" TYPE="foreign" FIELDS="labelid"
-             REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_user_label" UNIQUE="false" FIELDS="userid, labelid"/>
-        <INDEX NAME="idx_itemtype"   UNIQUE="false" FIELDS="userid, labelid, itemtype"/>
+        <INDEX NAME="profiletype_ix" UNIQUE="false" FIELDS="profileid,transactiontype"/>
+        <INDEX NAME="timecreated_ix" UNIQUE="false" FIELDS="timecreated"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_stackmathgame_design_package" COMMENT="Versioned import/export package metadata for designs.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="packageidentifier" TYPE="char" LENGTH="150" NOTNULL="true"/>
+        <FIELD NAME="packageversion" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="manifestjson" TYPE="text" NOTNULL="true"/>
+        <FIELD NAME="checksum" TYPE="char" LENGTH="128" NOTNULL="false"/>
+        <FIELD NAME="origin" TYPE="char" LENGTH="50" NOTNULL="true"/>
+        <FIELD NAME="importedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="exportedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+        <KEY NAME="importedby_fk" TYPE="foreign" FIELDS="importedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="exportedby_fk" TYPE="foreign" FIELDS="exportedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="designversion_uix" UNIQUE="true" FIELDS="designid,packageversion"/>
+        <INDEX NAME="packageidentifier_ix" UNIQUE="false" FIELDS="packageidentifier"/>
       </INDEXES>
     </TABLE>
 

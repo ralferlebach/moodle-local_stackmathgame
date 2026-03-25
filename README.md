@@ -1,1 +1,10 @@
-# moodle-local_stackmathgame
+# local_stackmathgame
+
+Installable Moodle local plugin scaffold for integrating the analysed STACK math game capabilities.
+
+Implemented in this package:
+- fixed hook registration without the missing `navigation_hooks` callback class;
+- hook-based AMD injection for quiz attempt pages;
+- generated language packs (`en`, `de`);
+- seeded built-in fantasy theme and cache purge helper;
+- added missing studio/privacy/helper classes required for installation.
