@@ -3,8 +3,12 @@ namespace local_stackmathgame\game;
 
 defined('MOODLE_INTERNAL') || die();
 
+use local_stackmathgame\local\packaging\package_registry;
+
 /**
- * Theme record handling.
+ * Design record handling.
+ *
+ * Legacy class name retained while schema uses local_stackmathgame_design.
  */
 class theme_manager {
     /** @var array<int,?\stdClass> */
@@ -21,7 +25,7 @@ class theme_manager {
             return self::$cache[$themeid];
         }
 
-        $record = $DB->get_record('local_stackmathgame_theme', ['id' => $themeid, 'enabled' => 1]);
+        $record = $DB->get_record('local_stackmathgame_design', ['id' => $themeid, 'isactive' => 1]);
         self::$cache[$themeid] = $record ?: null;
         return self::$cache[$themeid];
     }
@@ -31,15 +35,15 @@ class theme_manager {
 
         $theme = $themeid > 0 ? self::get_theme($themeid) : null;
         if (!$theme) {
-            $theme = $DB->get_records('local_stackmathgame_theme', ['enabled' => 1], 'sortorder ASC', '*', 0, 1);
+            $theme = $DB->get_records('local_stackmathgame_design', ['isactive' => 1], 'name ASC', '*', 0, 1);
             $theme = $theme ? reset($theme) : null;
         }
 
-        if (!$theme || empty($theme->configjson)) {
+        if (!$theme || empty($theme->uijson)) {
             return [];
         }
 
-        return json_decode($theme->configjson, true) ?: [];
+        return json_decode((string)$theme->uijson, true) ?: [];
     }
 
     /**
@@ -47,48 +51,51 @@ class theme_manager {
      */
     public static function get_all_enabled(): array {
         global $DB;
-        return array_values($DB->get_records('local_stackmathgame_theme', ['enabled' => 1], 'sortorder ASC'));
+        return array_values($DB->get_records('local_stackmathgame_design', ['isactive' => 1], 'name ASC'));
     }
 
-    public static function asset_base_url(string $shortname): string {
-        return (string)new \moodle_url('/local/stackmathgame/pix/themes/' . clean_param($shortname, PARAM_SAFEDIR) . '/');
-    }
-
-    public static function seed_default_theme(): void {
-        global $DB;
-
-        if ($DB->record_exists('local_stackmathgame_theme', ['shortname' => 'fantasy'])) {
-            return;
+    public static function asset_base_url(string $slug): string {
+        global $CFG;
+        $package = package_registry::get_bundled_design_package_by_slug($slug);
+        if ($package) {
+            $relative = str_replace($CFG->dirroot . '/', '', $package['packagedir']);
+            return (string)new \moodle_url('/' . $relative . '/assets/');
         }
 
-        $now = time();
-        $DB->insert_record('local_stackmathgame_theme', (object)[
-            'name' => 'Fantasy Adventure',
-            'shortname' => 'fantasy',
-            'configjson' => json_encode(self::default_fantasy_config(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            'isbuiltin' => 1,
-            'enabled' => 1,
-            'sortorder' => 0,
-            'timecreated' => $now,
-            'timemodified' => $now,
-        ]);
-        self::purge_cache();
+        return (string)new \moodle_url('/local/stackmathgame/pix/packages/shared/');
     }
 
-    public static function default_fantasy_config(): array {
-        return [
-            'description' => 'Default fantasy-themed wrapper for STACK Math Game.',
-            'backgrounds' => [
-                'city' => 'bg-elven_land4.png',
-                'battle' => 'bg-forest1.png',
-                'clearing' => 'bg-forest4.png',
-            ],
-            'ui' => [
-                'flag' => 'flag.svg',
-                'skull' => 'skull.svg',
-                'house' => 'house-solid.svg',
-                'fairy' => 'fairy.svg',
-            ],
-        ];
+    public static function seed_default_themes(): void {
+        global $DB;
+
+        $now = time();
+        foreach (package_registry::get_bundled_design_packages() as $package) {
+            if ($DB->record_exists('local_stackmathgame_design', ['slug' => $package['slug']])) {
+                continue;
+            }
+
+            $DB->insert_record('local_stackmathgame_design', (object)[
+                'name' => $package['name'],
+                'slug' => $package['slug'],
+                'modecomponent' => $package['modecomponent'],
+                'description' => $package['description'],
+                'thumbnailfilename' => $package['manifest']['thumbnail'] ?? null,
+                'thumbnailfileitemid' => null,
+                'isbundled' => 1,
+                'isactive' => 1,
+                'versioncode' => $package['versioncode'],
+                'narrativejson' => $package['narrativejson'],
+                'uijson' => $package['uijson'],
+                'mechanicsjson' => $package['mechanicsjson'],
+                'assetmanifestjson' => $package['assetmanifestjson'],
+                'importmetajson' => $package['importmetajson'],
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'createdby' => null,
+                'modifiedby' => null,
+            ]);
+        }
+
+        self::purge_cache();
     }
 }

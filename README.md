@@ -23,3 +23,8 @@ Optional integrations:
 
 Subplugin support:
 - stackmathgamemode subplugins live in `mode/` and are declared in `db/subplugins.json`.
+
+
+## Bundled mode packages
+
+This work-in-progress build ships bundled default design packages for the `exitgames`, `wisewizzard`, and `rpg` mode subplugins under `mode/*/packages/*`.

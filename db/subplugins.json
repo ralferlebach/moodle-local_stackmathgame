@@ -1,4 +1,7 @@
 {
+  "plugintypes": {
+    "stackmathgamemode": "local/stackmathgame/mode"
+  },
   "subplugintypes": {
     "stackmathgamemode": "mode"
   }

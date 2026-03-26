@@ -10,54 +10,10 @@ use local_stackmathgame\game\theme_manager;
  * Output hook callbacks.
  */
 class output_hooks {
-    /**
-     * Prevent hook logic from running during install/upgrade/admin bootstrap pages.
-     */
-    protected static function should_skip_hooks(): bool {
-        global $CFG, $PAGE;
-
-        if (during_initial_install()) {
-            return true;
-        }
-
-        if (empty($PAGE)) {
-            return true;
-        }
-
-        if (!empty($CFG->upgraderunning)) {
-            return true;
-        }
-
-        $pagetype = (string)($PAGE->pagetype ?? '');
-        if ($pagetype === 'admin-index' || strpos($pagetype, 'admin-') === 0) {
-            return true;
-        }
-
-        $url = '';
-        if (!empty($PAGE->url)) {
-            $url = $PAGE->url->out(false);
-        }
-        if ($url !== '' && strpos($url, '/admin/') !== false) {
-            return true;
-        }
-
-        return false;
-    }
-
     public static function inject_studio_icon(\core\hook\output\before_standard_top_of_body_html_generation $hook): void {
-        global $OUTPUT;
+        global $PAGE, $OUTPUT;
 
-        if (self::should_skip_hooks()) {
-            return;
-        }
-
-        if (!isloggedin() || isguestuser()) {
-            return;
-        }
-
-        $context = \context_system::instance();
-        if (!has_capability('local/stackmathgame:viewstudio', $context)
-                && !has_capability('local/stackmathgame:managethemes', $context)) {
+        if (!isloggedin() || isguestuser() || !has_capability('local/stackmathgame:viewstudio', \context_system::instance())) {
             return;
         }
 
@@ -79,11 +35,7 @@ class output_hooks {
     public static function inject_game_assets(\core\hook\output\before_http_headers $hook): void {
         global $PAGE, $CFG, $USER;
 
-        if (self::should_skip_hooks()) {
-            return;
-        }
-
-        if (($PAGE->pagetype ?? '') !== 'mod-quiz-attempt' || empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
+        if ($PAGE->pagetype !== 'mod-quiz-attempt' || empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
             return;
         }
 
@@ -92,9 +44,9 @@ class output_hooks {
             return;
         }
 
-        $themeid = (int)($config->themeid ?? 0);
+        $themeid = (int)($config->designid ?? 0);
         $theme = $themeid > 0 ? theme_manager::get_theme($themeid) : null;
-        $themeurl = theme_manager::asset_base_url($theme && !empty($theme->shortname) ? $theme->shortname : 'fantasy');
+        $themeurl = theme_manager::asset_base_url($theme && !empty($theme->slug) ? $theme->slug : 'fantasy');
 
         $PAGE->requires->strings_for_js([
             'nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready'
