@@ -44,6 +44,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'local/stackmathgame:play',
     ],
+    'local_stackmathgame_get_question_fragment' => [
+        'classname' => 'local_stackmathgame\external\get_question_fragment',
+        'methodname' => 'execute',
+        'description' => 'Return a refreshed HTML fragment for the current question where available.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
     'local_stackmathgame_prefetch_next_node' => [
         'classname' => 'local_stackmathgame\external\prefetch_next_node',
         'methodname' => 'execute',

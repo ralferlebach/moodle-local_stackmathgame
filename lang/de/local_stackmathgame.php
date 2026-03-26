@@ -35,3 +35,6 @@ $string['viewstudio'] = 'Game-Design-Studio ansehen';
 $string['managenarratives'] = 'Spielnarrative verwalten';
 $string['manageassets'] = 'Spiel-Assets verwalten';
 $string['managemechanics'] = 'Spielmechaniken verwalten';
+
+$string['submitanswerprocessed'] = 'Answer processed and quiz attempt updated.';
+$string['submitanswerfallback'] = 'Game processing fell back to passive mode.';
