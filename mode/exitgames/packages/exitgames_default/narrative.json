@@ -1,0 +1,11 @@
+{
+  "world_enter": [
+    "Welcome to the puzzle room."
+  ],
+  "victory": [
+    "You solved the final lock."
+  ],
+  "defeat": [
+    "Try the next clue."
+  ]
+}

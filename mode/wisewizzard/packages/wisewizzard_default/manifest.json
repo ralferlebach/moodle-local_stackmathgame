@@ -1,0 +1,24 @@
+{
+  "packageid": "wisewizzard_default",
+  "displayname": "TheWiseWizzard Default",
+  "version": "1.0.0",
+  "versioncode": 1,
+  "modecomponent": "stackmathgamemode_wisewizzard",
+  "designslug": "wisewizzard_default",
+  "origin": "bundled",
+  "author": "OpenAI scaffolding placeholder",
+  "license": "UNSPECIFIED",
+  "licensefile": "LICENSE.txt",
+  "description": "Bundled default design for the TheWiseWizzard mode.",
+  "thumbnail": "preview/thumbnail.svg",
+  "assetslots": {
+    "mentor_happy": "assets/ui/mentor_happy.svg",
+    "mentor_hint": "assets/ui/mentor_hint.svg",
+    "hub_icon": "assets/ui/hub_icon.svg",
+    "goal_flag": "assets/ui/goal_flag.svg",
+    "operators_panel": "assets/ui/operators_panel.svg"
+  },
+  "narrativefile": "narrative.json",
+  "uifile": "ui.json",
+  "mechanicsfile": "mechanics.json"
+}

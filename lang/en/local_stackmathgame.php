@@ -25,3 +25,11 @@ $string['shortcode_smgprogress'] = 'Displays the current progress payload for a 
 $string['shortcode_smgnarrative'] = 'Displays or wraps narrative content.';
 $string['shortcode_smgavatar'] = 'Displays the current avatar payload for a game label.';
 $string['shortcode_smgleaderboard'] = 'Displays a simple leaderboard for a game label.';
+
+
+$string['selectdesign'] = 'Select game design';
+$string['managelabels'] = 'Manage game labels';
+$string['viewstudio'] = 'View game design studio';
+$string['managenarratives'] = 'Manage game narratives';
+$string['manageassets'] = 'Manage game assets';
+$string['managemechanics'] = 'Manage game mechanics';

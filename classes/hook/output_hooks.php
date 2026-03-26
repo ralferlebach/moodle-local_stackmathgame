@@ -10,10 +10,54 @@ use local_stackmathgame\game\theme_manager;
  * Output hook callbacks.
  */
 class output_hooks {
-    public static function inject_studio_icon(\core\hook\output\before_standard_top_of_body_html_generation $hook): void {
-        global $PAGE, $OUTPUT;
+    /**
+     * Prevent hook logic from running during install/upgrade/admin bootstrap pages.
+     */
+    protected static function should_skip_hooks(): bool {
+        global $CFG, $PAGE;
 
-        if (!isloggedin() || isguestuser() || !has_capability('local/stackmathgame:managethemes', \context_system::instance())) {
+        if (during_initial_install()) {
+            return true;
+        }
+
+        if (empty($PAGE)) {
+            return true;
+        }
+
+        if (!empty($CFG->upgraderunning)) {
+            return true;
+        }
+
+        $pagetype = (string)($PAGE->pagetype ?? '');
+        if ($pagetype === 'admin-index' || strpos($pagetype, 'admin-') === 0) {
+            return true;
+        }
+
+        $url = '';
+        if (!empty($PAGE->url)) {
+            $url = $PAGE->url->out(false);
+        }
+        if ($url !== '' && strpos($url, '/admin/') !== false) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static function inject_studio_icon(\core\hook\output\before_standard_top_of_body_html_generation $hook): void {
+        global $OUTPUT;
+
+        if (self::should_skip_hooks()) {
+            return;
+        }
+
+        if (!isloggedin() || isguestuser()) {
+            return;
+        }
+
+        $context = \context_system::instance();
+        if (!has_capability('local/stackmathgame:viewstudio', $context)
+                && !has_capability('local/stackmathgame:managethemes', $context)) {
             return;
         }
 
@@ -35,7 +79,11 @@ class output_hooks {
     public static function inject_game_assets(\core\hook\output\before_http_headers $hook): void {
         global $PAGE, $CFG, $USER;
 
-        if ($PAGE->pagetype !== 'mod-quiz-attempt' || empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
+        if (self::should_skip_hooks()) {
+            return;
+        }
+
+        if (($PAGE->pagetype ?? '') !== 'mod-quiz-attempt' || empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
             return;
         }
 

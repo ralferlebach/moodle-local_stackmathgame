@@ -1,0 +1,24 @@
+{
+  "packageid": "exitgames_default",
+  "displayname": "ExitGames Default",
+  "version": "1.0.0",
+  "versioncode": 1,
+  "modecomponent": "stackmathgamemode_exitgames",
+  "designslug": "exitgames_default",
+  "origin": "bundled",
+  "author": "OpenAI scaffolding placeholder",
+  "license": "UNSPECIFIED",
+  "licensefile": "LICENSE.txt",
+  "description": "Bundled default design for the ExitGames mode.",
+  "thumbnail": "preview/thumbnail.svg",
+  "assetslots": {
+    "guide_happy": "assets/ui/guide_happy.svg",
+    "guide_think": "assets/ui/guide_think.svg",
+    "goal_flag": "assets/ui/goal_flag.svg",
+    "boss_icon": "assets/ui/boss_icon.svg",
+    "operators_panel": "assets/ui/operators_panel.svg"
+  },
+  "narrativefile": "narrative.json",
+  "uifile": "ui.json",
+  "mechanicsfile": "mechanics.json"
+}

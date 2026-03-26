@@ -1,0 +1,24 @@
+{
+  "packageid": "rpg_default",
+  "displayname": "RPG Default",
+  "version": "1.0.0",
+  "versioncode": 1,
+  "modecomponent": "stackmathgamemode_rpg",
+  "designslug": "rpg_default",
+  "origin": "bundled",
+  "author": "OpenAI scaffolding placeholder",
+  "license": "UNSPECIFIED",
+  "licensefile": "LICENSE.txt",
+  "description": "Bundled default design for the RPG mode.",
+  "thumbnail": "preview/thumbnail.svg",
+  "assetslots": {
+    "player_idle": "assets/ui/player_idle.svg",
+    "enemy_idle": "assets/ui/enemy_idle.svg",
+    "bg_forest": "assets/ui/bg_forest.svg",
+    "signpost_info": "assets/ui/signpost_info.svg",
+    "ui_flag": "assets/ui/ui_flag.svg"
+  },
+  "narrativefile": "narrative.json",
+  "uifile": "ui.json",
+  "mechanicsfile": "mechanics.json"
+}

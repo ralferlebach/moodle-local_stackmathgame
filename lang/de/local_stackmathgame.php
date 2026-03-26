@@ -25,3 +25,11 @@ $string['shortcode_smgprogress'] = 'Zeigt die aktuelle Fortschrittsnutzlast für
 $string['shortcode_smgnarrative'] = 'Gibt narrativen Inhalt aus oder umschließt ihn.';
 $string['shortcode_smgavatar'] = 'Zeigt die aktuelle Avatar-Nutzlast für ein Spiellabel an.';
 $string['shortcode_smgleaderboard'] = 'Zeigt eine einfache Rangliste für ein Spiellabel an.';
+
+
+$string['selectdesign'] = 'Spiel-Design auswählen';
+$string['managelabels'] = 'Spiellabels verwalten';
+$string['viewstudio'] = 'Game-Design-Studio anzeigen';
+$string['managenarratives'] = 'Spielnarrative verwalten';
+$string['manageassets'] = 'Spiel-Assets verwalten';
+$string['managemechanics'] = 'Spielmechaniken verwalten';

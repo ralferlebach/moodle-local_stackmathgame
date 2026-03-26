@@ -1,0 +1,14 @@
+{
+  "world_enter": [
+    "A new quest begins."
+  ],
+  "victory": [
+    "Enemy defeated."
+  ],
+  "defeat": [
+    "Regroup and try again."
+  ],
+  "boss_intro": [
+    "A boss blocks your path."
+  ]
+}

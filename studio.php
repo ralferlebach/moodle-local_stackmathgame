@@ -3,10 +3,11 @@ require('../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
 require_login();
-require_capability('local/stackmathgame:managethemes', context_system::instance());
+$context = context_system::instance();
+require_capability('local/stackmathgame:viewstudio', $context);
 
 $PAGE->set_url(new moodle_url('/local/stackmathgame/studio.php'));
-$PAGE->set_context(context_system::instance());
+$PAGE->set_context($context);
 $PAGE->set_title(get_string('studio_title', 'local_stackmathgame'));
 $PAGE->set_heading(get_string('studio_title', 'local_stackmathgame'));
 

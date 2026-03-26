@@ -1,0 +1,11 @@
+{
+  "world_enter": [
+    "The wizard is ready to guide you."
+  ],
+  "victory": [
+    "Mastery increased."
+  ],
+  "defeat": [
+    "A hint will help you forward."
+  ]
+}
