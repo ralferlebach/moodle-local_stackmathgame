@@ -8,3 +8,18 @@ Implemented in this package:
 - generated language packs (`en`, `de`);
 - seeded built-in fantasy theme and cache purge helper;
 - added missing studio/privacy/helper classes required for installation.
+
+
+## Dependencies
+
+Required plugins:
+- qtype_stack
+- qbehaviour_stackmathgame
+- filter_shortcodes
+
+Optional integrations:
+- block_xp
+- block_stash
+
+Subplugin support:
+- stackmathgamemode subplugins live in `mode/` and are declared in `db/subplugins.json`.

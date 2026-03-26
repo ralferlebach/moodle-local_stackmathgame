@@ -17,3 +17,11 @@ $string['play'] = 'Play STACK Math Game activities';
 $string['pluginadministration'] = 'STACK Math Game administration';
 $string['pluginname_help'] = 'Provides a game-oriented interface layer and studio tooling for STACK quiz activities.';
 $string['settings'] = 'Settings';
+
+$string['shortcode_smgscore'] = 'Displays the current score for a game label.';
+$string['shortcode_smgxp'] = 'Displays the current XP for a game label.';
+$string['shortcode_smglevel'] = 'Displays the current level for a game label.';
+$string['shortcode_smgprogress'] = 'Displays the current progress payload for a game label.';
+$string['shortcode_smgnarrative'] = 'Displays or wraps narrative content.';
+$string['shortcode_smgavatar'] = 'Displays the current avatar payload for a game label.';
+$string['shortcode_smgleaderboard'] = 'Displays a simple leaderboard for a game label.';

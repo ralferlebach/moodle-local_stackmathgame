@@ -21,10 +21,10 @@
         <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="name_uix" UNIQUE="true" FIELDS="name"/>
-        <INDEX NAME="idnumber_uix" UNIQUE="true" FIELDS="idnumber"/>
-        <INDEX NAME="status_ix" UNIQUE="false" FIELDS="status"/>
-        <INDEX NAME="timedeleted_ix" UNIQUE="false" FIELDS="timedeleted"/>
+        <INDEX NAME="lsmg_lbl_name_uix" UNIQUE="true" FIELDS="name"/>
+        <INDEX NAME="lsmg_lbl_idno_uix" UNIQUE="true" FIELDS="idnumber"/>
+        <INDEX NAME="lsmg_lbl_status_ix" UNIQUE="false" FIELDS="status"/>
+        <INDEX NAME="lsmg_lbl_deleted_ix" UNIQUE="false" FIELDS="timedeleted"/>
       </INDEXES>
     </TABLE>
 
@@ -33,7 +33,7 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="name" TYPE="char" LENGTH="150" NOTNULL="true"/>
         <FIELD NAME="slug" TYPE="char" LENGTH="100" NOTNULL="true"/>
-        <FIELD NAME="modecomponent" TYPE="char" LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="modecomponent" TYPE="char" LENGTH="100" NOTNULL="true"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
         <FIELD NAME="thumbnailfilename" TYPE="char" LENGTH="255" NOTNULL="false"/>
         <FIELD NAME="thumbnailfileitemid" TYPE="int" LENGTH="10" NOTNULL="false"/>
@@ -56,9 +56,9 @@
         <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="slug_uix" UNIQUE="true" FIELDS="slug"/>
-        <INDEX NAME="modename_uix" UNIQUE="true" FIELDS="modecomponent,name"/>
-        <INDEX NAME="modeactive_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
+        <INDEX NAME="lsmg_dsg_slug_uix" UNIQUE="true" FIELDS="slug"/>
+        <INDEX NAME="lsmg_dsg_mode_name_uix" UNIQUE="true" FIELDS="modecomponent,name"/>
+        <INDEX NAME="lsmg_dsg_mode_active_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
       </INDEXES>
     </TABLE>
 
@@ -90,10 +90,10 @@
         <KEY NAME="lastdesignid_fk" TYPE="foreign" FIELDS="lastdesignid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="userlabel_uix" UNIQUE="true" FIELDS="userid,labelid"/>
-        <INDEX NAME="label_score_ix" UNIQUE="false" FIELDS="labelid,score"/>
-        <INDEX NAME="label_xp_ix" UNIQUE="false" FIELDS="labelid,xp"/>
-        <INDEX NAME="label_level_ix" UNIQUE="false" FIELDS="labelid,levelno"/>
+        <INDEX NAME="lsmg_prf_user_label_uix" UNIQUE="true" FIELDS="userid,labelid"/>
+        <INDEX NAME="lsmg_prf_label_score_ix" UNIQUE="false" FIELDS="labelid,score"/>
+        <INDEX NAME="lsmg_prf_label_xp_ix" UNIQUE="false" FIELDS="labelid,xp"/>
+        <INDEX NAME="lsmg_prf_label_level_ix" UNIQUE="false" FIELDS="labelid,levelno"/>
       </INDEXES>
     </TABLE>
 
@@ -123,10 +123,7 @@
         <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="quizid_uix" UNIQUE="true" FIELDS="quizid"/>
-        <INDEX NAME="labelid_ix" UNIQUE="false" FIELDS="labelid"/>
-        <INDEX NAME="designid_ix" UNIQUE="false" FIELDS="designid"/>
-        <INDEX NAME="enabled_ix" UNIQUE="false" FIELDS="enabled"/>
+        <INDEX NAME="lsmg_qcfg_enabled_ix" UNIQUE="false" FIELDS="enabled"/>
       </INDEXES>
     </TABLE>
 
@@ -151,7 +148,7 @@
         <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="designasset_uix" UNIQUE="true" FIELDS="designid,assetkey"/>
+        <INDEX NAME="lsmg_dasset_design_key_uix" UNIQUE="true" FIELDS="designid,assetkey"/>
         <INDEX NAME="designasset_type_ix" UNIQUE="false" FIELDS="designid,assettype"/>
       </INDEXES>
     </TABLE>
@@ -177,9 +174,9 @@
         <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="quizslot_uix" UNIQUE="true" FIELDS="quizid,slotnumber"/>
-        <INDEX NAME="quiznodekey_uix" UNIQUE="true" FIELDS="quizid,nodekey"/>
-        <INDEX NAME="quiznodetype_ix" UNIQUE="false" FIELDS="quizid,nodetype"/>
+        <INDEX NAME="lsmg_qmap_quiz_slot_uix" UNIQUE="true" FIELDS="quizid,slotnumber"/>
+        <INDEX NAME="lsmg_qmap_quiz_node_uix" UNIQUE="true" FIELDS="quizid,nodekey"/>
+        <INDEX NAME="lsmg_qmap_quiz_type_ix" UNIQUE="false" FIELDS="quizid,nodetype"/>
       </INDEXES>
     </TABLE>
 
@@ -209,8 +206,8 @@
         <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="label_event_ix" UNIQUE="false" FIELDS="labelid,eventtype"/>
-        <INDEX NAME="user_label_time_ix" UNIQUE="false" FIELDS="userid,labelid,timecreated"/>
+        <INDEX NAME="lsmg_evt_label_type_ix" UNIQUE="false" FIELDS="labelid,eventtype"/>
+        <INDEX NAME="lsmg_evt_user_label_time_ix" UNIQUE="false" FIELDS="userid,labelid,timecreated"/>
       </INDEXES>
     </TABLE>
 
@@ -229,7 +226,7 @@
         <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="profileitem_uix" UNIQUE="true" FIELDS="profileid,itemkey"/>
+        <INDEX NAME="lsmg_inv_profile_item_uix" UNIQUE="true" FIELDS="profileid,itemkey"/>
       </INDEXES>
     </TABLE>
 
@@ -250,8 +247,8 @@
         <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="profilestatus_ix" UNIQUE="false" FIELDS="profileid,status"/>
-        <INDEX NAME="expiresat_ix" UNIQUE="false" FIELDS="expiresat"/>
+        <INDEX NAME="lsmg_bst_profile_status_ix" UNIQUE="false" FIELDS="profileid,status"/>
+        <INDEX NAME="lsmg_bst_expires_ix" UNIQUE="false" FIELDS="expiresat"/>
       </INDEXES>
     </TABLE>
 
@@ -270,7 +267,7 @@
         <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="profileupgrade_uix" UNIQUE="true" FIELDS="profileid,upgradekey"/>
+        <INDEX NAME="lsmg_aup_profile_key_uix" UNIQUE="true" FIELDS="profileid,upgradekey"/>
       </INDEXES>
     </TABLE>
 
@@ -281,7 +278,7 @@
         <FIELD NAME="name" TYPE="char" LENGTH="150" NOTNULL="true"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false"/>
         <FIELD NAME="labelscope" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="modecomponent" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="modecomponent" TYPE="char" LENGTH="100" NOTNULL="false"/>
         <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
         <FIELD NAME="isactive" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
@@ -291,8 +288,8 @@
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="achievementkey_uix" UNIQUE="true" FIELDS="achievementkey"/>
-        <INDEX NAME="modeactive_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
+        <INDEX NAME="lsmg_ach_key_uix" UNIQUE="true" FIELDS="achievementkey"/>
+        <INDEX NAME="lsmg_dsg_mode_active_ix" UNIQUE="false" FIELDS="modecomponent,isactive"/>
       </INDEXES>
     </TABLE>
 
@@ -311,7 +308,7 @@
         <KEY NAME="achievementid_fk" TYPE="foreign" FIELDS="achievementid" REFTABLE="local_stackmathgame_achievement" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="profileachievement_uix" UNIQUE="true" FIELDS="profileid,achievementid"/>
+        <INDEX NAME="lsmg_pach_profile_ach_uix" UNIQUE="true" FIELDS="profileid,achievementid"/>
       </INDEXES>
     </TABLE>
 
@@ -331,7 +328,7 @@
         <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="profiletype_ix" UNIQUE="false" FIELDS="profileid,transactiontype"/>
+        <INDEX NAME="lsmg_shop_profile_type_ix" UNIQUE="false" FIELDS="profileid,transactiontype"/>
         <INDEX NAME="timecreated_ix" UNIQUE="false" FIELDS="timecreated"/>
       </INDEXES>
     </TABLE>
@@ -357,7 +354,7 @@
         <KEY NAME="exportedby_fk" TYPE="foreign" FIELDS="exportedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="designversion_uix" UNIQUE="true" FIELDS="designid,packageversion"/>
+        <INDEX NAME="lsmg_pkg_design_ver_uix" UNIQUE="true" FIELDS="designid,packageversion"/>
         <INDEX NAME="packageidentifier_ix" UNIQUE="false" FIELDS="packageidentifier"/>
       </INDEXES>
     </TABLE>

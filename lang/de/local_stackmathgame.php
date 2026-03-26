@@ -17,3 +17,11 @@ $string['play'] = 'STACK-Mathe-Spiel-Aktivitäten spielen';
 $string['pluginadministration'] = 'Administration STACK-Mathe-Spiel';
 $string['pluginname_help'] = 'Stellt eine spielorientierte Oberfläche und Studio-Werkzeuge für STACK-Quizaktivitäten bereit.';
 $string['settings'] = 'Einstellungen';
+
+$string['shortcode_smgscore'] = 'Zeigt den aktuellen Punktestand für ein Spiellabel an.';
+$string['shortcode_smgxp'] = 'Zeigt die aktuellen XP für ein Spiellabel an.';
+$string['shortcode_smglevel'] = 'Zeigt das aktuelle Level für ein Spiellabel an.';
+$string['shortcode_smgprogress'] = 'Zeigt die aktuelle Fortschrittsnutzlast für ein Spiellabel an.';
+$string['shortcode_smgnarrative'] = 'Gibt narrativen Inhalt aus oder umschließt ihn.';
+$string['shortcode_smgavatar'] = 'Zeigt die aktuelle Avatar-Nutzlast für ein Spiellabel an.';
+$string['shortcode_smgleaderboard'] = 'Zeigt eine einfache Rangliste für ein Spiellabel an.';
