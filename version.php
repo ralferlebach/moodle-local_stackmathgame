@@ -9,12 +9,12 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_stackmathgame';
-$plugin->version = 2026032606;
+$plugin->version = 2026032605;
 $plugin->requires = 2024100700; // Moodle 4.5.
 $plugin->maturity = MATURITY_ALPHA;
-$plugin->release = '0.6.2';
+$plugin->release = '0.6.1';
 $plugin->dependencies = [
     'qtype_stack' => ANY_VERSION,
-    'qbehaviour_stackmathgame' => 2026032600,
+    'qbehaviour_stackmathgame' => ANY_VERSION,
     'filter_shortcodes' => ANY_VERSION,
 ];

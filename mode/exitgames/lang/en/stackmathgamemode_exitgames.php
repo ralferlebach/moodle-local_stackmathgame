@@ -1,2 +1,2 @@
 <?php
-$string['pluginname'] = 'ExitGames Default mode';
+$string['pluginname'] = 'ExitGame Default mode';

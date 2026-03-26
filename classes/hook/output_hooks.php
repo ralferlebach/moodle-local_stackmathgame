@@ -11,9 +11,22 @@ use local_stackmathgame\game\theme_manager;
  */
 class output_hooks {
     public static function inject_studio_icon(\core\hook\output\before_standard_top_of_body_html_generation $hook): void {
-        global $PAGE, $OUTPUT;
+        global $OUTPUT, $CFG;
 
-        if (!isloggedin() || isguestuser() || !has_capability('local/stackmathgame:viewstudio', \context_system::instance())) {
+        if (during_initial_install() || !empty($CFG->upgraderunning)) {
+            return;
+        }
+        if (!isloggedin() || isguestuser()) {
+            return;
+        }
+        if (!function_exists('get_capability_info')) {
+            return;
+        }
+
+        $systemcontext = \context_system::instance();
+        $canviewstudio = get_capability_info('local/stackmathgame:viewstudio') && has_capability('local/stackmathgame:viewstudio', $systemcontext);
+        $canmanagethemes = get_capability_info('local/stackmathgame:managethemes') && has_capability('local/stackmathgame:managethemes', $systemcontext);
+        if (!$canviewstudio && !$canmanagethemes) {
             return;
         }
 
@@ -22,35 +35,38 @@ class output_hooks {
         $html = \html_writer::link(
             $url,
             $OUTPUT->render($icon),
-            [
-                'class' => 'smg-studio-link',
-                'title' => get_string('studio_title', 'local_stackmathgame'),
-                'aria-label' => get_string('studio_title', 'local_stackmathgame'),
-            ]
+            ['class' => 'btn btn-link local-stackmathgame-studio-icon', 'title' => get_string('studio_title', 'local_stackmathgame')]
         );
-
-        $hook->add_html(\html_writer::div($html, 'smg-studio-link-wrapper'));
+        $hook->add_html($html);
     }
 
     public static function inject_game_assets(\core\hook\output\before_http_headers $hook): void {
-        global $PAGE, $CFG, $USER;
+        global $PAGE, $USER, $CFG;
 
-        if ($PAGE->pagetype !== 'mod-quiz-attempt' || empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
+        if (during_initial_install() || !empty($CFG->upgraderunning)) {
+            return;
+        }
+        if (empty($PAGE) || empty($PAGE->cm) || empty($PAGE->cm->modname) || $PAGE->cm->modname !== 'quiz') {
+            return;
+        }
+        if (empty($PAGE->context) || !function_exists('get_capability_info') || !get_capability_info('local/stackmathgame:play') || !has_capability('local/stackmathgame:play', $PAGE->context)) {
             return;
         }
 
-        $config = quiz_configurator::get_plugin_config((int)$PAGE->cm->instance);
-        if (!$config || empty($config->enabled)) {
+        $config = quiz_configurator::ensure_default((int)$PAGE->cm->instance);
+        if (empty($config->enabled)) {
             return;
         }
 
-        $themeid = (int)($config->designid ?? 0);
-        $theme = $themeid > 0 ? theme_manager::get_theme($themeid) : null;
-        $themeurl = theme_manager::asset_base_url($theme && !empty($theme->slug) ? $theme->slug : 'fantasy');
+        $themeurl = '';
+        if (!empty($config->designid)) {
+            $theme = theme_manager::get_theme((int)$config->designid);
+            if ($theme && !empty($theme->slug)) {
+                $themeurl = theme_manager::asset_base_url((string)$theme->slug);
+            }
+        }
 
-        $PAGE->requires->strings_for_js([
-            'nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready'
-        ], 'local_stackmathgame');
+        $PAGE->requires->strings_for_js(['submitanswerplaceholder'], 'local_stackmathgame');
         $PAGE->requires->js_call_amd('local_stackmathgame/fantasy_quiz', 'init', [[
             'quizid' => (int)$PAGE->cm->instance,
             'cmid' => (int)$PAGE->cm->id,

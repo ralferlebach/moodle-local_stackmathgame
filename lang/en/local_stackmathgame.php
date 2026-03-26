@@ -107,4 +107,5 @@ $string['designmodecomponent'] = 'Mode component';
 $string['designpackageorigin'] = 'Package origin';
 $string['packagelicense'] = 'Package licence';
 
-$string['qbehaviourrequirednotice'] = 'Gamified quizzes require the STACK Math Game question behaviour.';
+$string['subplugintype_stackmathgamemode'] = 'Game mode';
+$string['subplugintype_stackmathgamemode_plural'] = 'Game modes';
