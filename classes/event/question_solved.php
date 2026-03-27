@@ -15,30 +15,49 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugininfo handler for stackmathgame mode subplugins.
+ * Event: question solved.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace local_stackmathgame\plugininfo;
+namespace local_stackmathgame\event;
 
 /**
- * Plugininfo handler for stackmathgame mode subplugins.
+ * Event fired when a question is solved for the first time.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class stackmathgamemode extends \core\plugininfo\base {
+class question_solved extends \core\event\base {
+    /**
+     * Initialise required event data properties.
+     *
+     * @return void
+     */
+    protected function init(): void {
+        $this->data['crud'] = 'u';
+        $this->data['edulevel'] = self::LEVEL_PARTICIPATING;
+        $this->data['objecttable'] = 'local_stackmathgame_profile';
+    }
 
     /**
-     * Whether the plugin can be uninstalled.
+     * Return the localised event name.
      *
-     * @return bool Always returns true.
+     * @return string
      */
-    public function is_uninstall_allowed(): bool {
-        return true;
+    public static function get_name(): string {
+        return get_string('event_question_solved', 'local_stackmathgame');
+    }
+
+    /**
+     * Return a non-localised description of the event.
+     *
+     * @return string
+     */
+    public function get_description(): string {
+        return 'Question solved by STACK Math Game for user id ' . $this->userid . '.';
     }
 }

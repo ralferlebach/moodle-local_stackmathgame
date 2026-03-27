@@ -1,7 +1,28 @@
 <?php
-namespace local_stackmathgame\external;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Helper facade for external functions.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\external;
 
 use context_module;
 use local_stackmathgame\game\quiz_configurator;
@@ -9,18 +30,19 @@ use local_stackmathgame\game\theme_manager;
 use local_stackmathgame\local\service\profile_service;
 
 /**
- * Helper facade for external functions.
+ * Helper facade shared by all external function classes.
  *
- * Fixed issues:
- * 1. export_design(null) was missing 'runtimejson' in the returned array.
- *    The design_structure() in get_quiz_config declares runtimejson as a
- *    required field, so a null design without it caused external API
- *    validation failures downstream (e.g. in get_profile_state, save_progress).
- * 2. global_userid() has been moved inside the class as a private static
- *    method to avoid polluting the global namespace.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class api {
-
+    /**
+     * Normalise a raw question payload to canonical keys.
+     *
+     * @param array $payload Raw payload array.
+     * @return array Normalised array with questionid, slot and answers keys.
+     */
     public static function normalise_question_payload(array $payload): array {
         return [
             'questionid' => (int)($payload['questionid'] ?? 0),
@@ -29,12 +51,32 @@ class api {
         ];
     }
 
+    /**
+     * Resolve the course-module and context for a quiz instance.
+     *
+     * Uses IGNORE_MISSING (4th param only) and throws a moodle_exception when
+     * the quiz has no course_modules record rather than crashing with a
+     * dml_missing_record_exception.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return array Two-element array: [$cm, $context].
+     * @throws \moodle_exception When no course_modules entry exists.
+     */
     public static function get_quiz_context(int $quizid): array {
-        $cm      = get_coursemodule_from_instance('quiz', $quizid, 0, false, MUST_EXIST);
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, IGNORE_MISSING);
+        if (!$cm) {
+            throw new \moodle_exception('quiznotfound', 'local_stackmathgame', '', $quizid);
+        }
         $context = context_module::instance((int)$cm->id);
         return [$cm, $context];
     }
 
+    /**
+     * Validate access to a quiz and return key runtime objects.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return array Five-element array: [$cm, $context, $config, $profile, $design].
+     */
     public static function validate_quiz_access(int $quizid): array {
         [$cm, $context] = self::get_quiz_context($quizid);
         \external_api::validate_context($context);
@@ -45,6 +87,12 @@ class api {
         return [$cm, $context, $config, $profile, $design];
     }
 
+    /**
+     * Build a serialisable profile export array.
+     *
+     * @param \stdClass $profile The profile record.
+     * @return array The export array.
+     */
     public static function export_profile(\stdClass $profile): array {
         $summary = profile_service::build_summary($profile);
         return [
@@ -67,12 +115,16 @@ class api {
         ];
     }
 
+    /**
+     * Build a serialisable design export array.
+     *
+     * Returns an empty-value array when $design is null.
+     *
+     * @param \stdClass|null $design The design record, or null.
+     * @return array The export array.
+     */
     public static function export_design(?\stdClass $design): array {
         if (!$design) {
-            // *** BUG FIX: runtimejson was missing here. design_structure() in
-            // get_quiz_config declares it as a required return field. Callers
-            // that receive a null design (quiz with no active design) would
-            // get an external API validation exception. ***
             return [
                 'id'               => 0,
                 'name'             => '',
@@ -88,7 +140,6 @@ class api {
                 'runtimejson'      => '{}',
             ];
         }
-
         $config = theme_manager::get_theme_config((int)$design->id);
         return [
             'id'               => (int)$design->id,
@@ -113,6 +164,19 @@ class api {
         ];
     }
 
+    /**
+     * Append a row to the game event log.
+     *
+     * @param \stdClass $profile   The profile record.
+     * @param int       $quizid    The quiz ID.
+     * @param int       $designid  The active design ID.
+     * @param string    $eventtype Short event type string.
+     * @param string    $source    Dotted source path for debugging.
+     * @param array     $payload   Optional context payload.
+     * @param int       $valueint  Optional numeric value.
+     * @param string    $valuechar Optional char value.
+     * @return void
+     */
     public static function log_event(
         \stdClass $profile,
         int $quizid,
@@ -140,6 +204,12 @@ class api {
         ]);
     }
 
+    /**
+     * Build the question map array for a quiz.
+     *
+     * @param int $quizid The quiz ID.
+     * @return array Array of node arrays ordered by sortorder, slotnumber.
+     */
     public static function get_question_map(int $quizid): array {
         global $DB;
         $records = $DB->get_records(
@@ -162,23 +232,12 @@ class api {
     }
 
     /**
-     * Return current user id safely (0 for guests / CLI).
-     * Private helper replacing the old global function global_userid().
+     * Return the current user ID safely (returns 0 for guests or CLI).
+     *
+     * @return int The user ID.
      */
     private static function current_userid(): int {
         global $USER;
         return (int)($USER->id ?? 0);
     }
-}
-
-/**
- * Backward-compatible global function kept so any external code that
- * still calls global_userid() does not break immediately.
- *
- * @deprecated Use \local_stackmathgame\external\api::validate_quiz_access() instead.
- * @return int
- */
-function global_userid(): int {
-    global $USER;
-    return (int)($USER->id ?? 0);
 }

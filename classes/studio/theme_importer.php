@@ -1,30 +1,46 @@
 <?php
-namespace local_stackmathgame\studio;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * ZIP design bundle importer for local_stackmathgame.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\studio;
 
 use local_stackmathgame\game\theme_manager;
 
 /**
- * Import zipped design bundles into the local_stackmathgame_design table.
+ * Imports zipped design bundles into the local_stackmathgame_design table.
  *
- * Fixed issues:
- * 1. Referenced table 'local_stackmathgame_theme' which does not exist.
- *    The correct table is 'local_stackmathgame_design'.
- * 2. Called theme_manager::default_fantasy_config() which is not defined
- *    anywhere – replaced with a safe default design record structure.
- * 3. Used old field names (shortname → slug, configjson, isbuiltin → isbundled,
- *    sortorder) that don't match the actual install.xml schema.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class theme_importer {
-
     /**
-     * Process an uploaded ZIP draft file and create/update a design record.
+     * Process an uploaded ZIP draft file and create or update a design record.
      *
-     * Expects the uploaded ZIP to contain at least a manifest.json at the root.
-     * If manifest.json is absent the importer creates a minimal stub record.
+     * The ZIP should contain a manifest.json at its root declaring at minimum
+     * the modecomponent field. Without it, the import is rejected.
      *
-     * @return array{success:bool, designid:int|null, error:string|null}
+     * @return array{success: bool, designid: int|null, error: string|null}
      */
     public static function process_upload(): array {
         global $DB, $USER;
@@ -50,8 +66,7 @@ class theme_importer {
 
         $file     = reset($files);
         $filename = $file->get_filename();
-        // Derive a safe slug from the filename (without extension).
-        $slug = clean_param(
+        $slug     = clean_param(
             str_replace([' ', '-'], '_', strtolower(pathinfo($filename, PATHINFO_FILENAME))),
             PARAM_ALPHANUMEXT
         );
@@ -59,10 +74,9 @@ class theme_importer {
             $slug = 'imported_' . time();
         }
 
-        // Try to extract manifest.json from the ZIP.
-        $manifest     = [];
-        $tmpdir       = make_request_directory();
-        $tmpzippath   = $tmpdir . '/' . $filename;
+        $manifest   = [];
+        $tmpdir     = make_request_directory();
+        $tmpzippath = $tmpdir . '/' . $filename;
         $file->copy_content_to($tmpzippath);
 
         if (is_readable($tmpzippath) && class_exists('ZipArchive')) {
@@ -76,14 +90,15 @@ class theme_importer {
             }
         }
 
-        // Extract relevant fields from the manifest (with safe fallbacks).
-        $name          = clean_param((string)($manifest['displayname'] ?? ucwords(str_replace('_', ' ', $slug))), PARAM_TEXT);
+        $name          = clean_param(
+            (string)($manifest['displayname'] ?? ucwords(str_replace('_', ' ', $slug))),
+            PARAM_TEXT
+        );
         $modecomponent = clean_param((string)($manifest['modecomponent'] ?? ''), PARAM_COMPONENT);
-        $description   = clean_param((string)($manifest['description']   ?? ''), PARAM_TEXT);
+        $description   = clean_param((string)($manifest['description'] ?? ''), PARAM_TEXT);
         $version       = (int)($manifest['versioncode'] ?? 1);
 
         if ($modecomponent === '') {
-            // Cannot import without knowing which mode this design belongs to.
             return [
                 'success'  => false,
                 'designid' => null,
@@ -91,8 +106,6 @@ class theme_importer {
             ];
         }
 
-        // *** BUG FIX: was using non-existent table 'local_stackmathgame_theme'.
-        // Correct table is 'local_stackmathgame_design' with field 'slug'. ***
         $existing = $DB->get_record('local_stackmathgame_design', ['slug' => $slug]);
         if ($existing && !empty($existing->isbundled)) {
             return [
@@ -105,7 +118,6 @@ class theme_importer {
         $now = time();
 
         if ($existing) {
-            // Update the existing imported design.
             $DB->update_record('local_stackmathgame_design', (object)[
                 'id'            => (int)$existing->id,
                 'name'          => $name,
@@ -114,19 +126,18 @@ class theme_importer {
                 'versioncode'   => $version,
                 'isactive'      => 1,
                 'importmetajson' => json_encode([
-                    'origin'    => 'upload',
-                    'filename'  => $filename,
-                    'imported'  => $now,
-                    'manifest'  => $manifest,
+                    'origin'   => 'upload',
+                    'filename' => $filename,
+                    'imported' => $now,
+                    'manifest' => $manifest,
                 ], JSON_UNESCAPED_UNICODE),
                 'timemodified'  => $now,
                 'modifiedby'    => (int)$USER->id,
             ]);
             $designid = (int)$existing->id;
         } else {
-            // *** BUG FIX: was inserting into non-existent table with wrong fields.
-            // Now uses correct table and schema from install.xml. ***
-            $designid = (int)$DB->insert_record('local_stackmathgame_design', (object)[
+            $assetslots = (array)($manifest['assetslots'] ?? []);
+            $designid   = (int)$DB->insert_record('local_stackmathgame_design', (object)[
                 'name'             => $name,
                 'slug'             => $slug,
                 'modecomponent'    => $modecomponent,
@@ -137,10 +148,7 @@ class theme_importer {
                 'narrativejson'    => '{}',
                 'uijson'           => '{}',
                 'mechanicsjson'    => '{}',
-                'assetmanifestjson' => json_encode(
-                    (array)($manifest['assetslots'] ?? []),
-                    JSON_UNESCAPED_UNICODE
-                ),
+                'assetmanifestjson' => json_encode($assetslots, JSON_UNESCAPED_UNICODE),
                 'importmetajson'   => json_encode([
                     'origin'   => 'upload',
                     'filename' => $filename,

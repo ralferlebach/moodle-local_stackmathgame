@@ -5,37 +5,84 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Quiz-level game settings page.
+ * Quiz-level game settings page for local_stackmathgame.
  *
- * Can be reached either from the quiz settings navigation (provides both
- * quizid and cmid) or from direct links that only provide quizid.
- * If cmid is absent it is derived automatically from quizid so the page
- * never throws "Required parameter cmid is missing".
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require('../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
-// ------------------------------------------------------------------
-// Parameter handling: cmid is optional – derive from quizid if absent
-// ------------------------------------------------------------------
-$quizid = required_param('quizid', PARAM_INT);
-$cmid   = optional_param('cmid',   0,  PARAM_INT);
+// Both cmid and quizid are optional; at least one must be provided.
+// Internal work is always done with cmid.
+$cmid   = optional_param('cmid', 0, PARAM_INT);
+$quizid = optional_param('quizid', 0, PARAM_INT);
 
-if ($cmid <= 0) {
-    // Derive course-module from quizid so direct links still work.
-    $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, MUST_EXIST);
-    $cmid = (int)$cm->id;
-} else {
-    $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, MUST_EXIST);
-    // Sanity-check: cm really belongs to the supplied quizid.
-    if ((int)$cm->instance !== $quizid) {
-        throw new moodle_exception('invalidparameter', 'error');
-    }
+if ($cmid <= 0 && $quizid <= 0) {
+    throw new moodle_exception('invalidparameter', 'error');
 }
 
+// Resolve course-module: cmid takes priority, else derive from quizid.
+$cm = null;
+if ($cmid > 0) {
+    $cm = get_coursemodule_from_id('quiz', $cmid, 0, IGNORE_MISSING);
+    if ($cm && $quizid > 0 && (int)$cm->instance !== $quizid) {
+        // Mismatch between supplied cmid and quizid.
+        $cm = null;
+    }
+}
+if (!$cm && $quizid > 0) {
+    $cm = get_coursemodule_from_instance('quiz', $quizid, 0, IGNORE_MISSING);
+}
+
+// Handle case where the quiz no longer has a course-module (deleted).
+if (!$cm) {
+    $PAGE->set_url(new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => $cmid]));
+    $PAGE->set_context(context_system::instance());
+    $PAGE->set_title(get_string('gamesettings', 'local_stackmathgame'));
+    $PAGE->set_heading(get_string('gamesettings', 'local_stackmathgame'));
+    require_login();
+
+    try {
+        if ($quizid > 0) {
+            $DB->delete_records('local_stackmathgame_quizcfg', ['quizid' => $quizid]);
+        }
+    } catch (Throwable $e) {
+        debugging('Could not remove orphaned quizcfg: ' . $e->getMessage(), DEBUG_DEVELOPER);
+    }
+
+    echo $OUTPUT->header();
+    echo $OUTPUT->notification(
+        get_string('quiznotfound', 'local_stackmathgame', $quizid ?: $cmid),
+        \core\output\notification::NOTIFY_WARNING
+    );
+    echo html_writer::div(
+        html_writer::link(
+            new moodle_url('/'),
+            get_string('returnhome', 'local_stackmathgame'),
+            ['class' => 'btn btn-secondary']
+        ),
+        'mt-3'
+    );
+    echo $OUTPUT->footer();
+    exit;
+}
+
+// Work internally with cmid throughout.
+$cmid   = (int)$cm->id;
+$quizid = (int)$cm->instance;
 $course  = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
 $context = context_module::instance($cmid);
 
@@ -43,8 +90,8 @@ require_login($course, false, $cm);
 require_capability('local/stackmathgame:configurequiz', $context);
 
 $pageurl = new moodle_url('/local/stackmathgame/quiz_settings.php', [
-    'quizid' => $quizid,
     'cmid'   => $cmid,
+    'quizid' => $quizid,
 ]);
 
 $PAGE->set_url($pageurl);
@@ -52,16 +99,17 @@ $PAGE->set_context($context);
 $PAGE->set_title(get_string('gamesettings', 'local_stackmathgame'));
 $PAGE->set_heading(format_string($course->fullname));
 
-// ------------------------------------------------------------------
-// Load current config + form dependencies
-// ------------------------------------------------------------------
 $config          = \local_stackmathgame\game\quiz_configurator::ensure_default($quizid);
 $designs         = \local_stackmathgame\game\theme_manager::get_all_enabled();
 $canselectdesign = has_capability('local/stackmathgame:selectdesign', $context);
 $canmanagelabels = has_capability('local/stackmathgame:managelabels', $context);
 
-// Build label options for autocomplete element.
-$labelrecords = $DB->get_records('local_stackmathgame_label', ['status' => 1], 'name ASC', 'id,name');
+$labelrecords = $DB->get_records(
+    'local_stackmathgame_label',
+    ['status' => 1],
+    'name ASC',
+    'id,name'
+);
 $labeloptions = [];
 foreach ($labelrecords as $lrec) {
     $labeloptions[(int)$lrec->id] = format_string($lrec->name);
@@ -77,36 +125,28 @@ $customdata = [
     'cmid'            => $cmid,
 ];
 
-$form = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
-
-// URL to go back to after cancel / save.
+$form      = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
 $returnurl = new moodle_url('/mod/quiz/view.php', ['id' => $cmid]);
 
-// ------------------------------------------------------------------
-// Form processing
-// ------------------------------------------------------------------
 if ($form->is_cancelled()) {
     redirect($returnurl);
 }
 
 if ($data = $form->get_data()) {
-    // Handle new label creation when user typed in the newlabel field.
     $newlabelname = trim((string)($data->newlabel ?? ''));
-    $labelid = (int)($data->labelid ?? 0);
+    $labelid      = (int)($data->labelid ?? 0);
 
     if ($newlabelname !== '' && $labelid <= 0) {
-        // Check if a label with this name already exists.
         $existing = $DB->get_record('local_stackmathgame_label', ['name' => $newlabelname], 'id');
         if ($existing) {
             $labelid = (int)$existing->id;
         } else {
-            $now = time();
+            $now          = time();
             $safeidnumber = clean_param(
                 str_replace(' ', '_', strtolower($newlabelname)),
                 PARAM_ALPHANUMEXT
             );
-            // Ensure idnumber uniqueness.
-            $base = $safeidnumber;
+            $base   = $safeidnumber;
             $suffix = 1;
             while ($DB->record_exists('local_stackmathgame_label', ['idnumber' => $safeidnumber])) {
                 $safeidnumber = $base . '_' . $suffix++;
@@ -135,9 +175,6 @@ if ($data = $form->get_data()) {
     );
 }
 
-// ------------------------------------------------------------------
-// Output
-// ------------------------------------------------------------------
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gamesettings', 'local_stackmathgame'));
 $form->display();

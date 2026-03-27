@@ -1,26 +1,44 @@
 <?php
-namespace local_stackmathgame\studio;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Studio-facing design management helper.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\studio;
 
 use local_stackmathgame\game\theme_manager;
 use local_stackmathgame\local\packaging\package_registry;
 
 /**
- * Studio-facing design/theme listing helper.
+ * Studio-facing design listing and persistence helper.
  *
- * Fixed issues:
- * 1. export_all() referenced $theme->shortname  → correct field is $theme->slug
- * 2. export_all() referenced $theme->isbuiltin  → correct field is $theme->isbundled
- * 3. export_all() referenced $theme->enabled    → correct field is $theme->isactive
- *    These mismatches caused PHP notices and a broken studio gallery.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class theme_manager_studio {
-
     /**
      * Export all active designs for the studio gallery.
      *
-     * @return array<int, array<string, mixed>>
+     * @return array<int, array<string, mixed>> Array of design export arrays.
      */
     public static function export_all(): array {
         $designs = [];
@@ -32,13 +50,10 @@ class theme_manager_studio {
             $designs[] = [
                 'id'            => (int)$design->id,
                 'name'          => (string)$design->name,
-                // *** BUG FIX: was 'shortname' → correct field is 'slug' ***
                 'slug'          => (string)$design->slug,
                 'modecomponent' => (string)$design->modecomponent,
                 'description'   => (string)($design->description ?? ''),
-                // *** BUG FIX: was 'isbuiltin' → correct field is 'isbundled' ***
                 'isbundled'     => !empty($design->isbundled),
-                // *** BUG FIX: was 'enabled' → correct field is 'isactive' ***
                 'isactive'      => !empty($design->isactive),
                 'thumbnailurl'  => (string)($runtimeassets['thumbnail'] ?? ''),
                 'canexport'     => true,
@@ -48,10 +63,10 @@ class theme_manager_studio {
     }
 
     /**
-     * Export a single design record for editing.
+     * Export a single design record for the studio edit form.
      *
-     * @param int $designid
-     * @return array<string, mixed>|null
+     * @param int $designid The design record ID.
+     * @return array<string, mixed>|null The design export array, or null if not found.
      */
     public static function export_one(int $designid): ?array {
         global $DB;
@@ -81,12 +96,11 @@ class theme_manager_studio {
     }
 
     /**
-     * Save a design record from form data.
+     * Persist a design record from studio form data.
      *
-     * @param array $data Form data (id, name, slug, modecomponent, isactive,
-     *                    description, narrativejson, uijson, mechanicsjson,
-     *                    assetmanifestjson)
-     * @return int Design id
+     * @param array $data Form data array (id, name, slug, modecomponent, isactive,
+     *                    description, narrativejson, uijson, mechanicsjson, assetmanifestjson).
+     * @return int The design record ID.
      */
     public static function save_from_form(array $data): int {
         global $DB, $USER;
@@ -101,25 +115,29 @@ class theme_manager_studio {
             $record->modecomponent    = clean_param((string)($data['modecomponent'] ?? ''), PARAM_COMPONENT);
             $record->isactive         = empty($data['isactive']) ? 0 : 1;
             $record->description      = clean_param((string)($data['description'] ?? ''), PARAM_TEXT);
-            $record->narrativejson    = (string)($data['narrativejson']    ?? '{}');
-            $record->uijson           = (string)($data['uijson']           ?? '{}');
-            $record->mechanicsjson    = (string)($data['mechanicsjson']    ?? '{}');
+            $record->narrativejson    = (string)($data['narrativejson'] ?? '{}');
+            $record->uijson           = (string)($data['uijson'] ?? '{}');
+            $record->mechanicsjson    = (string)($data['mechanicsjson'] ?? '{}');
             $record->assetmanifestjson = (string)($data['assetmanifestjson'] ?? '{}');
             $record->timemodified     = $now;
             $record->modifiedby       = (int)$USER->id;
             $DB->update_record('local_stackmathgame_design', $record);
         } else {
+            $slug = clean_param(
+                (string)($data['slug'] ?? 'design_' . time()),
+                PARAM_ALPHANUMEXT
+            );
             $id = (int)$DB->insert_record('local_stackmathgame_design', (object)[
                 'name'             => clean_param((string)($data['name'] ?? ''), PARAM_TEXT),
-                'slug'             => clean_param((string)($data['slug'] ?? 'design_' . time()), PARAM_ALPHANUMEXT),
+                'slug'             => $slug,
                 'modecomponent'    => clean_param((string)($data['modecomponent'] ?? ''), PARAM_COMPONENT),
                 'isactive'         => empty($data['isactive']) ? 0 : 1,
                 'isbundled'        => 0,
                 'versioncode'      => 1,
                 'description'      => clean_param((string)($data['description'] ?? ''), PARAM_TEXT),
-                'narrativejson'    => (string)($data['narrativejson']    ?? '{}'),
-                'uijson'           => (string)($data['uijson']           ?? '{}'),
-                'mechanicsjson'    => (string)($data['mechanicsjson']    ?? '{}'),
+                'narrativejson'    => (string)($data['narrativejson'] ?? '{}'),
+                'uijson'           => (string)($data['uijson'] ?? '{}'),
+                'mechanicsjson'    => (string)($data['mechanicsjson'] ?? '{}'),
                 'assetmanifestjson' => (string)($data['assetmanifestjson'] ?? '{}'),
                 'importmetajson'   => json_encode(['origin' => 'studio'], JSON_UNESCAPED_UNICODE),
                 'timecreated'      => $now,

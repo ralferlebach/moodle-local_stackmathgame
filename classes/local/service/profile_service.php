@@ -1,43 +1,71 @@
 <?php
-namespace local_stackmathgame\local\service;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Label-bound profile state management.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\local\service;
 
 use local_stackmathgame\game\quiz_configurator;
 use local_stackmathgame\game\theme_manager;
 
 /**
- * Handles label-bound profile state.
+ * Handles label-bound profile state and progress tracking.
  *
- * Fixed issues:
- * 1. apply_progress() previously performed a bare read-then-write without
- *    any transaction or locking. When a student clicked "Check" rapidly, or
- *    when two tabs submitted simultaneously, both requests read the same
- *    baseline XP value, computed deltas independently, and wrote conflicting
- *    updates – resulting in duplicate XP awards.
+ * The apply_progress() method wraps its read-modify-write cycle in a
+ * delegated Moodle database transaction to prevent duplicate XP awards
+ * when a student submits rapidly or from multiple tabs simultaneously.
  *
- *    The fix wraps the entire read-modify-write cycle in a delegated Moodle
- *    database transaction. Moodle's $DB->start_delegated_transaction() is
- *    compatible with nested transactions (the outermost commit wins) and
- *    causes the inner write to fail with a rollback if a concurrent
- *    transaction already modified the same row – which is the desired
- *    serialization behaviour on all supported DB engines (MySQL/MariaDB
- *    InnoDB, PostgreSQL).
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class profile_service {
-
-    // ------------------------------------------------------------------
-    // Pure helpers (no DB)
-    // ------------------------------------------------------------------
-
+    /**
+     * Calculate the level number for a given XP total.
+     *
+     * @param int $xp Total XP.
+     * @return int Level number (minimum 1).
+     */
     public static function calculate_level_from_xp(int $xp): int {
         return max(1, (int)floor($xp / 100) + 1);
     }
 
+    /**
+     * Decode a nullable JSON string field to an array.
+     *
+     * @param string|null $value The JSON string or null.
+     * @return array The decoded array, or empty array on failure.
+     */
     public static function decode_json_field(?string $value): array {
         return json_decode((string)$value, true) ?: [];
     }
 
+    /**
+     * Return the state string for a specific question slot from a profile.
+     *
+     * @param \stdClass $profile The profile record.
+     * @param int       $slot    The slot number.
+     * @return string The state string, or empty string if not tracked.
+     */
     public static function get_slot_state(\stdClass $profile, int $slot): string {
         $progress = self::decode_json_field($profile->progressjson ?? '{}');
         $slots    = (array)($progress['slots'] ?? []);
@@ -51,13 +79,20 @@ class profile_service {
         return '';
     }
 
+    /**
+     * Calculate score/XP deltas for a state transition.
+     *
+     * @param string $previousstate Previous question state string.
+     * @param string $newstate      New question state string.
+     * @return array Array with keys 'score', 'xp', 'solved'.
+     */
     public static function calculate_submit_deltas(string $previousstate, string $newstate): array {
         $rightstates   = ['gradedright', 'complete'];
         $partialstates = ['gradedpartial'];
-        $wasright   = in_array($previousstate, $rightstates,   true);
-        $isright    = in_array($newstate,      $rightstates,   true);
+        $wasright   = in_array($previousstate, $rightstates, true);
+        $isright    = in_array($newstate, $rightstates, true);
         $waspartial = in_array($previousstate, $partialstates, true);
-        $ispartial  = in_array($newstate,      $partialstates, true);
+        $ispartial  = in_array($newstate, $partialstates, true);
 
         if ($isright && !$wasright) {
             return ['score' => 10, 'xp' => 5, 'solved' => true];
@@ -68,6 +103,12 @@ class profile_service {
         return ['score' => 0, 'xp' => 0, 'solved' => $wasright || $isright];
     }
 
+    /**
+     * Build a summary statistics array from a profile record.
+     *
+     * @param \stdClass $profile The profile record.
+     * @return array Summary with solvedcount, partialcount, trackedslots, levelprogress.
+     */
     public static function build_summary(\stdClass $profile): array {
         $progress = self::decode_json_field($profile->progressjson ?? '{}');
         $slots    = (array)($progress['slots'] ?? []);
@@ -82,17 +123,20 @@ class profile_service {
             }
         }
         return [
-            'solvedcount'  => $solved,
-            'partialcount' => $partial,
-            'trackedslots' => count($slots),
+            'solvedcount'   => $solved,
+            'partialcount'  => $partial,
+            'trackedslots'  => count($slots),
             'levelprogress' => (int)$profile->xp % 100,
         ];
     }
 
-    // ------------------------------------------------------------------
-    // Profile retrieval / creation
-    // ------------------------------------------------------------------
-
+    /**
+     * Get or create the profile for a user in the context of a specific quiz.
+     *
+     * @param int $userid  The user ID.
+     * @param int $quizid  The quiz ID (used to look up labelid).
+     * @return \stdClass The profile record.
+     */
     public static function get_or_create_for_quiz(int $userid, int $quizid): \stdClass {
         $config = quiz_configurator::ensure_default($quizid);
         return self::get_or_create(
@@ -103,6 +147,15 @@ class profile_service {
         );
     }
 
+    /**
+     * Get or create a profile record for a user and label combination.
+     *
+     * @param int      $userid   The user ID.
+     * @param int      $labelid  The label ID.
+     * @param int|null $quizid   Optional last-accessed quiz ID.
+     * @param int|null $designid Optional last-used design ID.
+     * @return \stdClass The profile record.
+     */
     public static function get_or_create(
         int $userid,
         int $labelid,
@@ -141,32 +194,22 @@ class profile_service {
         return $DB->get_record('local_stackmathgame_profile', ['id' => $id], '*', MUST_EXIST);
     }
 
-    // ------------------------------------------------------------------
-    // Progress update – race-condition safe
-    // ------------------------------------------------------------------
-
     /**
-     * Apply a set of changes to a profile record.
+     * Apply a set of delta changes to a profile record inside a DB transaction.
      *
-     * The entire read-modify-write cycle runs inside a delegated Moodle
-     * database transaction so that concurrent submissions cannot produce
-     * duplicate XP or score awards.
+     * The read-modify-write cycle runs inside a delegated Moodle database
+     * transaction to prevent duplicate XP awards from concurrent submissions.
      *
-     * @param int   $profileid Profile record id.
-     * @param array $changes   Associative array with optional keys:
-     *                           scoredelta, xpdelta, softcurrencydelta,
-     *                           hardcurrencydelta, levelno, quizid, designid,
-     *                           progress (array patch), flags (array patch),
-     *                           stats (array patch).
-     * @return \stdClass       Updated profile record (re-read after commit).
-     * @throws \Throwable      Re-throws after rolling back the transaction.
+     * @param int   $profileid Profile record ID.
+     * @param array $changes   Changes with optional keys: scoredelta, xpdelta,
+     *                         softcurrencydelta, hardcurrencydelta, levelno,
+     *                         quizid, designid, progress, flags, stats.
+     * @return \stdClass Updated profile record (re-read after commit).
+     * @throws \Throwable Re-thrown after transaction rollback.
      */
     public static function apply_progress(int $profileid, array $changes): \stdClass {
         global $DB;
 
-        // *** BUG FIX: wrap in a delegated transaction to serialize concurrent
-        // submissions. Without this, two rapid "Check" clicks could both read
-        // xp=100, each add 5, and both write 105 instead of the correct 110. ***
         $transaction = $DB->start_delegated_transaction();
         try {
             $profile  = $DB->get_record(
@@ -176,25 +219,24 @@ class profile_service {
                 MUST_EXIST
             );
             $progress = json_decode((string)$profile->progressjson, true) ?: [];
-            $flags    = json_decode((string)$profile->flagsjson,    true) ?: [];
-            $stats    = json_decode((string)$profile->statsjson,    true) ?: [];
+            $flags    = json_decode((string)$profile->flagsjson, true) ?: [];
+            $stats    = json_decode((string)$profile->statsjson, true) ?: [];
 
-            $profile->score        += (int)($changes['scoredelta']        ?? 0);
-            $profile->xp           += (int)($changes['xpdelta']           ?? 0);
-            $profile->softcurrency  += (int)($changes['softcurrencydelta']  ?? 0);
-            $profile->hardcurrency  += (int)($changes['hardcurrencydelta']  ?? 0);
+            $profile->score        += (int)($changes['scoredelta'] ?? 0);
+            $profile->xp           += (int)($changes['xpdelta'] ?? 0);
+            $profile->softcurrency  += (int)($changes['softcurrencydelta'] ?? 0);
+            $profile->hardcurrency  += (int)($changes['hardcurrencydelta'] ?? 0);
 
-            // Prevent scores going negative.
             $profile->score        = max(0, (int)$profile->score);
             $profile->xp           = max(0, (int)$profile->xp);
             $profile->softcurrency = max(0, (int)$profile->softcurrency);
             $profile->hardcurrency = max(0, (int)$profile->hardcurrency);
 
-            $profile->levelno     = max(
+            $profile->levelno = max(
                 1,
                 (int)($changes['levelno'] ?? self::calculate_level_from_xp((int)$profile->xp))
             );
-            $profile->lastquizid  = isset($changes['quizid'])
+            $profile->lastquizid = isset($changes['quizid'])
                 ? (int)$changes['quizid']
                 : $profile->lastquizid;
             $profile->lastdesignid = isset($changes['designid'])
@@ -214,15 +256,14 @@ class profile_service {
             }
 
             $profile->progressjson = json_encode($progress, JSON_UNESCAPED_UNICODE);
-            $profile->flagsjson    = json_encode($flags,    JSON_UNESCAPED_UNICODE);
-            $profile->statsjson    = json_encode($stats,    JSON_UNESCAPED_UNICODE);
+            $profile->flagsjson    = json_encode($flags, JSON_UNESCAPED_UNICODE);
+            $profile->statsjson    = json_encode($stats, JSON_UNESCAPED_UNICODE);
 
             $DB->update_record('local_stackmathgame_profile', $profile);
             $transaction->allow_commit();
-
         } catch (\Throwable $e) {
             $transaction->rollback($e);
-            throw $e;  // Re-throw so callers can handle.
+            throw $e;
         }
 
         return $DB->get_record(

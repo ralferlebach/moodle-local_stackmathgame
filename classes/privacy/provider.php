@@ -1,7 +1,28 @@
 <?php
-namespace local_stackmathgame\privacy;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Privacy provider for local_stackmathgame.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\privacy;
 
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
@@ -11,27 +32,21 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 
 /**
- * Privacy provider for local_stackmathgame.
+ * Privacy provider: implements full export and deletion for profile/eventlog data.
  *
- * Fixed issues:
- * 1. The original class implemented BOTH null_provider AND plugin\provider.
- *    These interfaces are mutually exclusive: null_provider says "I store no
- *    data" while plugin\provider says "I handle data export/deletion".
- *    Implementing both causes a PHP fatal error on newer Moodle versions.
- * 2. The plugin DOES store personal data (profile, eventlog tables keyed by
- *    userid) so null_provider was incorrect. The full provider interface must
- *    be implemented with real export and deletion logic.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements
     \core_privacy\local\metadata\provider,
-    \core_privacy\local\request\plugin\provider,
-    \core_privacy\local\request\core_userlist_provider {
-
+    \core_privacy\local\request\core_userlist_provider,
+    \core_privacy\local\request\plugin\provider {
     /**
      * Describe all personal data fields stored by this plugin.
      *
-     * @param collection $collection
-     * @return collection
+     * @param collection $collection The metadata collection to populate.
+     * @return collection The populated collection.
      */
     public static function get_metadata(collection $collection): collection {
         $collection->add_database_table(
@@ -54,7 +69,6 @@ class provider implements
             ],
             'privacy:metadata:profile'
         );
-
         $collection->add_database_table(
             'local_stackmathgame_eventlog',
             [
@@ -68,37 +82,31 @@ class provider implements
             ],
             'privacy:metadata:eventlog'
         );
-
         return $collection;
     }
 
     /**
      * Get the list of contexts that contain user data for the specified user.
      *
-     * Game data is stored at system context since labels cross courses.
-     *
-     * @param int $userid
-     * @return contextlist
+     * @param int $userid The user ID.
+     * @return contextlist The context list.
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         global $DB;
-
         $contextlist = new contextlist();
-
-        $hasprofile = $DB->record_exists('local_stackmathgame_profile', ['userid' => $userid]);
-        $hasevent   = $DB->record_exists('local_stackmathgame_eventlog', ['userid' => $userid]);
-
+        $hasprofile  = $DB->record_exists('local_stackmathgame_profile', ['userid' => $userid]);
+        $hasevent    = $DB->record_exists('local_stackmathgame_eventlog', ['userid' => $userid]);
         if ($hasprofile || $hasevent) {
             $contextlist->add_system_context();
         }
-
         return $contextlist;
     }
 
     /**
      * Get the list of users who have data within a context.
      *
-     * @param userlist $userlist
+     * @param userlist $userlist The userlist to populate.
+     * @return void
      */
     public static function get_users_in_context(userlist $userlist): void {
         $context = $userlist->get_context();
@@ -113,33 +121,30 @@ class provider implements
     }
 
     /**
-     * Export all data for the supplied userid and contexts.
+     * Export all data for the supplied user and contexts.
      *
-     * @param approved_contextlist $contextlist
+     * @param approved_contextlist $contextlist The approved contextlist.
+     * @return void
      */
     public static function export_user_data(approved_contextlist $contextlist): void {
         global $DB;
-
         $userid = (int)$contextlist->get_user()->id;
-
         foreach ($contextlist->get_contexts() as $context) {
             if (!$context instanceof \context_system) {
                 continue;
             }
-
-            // Export profile records.
             $profiles = $DB->get_records('local_stackmathgame_profile', ['userid' => $userid]);
             if ($profiles) {
                 writer::with_context($context)->export_data(
                     ['local_stackmathgame', 'profiles'],
                     (object)['profiles' => array_values(array_map(
-                        static function(\stdClass $p): array {
+                        static function (\stdClass $p): array {
                             return [
-                                'labelid'    => (int)$p->labelid,
-                                'score'      => (int)$p->score,
-                                'xp'         => (int)$p->xp,
-                                'levelno'    => (int)$p->levelno,
-                                'lastaccess' => \core_privacy\local\request\transform::datetime($p->lastaccess),
+                                'labelid'     => (int)$p->labelid,
+                                'score'       => (int)$p->score,
+                                'xp'          => (int)$p->xp,
+                                'levelno'     => (int)$p->levelno,
+                                'lastaccess'  => \core_privacy\local\request\transform::datetime($p->lastaccess),
                                 'timecreated' => \core_privacy\local\request\transform::datetime($p->timecreated),
                             ];
                         },
@@ -147,17 +152,19 @@ class provider implements
                     ))]
                 );
             }
-
-            // Export event log.
-            $events = $DB->get_records('local_stackmathgame_eventlog', ['userid' => $userid], 'timecreated ASC');
+            $events = $DB->get_records(
+                'local_stackmathgame_eventlog',
+                ['userid' => $userid],
+                'timecreated ASC'
+            );
             if ($events) {
                 writer::with_context($context)->export_data(
                     ['local_stackmathgame', 'eventlog'],
                     (object)['events' => array_values(array_map(
-                        static function(\stdClass $e): array {
+                        static function (\stdClass $e): array {
                             return [
-                                'eventtype'  => $e->eventtype,
-                                'quizid'     => (int)$e->quizid,
+                                'eventtype'   => $e->eventtype,
+                                'quizid'      => (int)$e->quizid,
                                 'timecreated' => \core_privacy\local\request\transform::datetime($e->timecreated),
                             ];
                         },
@@ -171,15 +178,14 @@ class provider implements
     /**
      * Delete all data for all users in the specified context.
      *
-     * @param \context $context
+     * @param \context $context The context to delete data for.
+     * @return void
      */
     public static function delete_data_for_all_users_in_context(\context $context): void {
         global $DB;
-
         if (!$context instanceof \context_system) {
             return;
         }
-
         $DB->delete_records('local_stackmathgame_eventlog', []);
         $DB->delete_records('local_stackmathgame_profile', []);
     }
@@ -187,38 +193,36 @@ class provider implements
     /**
      * Delete all data for the specified user in the specified contexts.
      *
-     * @param approved_contextlist $contextlist
+     * @param approved_contextlist $contextlist The approved contextlist.
+     * @return void
      */
     public static function delete_data_for_user(approved_contextlist $contextlist): void {
         global $DB;
-
         $userid = (int)$contextlist->get_user()->id;
-
         foreach ($contextlist->get_contexts() as $context) {
             if (!$context instanceof \context_system) {
                 continue;
             }
             $DB->delete_records('local_stackmathgame_eventlog', ['userid' => $userid]);
-            $DB->delete_records('local_stackmathgame_profile',  ['userid' => $userid]);
+            $DB->delete_records('local_stackmathgame_profile', ['userid' => $userid]);
         }
     }
 
     /**
      * Delete multiple users' data within a single context.
      *
-     * @param approved_userlist $userlist
+     * @param approved_userlist $userlist The approved userlist.
+     * @return void
      */
     public static function delete_data_for_users(approved_userlist $userlist): void {
         global $DB;
-
         $context = $userlist->get_context();
         if (!$context instanceof \context_system) {
             return;
         }
-
         foreach ($userlist->get_userids() as $userid) {
             $DB->delete_records('local_stackmathgame_eventlog', ['userid' => (int)$userid]);
-            $DB->delete_records('local_stackmathgame_profile',  ['userid' => (int)$userid]);
+            $DB->delete_records('local_stackmathgame_profile', ['userid' => (int)$userid]);
         }
     }
 }

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Event class for stash item granted in STACK Math Game.
+ * Event: stash item granted.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -25,16 +25,15 @@
 namespace local_stackmathgame\event;
 
 /**
- * Event fired when a local stash-like item is granted.
+ * Event fired when a local stash-like item is granted to a user.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class stash_item_granted extends \core\event\base {
-
     /**
-     * Initialise the event.
+     * Initialise required event data properties.
      *
      * @return void
      */
@@ -59,6 +58,6 @@ class stash_item_granted extends \core\event\base {
      * @return string
      */
     public function get_description(): string {
-        return 'Local stash-like item granted in STACK Math Game.';
+        return 'Stash item granted by STACK Math Game for user id ' . $this->userid . '.';
     }
 }

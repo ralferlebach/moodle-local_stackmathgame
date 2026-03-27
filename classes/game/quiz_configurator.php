@@ -1,25 +1,54 @@
 <?php
-namespace local_stackmathgame\game;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Quiz configuration persistence for local_stackmathgame.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace local_stackmathgame\game;
 
 /**
  * Quiz-level configuration persistence.
  *
- * Fixed issues:
- * 1. save_for_quiz() accepted labelid=0 from form data without validation.
- *    A labelid of 0 breaks the foreign-key constraint on the quizcfg table
- *    (labelid_fk references local_stackmathgame_label.id) and caused DB
- *    errors on installations with strict FK enforcement (PostgreSQL).
- *    If the incoming labelid is 0 or missing, the existing value is preserved.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class quiz_configurator {
-
+    /**
+     * Retrieve the game configuration for a quiz, or null if none exists.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return \stdClass|null The configuration record, or null.
+     */
     public static function get_plugin_config(int $quizid): ?\stdClass {
         global $DB;
         return $DB->get_record('local_stackmathgame_quizcfg', ['quizid' => $quizid]) ?: null;
     }
 
+    /**
+     * Ensure a default configuration row exists for the given quiz and return it.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return \stdClass The configuration record.
+     */
     public static function ensure_default(int $quizid): \stdClass {
         global $DB, $USER;
 
@@ -28,11 +57,11 @@ class quiz_configurator {
             return $record;
         }
 
-        $quiz    = $DB->get_record('quiz', ['id' => $quizid], 'id,course', MUST_EXIST);
-        $labelid = self::ensure_default_label();
+        $quiz     = $DB->get_record('quiz', ['id' => $quizid], 'id,course', MUST_EXIST);
+        $labelid  = self::ensure_default_label();
         $designid = theme_manager::ensure_default_design();
-        $now  = time();
-        $data = (object)[
+        $now      = time();
+        $data     = (object)[
             'courseid'          => (int)$quiz->course,
             'quizid'            => $quizid,
             'labelid'           => $labelid,
@@ -51,37 +80,44 @@ class quiz_configurator {
         return $DB->get_record('local_stackmathgame_quizcfg', ['id' => $id], '*', MUST_EXIST);
     }
 
+    /**
+     * Persist updated settings for a quiz game configuration.
+     *
+     * Guards against labelid=0 to prevent FK violations (PostgreSQL).
+     *
+     * @param int   $quizid The quiz instance ID.
+     * @param array $data   Form data to persist.
+     * @return \stdClass The updated configuration record.
+     */
     public static function save_for_quiz(int $quizid, array $data): \stdClass {
         global $DB, $USER;
 
         $record = self::ensure_default($quizid);
 
-        // *** BUG FIX: guard against labelid=0 to prevent FK violation. ***
-        // If the caller passes labelid=0 (e.g. the form was submitted without
-        // selecting a label), keep the existing labelid rather than writing an
-        // invalid 0 reference into the quizcfg table.
+        // Guard: if labelid=0, preserve the existing value to avoid FK violation.
         $newlabelid = (int)($data['labelid'] ?? 0);
         if ($newlabelid <= 0) {
-            $newlabelid = (int)$record->labelid;  // Preserve existing value.
+            $newlabelid = (int)$record->labelid;
         }
 
-        // Same guard for designid.
+        // Guard: same for designid.
         $newdesignid = (int)($data['designid'] ?? 0);
         if ($newdesignid <= 0) {
             $newdesignid = (int)$record->designid;
         }
 
+        $configarr = (array)(
+            $data['config'] ?? json_decode((string)$record->configjson, true) ?: []
+        );
+
         $update = (object)[
             'id'                => $record->id,
             'labelid'           => $newlabelid,
             'designid'          => $newdesignid,
-            'enabled'           => empty($data['enabled'])           ? 0 : 1,
+            'enabled'           => empty($data['enabled']) ? 0 : 1,
             'requiresbehaviour' => empty($data['requiresbehaviour']) ? 0 : 1,
             'teacherdisplayname' => $data['teacherdisplayname'] ?? $record->teacherdisplayname,
-            'configjson'        => json_encode(
-                (array)($data['config'] ?? json_decode((string)$record->configjson, true) ?: []),
-                JSON_UNESCAPED_UNICODE
-            ),
+            'configjson'        => json_encode($configarr, JSON_UNESCAPED_UNICODE),
             'timemodified'      => time(),
             'modifiedby'        => empty($USER->id) ? null : (int)$USER->id,
         ];
@@ -90,6 +126,11 @@ class quiz_configurator {
         return self::get_plugin_config($quizid);
     }
 
+    /**
+     * Ensure the default label exists and return its ID.
+     *
+     * @return int The label ID.
+     */
     public static function ensure_default_label(): int {
         global $DB;
         $existing = $DB->get_record('local_stackmathgame_label', ['name' => 'default'], 'id');
@@ -100,7 +141,7 @@ class quiz_configurator {
         return (int)$DB->insert_record('local_stackmathgame_label', (object)[
             'name'         => 'default',
             'idnumber'     => 'default',
-            'description'  => 'Default global STACK Math Game label',
+            'description'  => 'Default global STACK Math Game label.',
             'status'       => 1,
             'timecreated'  => $now,
             'timemodified' => $now,

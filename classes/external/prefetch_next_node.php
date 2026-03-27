@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * External function: prefetch_next_node.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 namespace local_stackmathgame\external;
 
 defined('MOODLE_INTERNAL') || die();
@@ -6,24 +29,37 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/externallib.php');
 
 /**
- * Returns the next mapped node or next quiz slot as lightweight prefetch data.
+ * Return the next mapped node or next quiz slot as prefetch data.
  *
- * Fixed issue:
- * When no quiz_slots row exists after the current slot (i.e. quiz is at the
- * last question), $slotstate was referenced in the 'end' node payload without
- * ever being assigned – causing an "Undefined variable $slotstate" notice that
- * could manifest as a broken JSON payload.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class prefetch_next_node extends \external_api {
-
+    /**
+     * Describe input parameters.
+     *
+     * @return \external_function_parameters
+     */
     public static function execute_parameters(): \external_function_parameters {
         return new \external_function_parameters([
             'quizid'      => new \external_value(PARAM_INT, 'Quiz id'),
-            'currentslot' => new \external_value(PARAM_INT,
-                                 'Current slot number', VALUE_DEFAULT, 0),
+            'currentslot' => new \external_value(
+                PARAM_INT,
+                'Current slot number',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
+    /**
+     * Execute the function.
+     *
+     * @param int $quizid      The quiz instance ID.
+     * @param int $currentslot The currently active slot.
+     * @return array The next-node payload.
+     */
     public static function execute(int $quizid, int $currentslot = 0): array {
         global $DB;
 
@@ -34,7 +70,6 @@ class prefetch_next_node extends \external_api {
         );
         $slotsprogress = (array)($progress['slots'] ?? []);
 
-        // First try: look in the game's own question map.
         $next = $DB->get_records_select(
             'local_stackmathgame_questionmap',
             'quizid = ? AND slotnumber > ?',
@@ -56,13 +91,11 @@ class prefetch_next_node extends \external_api {
                 break;
             }
         }
-        // If all mapped nodes are solved, fall back to the first mapped one.
         if (!$record && $next) {
             $record = reset($next);
         }
 
         if (!$record) {
-            // Second try: fall back to raw quiz_slots.
             $sql   = 'SELECT id, slot AS slotnumber, questionid'
                    . '  FROM {quiz_slots}'
                    . ' WHERE quizid = ? AND slot > ?'
@@ -71,7 +104,6 @@ class prefetch_next_node extends \external_api {
             $slot  = $slots ? reset($slots) : null;
 
             if ($slot) {
-                // *** BUG FIX: $slotstate was not initialised before use here. ***
                 $slotstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
                     $profile,
                     (int)$slot->slotnumber
@@ -88,17 +120,13 @@ class prefetch_next_node extends \external_api {
                     ),
                 ];
             } else {
-                // *** BUG FIX: $slotstate was undefined here in the original code. ***
                 $payload = [
                     'slotnumber' => 0,
                     'questionid' => 0,
                     'nodekey'    => '',
                     'nodetype'   => 'end',
                     'sortorder'  => 0,
-                    'configjson' => json_encode(
-                        ['slotstate' => ''],  // No slot – state is empty string.
-                        JSON_UNESCAPED_UNICODE
-                    ),
+                    'configjson' => json_encode(['slotstate' => ''], JSON_UNESCAPED_UNICODE),
                 ];
             }
         } else {
@@ -128,6 +156,11 @@ class prefetch_next_node extends \external_api {
         ];
     }
 
+    /**
+     * Describe return values.
+     *
+     * @return \external_single_structure
+     */
     public static function execute_returns(): \external_single_structure {
         return new \external_single_structure([
             'quizid'      => new \external_value(PARAM_INT, 'Quiz id'),

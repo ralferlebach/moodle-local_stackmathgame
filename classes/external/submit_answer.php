@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * External function: submit_answer.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 namespace local_stackmathgame\external;
 
 defined('MOODLE_INTERNAL') || die();
@@ -7,18 +30,18 @@ require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
 /**
- * Processes a game-side answer submit and returns updated attempt metadata.
+ * Process a game-side answer submission and return updated attempt metadata.
  *
- * Fixed issues:
- * 1. previousstate was declared in execute_returns() but never included in the
- *    execute() return array → external API validation threw an exception.
- * 2. mod_quiz_external::process_attempt expects $data as an array of
- *    ['name'=>..., 'value'=>...] maps, not a flat associative array.
- * 3. require_once for the quiz external file is guarded so it doesn't
- *    fail on Moodle installs where the file has moved.
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class submit_answer extends \external_api {
-
+    /**
+     * Describe input parameters.
+     *
+     * @return \external_function_parameters
+     */
     public static function execute_parameters(): \external_function_parameters {
         return new \external_function_parameters([
             'attemptid' => new \external_value(PARAM_INT, 'Quiz attempt id'),
@@ -32,6 +55,14 @@ class submit_answer extends \external_api {
         ]);
     }
 
+    /**
+     * Execute the function.
+     *
+     * @param int   $attemptid The quiz attempt ID.
+     * @param int   $slot      The question slot.
+     * @param array $answers   Array of name/value pairs.
+     * @return array The submission result.
+     */
     public static function execute(int $attemptid, int $slot, array $answers): array {
         global $CFG, $USER;
 
@@ -51,9 +82,6 @@ class submit_answer extends \external_api {
         );
         $design  = \local_stackmathgame\game\theme_manager::get_theme((int)$config->designid);
 
-        // ----------------------------------------------------------------
-        // Build flat payload (key => value) for internal use.
-        // ----------------------------------------------------------------
         $flatpayload = [];
         foreach ($answers as $answer) {
             $name = (string)($answer['name'] ?? '');
@@ -62,7 +90,6 @@ class submit_answer extends \external_api {
             }
             $flatpayload[$name] = (string)($answer['value'] ?? '');
         }
-        // Ensure quiz mechanism fields are present.
         if (!isset($flatpayload['slots'])) {
             $flatpayload['slots'] = (string)$slot;
         }
@@ -74,38 +101,29 @@ class submit_answer extends \external_api {
         }
         $flatpayload['-submit'] = '1';
 
-        // ----------------------------------------------------------------
-        // Convert to the format expected by mod_quiz_external::process_attempt:
-        // an array of ['name' => ..., 'value' => ...] objects.
-        // ----------------------------------------------------------------
         $externaldata = [];
         foreach ($flatpayload as $name => $value) {
             $externaldata[] = ['name' => (string)$name, 'value' => (string)$value];
         }
 
-        // ----------------------------------------------------------------
-        // Try to process via the quiz external API (Moodle 4.x compatible).
-        // We load the external file only when it exists to avoid fatal errors.
-        // ----------------------------------------------------------------
         $processed = false;
         $message   = get_string('submitansweraccepted', 'local_stackmathgame');
 
         try {
-            // Moodle 4.x: quiz external is typically in mod/quiz/classes/external.php
             $quizexternalfile = $CFG->dirroot . '/mod/quiz/classes/external.php';
             if (is_readable($quizexternalfile)) {
                 require_once($quizexternalfile);
             }
-
-            if (class_exists('mod_quiz_external') &&
-                    method_exists('mod_quiz_external', 'process_attempt')) {
-                // Pass data in the correct [{name,value}] format.
+            if (
+                class_exists('mod_quiz_external')
+                && method_exists('mod_quiz_external', 'process_attempt')
+            ) {
                 \mod_quiz_external::process_attempt(
                     $attemptid,
                     $externaldata,
-                    false,   // finishattempt
-                    false,   // timeup
-                    []       // preflightdata
+                    false, // Finish attempt flag.
+                    false, // Time up flag.
+                    []     // Preflight data.
                 );
                 $processed = true;
                 $message   = get_string('submitanswerprocessed', 'local_stackmathgame');
@@ -116,7 +134,6 @@ class submit_answer extends \external_api {
                          . ' ' . $e->getMessage();
         }
 
-        // Reload attempt after processing so state reflects the new submission.
         $attemptobj    = \mod_quiz\quiz_attempt::create($attemptid);
         $qa            = $attemptobj->get_question_attempt($slot);
         $state         = (string)$qa->get_state()->get_name();
@@ -138,11 +155,11 @@ class submit_answer extends \external_api {
             $xpdelta    = (int)$deltas['xp'];
             $cannext    = (bool)$deltas['solved'];
 
-            $progress     = \local_stackmathgame\local\service\profile_service::decode_json_field(
+            $progress         = \local_stackmathgame\local\service\profile_service::decode_json_field(
                 $profile->progressjson ?? '{}'
             );
-            $slots        = (array)($progress['slots'] ?? []);
-            $slotkey      = (string)$slot;
+            $slots            = (array)($progress['slots'] ?? []);
+            $slotkey          = (string)$slot;
             $previousattempts = 0;
             if (isset($slots[$slotkey]) && is_array($slots[$slotkey])) {
                 $previousattempts = (int)($slots[$slotkey]['attempts'] ?? 0);
@@ -156,12 +173,12 @@ class submit_answer extends \external_api {
             $profile = \local_stackmathgame\local\service\profile_service::apply_progress(
                 (int)$profile->id,
                 [
-                    'quizid'        => $quizid,
-                    'designid'      => (int)$config->designid,
-                    'scoredelta'    => $scoredelta,
-                    'xpdelta'       => $xpdelta,
-                    'progress'      => ['slots' => [$slotkey => $slotpayload]],
-                    'stats'         => [
+                    'quizid'     => $quizid,
+                    'designid'   => (int)$config->designid,
+                    'scoredelta' => $scoredelta,
+                    'xpdelta'    => $xpdelta,
+                    'progress'   => ['slots' => [$slotkey => $slotpayload]],
+                    'stats'      => [
                         'lastsubmit' => time(),
                         'laststate'  => $state,
                         'lastslot'   => $slot,
@@ -198,16 +215,16 @@ class submit_answer extends \external_api {
             'questionid'    => (int)$qa->get_question()->id,
             'state'         => $state,
             'sequencecheck' => (int)$qa->get_sequence_check_count(),
-            'answers'       => array_map(static function(array $answer): array {
-                return [
-                    'name'  => (string)$answer['name'],
-                    'value' => (string)$answer['value'],
-                ];
-            }, $answers),
+            'answers'       => array_map(
+                static function (array $answer): array {
+                    return [
+                        'name'  => (string)$answer['name'],
+                        'value' => (string)$answer['value'],
+                    ];
+                },
+                $answers
+            ),
             'inputnames'    => array_keys($qa->get_qt_data()),
-            // *** BUG FIX: previousstate was declared in execute_returns() but
-            // was never included in the return array, causing external API
-            // validation to throw "Missing required attribute" exceptions. ***
             'previousstate' => $previousstate,
             'message'       => $message,
             'profile'       => api::export_profile($profile),
@@ -220,11 +237,15 @@ class submit_answer extends \external_api {
         ];
     }
 
+    /**
+     * Describe return values.
+     *
+     * @return \external_single_structure
+     */
     public static function execute_returns(): \external_single_structure {
         return new \external_single_structure([
             'status'        => new \external_value(PARAM_TEXT, 'Execution status'),
-            'processed'     => new \external_value(PARAM_BOOL,
-                                    'Whether quiz processing was attempted successfully'),
+            'processed'     => new \external_value(PARAM_BOOL, 'Whether processing succeeded'),
             'attemptid'     => new \external_value(PARAM_INT, 'Quiz attempt id'),
             'quizid'        => new \external_value(PARAM_INT, 'Quiz id'),
             'slot'          => new \external_value(PARAM_INT, 'Question slot'),
@@ -240,8 +261,7 @@ class submit_answer extends \external_api {
             'inputnames'    => new \external_multiple_structure(
                 new \external_value(PARAM_RAW_TRIMMED, 'Known question input name')
             ),
-            'previousstate' => new \external_value(PARAM_TEXT,
-                                    'Previous profile-tracked question state'),
+            'previousstate' => new \external_value(PARAM_TEXT, 'Previous profile-tracked question state'),
             'message'       => new \external_value(PARAM_TEXT, 'Human-readable message'),
             'profile'       => get_quiz_config::profile_structure(),
             'design'        => get_quiz_config::design_structure(),
@@ -249,8 +269,7 @@ class submit_answer extends \external_api {
             'scoredelta'    => new \external_value(PARAM_INT, 'Score delta'),
             'xpdelta'       => new \external_value(PARAM_INT, 'XP delta'),
             'canretry'      => new \external_value(PARAM_BOOL, 'Whether retry remains possible'),
-            'cannext'       => new \external_value(PARAM_BOOL,
-                                    'Whether the frontend may advance immediately'),
+            'cannext'       => new \external_value(PARAM_BOOL, 'Whether frontend may advance immediately'),
         ]);
     }
 }

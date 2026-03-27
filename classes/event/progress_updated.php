@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Event class for progress updated in STACK Math Game.
+ * Event: progress updated.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -25,16 +25,15 @@
 namespace local_stackmathgame\event;
 
 /**
- * Event fired when a user's progress is updated.
+ * Event fired when a user's game progress is updated.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class progress_updated extends \core\event\base {
-
     /**
-     * Initialise the event.
+     * Initialise required event data properties.
      *
      * @return void
      */
@@ -59,6 +58,6 @@ class progress_updated extends \core\event\base {
      * @return string
      */
     public function get_description(): string {
-        return 'Progress updated by STACK Math Game.';
+        return 'Progress updated by STACK Math Game for user id ' . $this->userid . '.';
     }
 }
