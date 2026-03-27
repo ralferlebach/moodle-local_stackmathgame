@@ -87,5 +87,12 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032707, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032708) {
+        // Version 2026032708: PHPCS fixes in test files; AMD injection moved
+        // from extend_settings_navigation to before_http_headers hook for
+        // reliable tertiary navigation injection on quiz management pages.
+        upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
+    }
+
     return true;
 }

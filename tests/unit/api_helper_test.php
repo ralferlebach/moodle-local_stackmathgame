@@ -32,7 +32,7 @@ final class api_helper_test extends advanced_testcase {
      * Full payload passes through with correct types.
      */
     public function test_normalise_full_payload(): void {
-        $input  = ['questionid' => 7, 'slot' => 3, 'answers' => ['a', 'b']];
+        $input = ['questionid' => 7, 'slot' => 3, 'answers' => ['a', 'b']];
         $result = api::normalise_question_payload($input);
         $this->assertSame(7, $result['questionid']);
         $this->assertSame(3, $result['slot']);
@@ -62,7 +62,7 @@ final class api_helper_test extends advanced_testcase {
      * export_design(null) returns all required keys.
      */
     public function test_export_design_null_has_required_keys(): void {
-        $export   = api::export_design(null);
+        $export = api::export_design(null);
         $required = [
             'id', 'name', 'slug', 'modecomponent', 'description',
             'isbundled', 'isactive', 'narrativejson', 'uijson',
@@ -89,21 +89,21 @@ final class api_helper_test extends advanced_testcase {
      */
     public function test_export_profile_has_required_keys(): void {
         $profile = (object)[
-            'id'               => 1,
-            'userid'           => 2,
-            'labelid'          => 3,
-            'score'            => 100,
-            'xp'               => 250,
-            'levelno'          => 3,
-            'softcurrency'     => 10,
-            'hardcurrency'     => 5,
+            'id' => 1,
+            'userid' => 2,
+            'labelid' => 3,
+            'score' => 100,
+            'xp' => 250,
+            'levelno' => 3,
+            'softcurrency' => 10,
+            'hardcurrency' => 5,
             'avatarconfigjson' => '{}',
-            'progressjson'     => '{}',
-            'statsjson'        => '{}',
-            'flagsjson'        => '{}',
-            'lastquizid'       => 7,
-            'lastdesignid'     => 4,
-            'lastaccess'       => 1700000000,
+            'progressjson' => '{}',
+            'statsjson' => '{}',
+            'flagsjson' => '{}',
+            'lastquizid' => 7,
+            'lastdesignid' => 4,
+            'lastaccess' => 1700000000,
         ];
         $export = api::export_profile($profile);
         $this->assertSame(1, $export['id']);

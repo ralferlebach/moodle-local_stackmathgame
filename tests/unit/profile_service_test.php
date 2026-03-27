@@ -32,7 +32,7 @@ final class profile_service_test extends advanced_testcase {
      * Level calculation: boundary and typical values.
      *
      * @dataProvider xp_level_provider
-     * @param int $xp      Input XP.
+     * @param int $xp Input XP.
      * @param int $expected Expected level.
      */
     public function test_calculate_level_from_xp(int $xp, int $expected): void {
@@ -46,14 +46,14 @@ final class profile_service_test extends advanced_testcase {
      */
     public static function xp_level_provider(): array {
         return [
-            'zero xp is level 1'        => [0, 1],
-            '50 xp is level 1'          => [50, 1],
-            '99 xp is level 1'          => [99, 1],
-            '100 xp is level 2'         => [100, 2],
-            '199 xp is level 2'         => [199, 2],
-            '200 xp is level 3'         => [200, 3],
-            '500 xp is level 6'         => [500, 6],
-            'negative xp clamped to 1'  => [-10, 1],
+            'zero xp is level 1' => [0, 1],
+            '50 xp is level 1' => [50, 1],
+            '99 xp is level 1' => [99, 1],
+            '100 xp is level 2' => [100, 2],
+            '199 xp is level 2' => [199, 2],
+            '200 xp is level 3' => [200, 3],
+            '500 xp is level 6' => [500, 6],
+            'negative xp clamped to 1' => [-10, 1],
         ];
     }
 
@@ -194,7 +194,7 @@ final class profile_service_test extends advanced_testcase {
         ];
         $profile = (object)[
             'progressjson' => json_encode($progress),
-            'xp'           => 150,
+            'xp' => 150,
         ];
         $summary = profile_service::build_summary($profile);
         $this->assertSame(3, $summary['solvedcount'], '3 gradedright/complete');
