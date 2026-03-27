@@ -163,7 +163,7 @@ final class profile_service_test extends advanced_testcase {
     public function test_deltas_upgrade_partial_to_correct(): void {
         $d = profile_service::calculate_submit_deltas('gradedpartial', 'gradedright');
         $this->assertSame(10, $d['score']);
-        $this->assertSame(5,  $d['xp']);
+        $this->assertSame(5, $d['xp']);
         $this->assertTrue($d['solved']);
     }
 
