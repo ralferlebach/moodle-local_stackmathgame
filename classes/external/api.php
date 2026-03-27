@@ -11,13 +11,15 @@ use local_stackmathgame\local\service\profile_service;
 /**
  * Helper facade for external functions.
  *
- * Fixed issues:
- * 1. export_design(null) was missing 'runtimejson' in the returned array.
- *    The design_structure() in get_quiz_config declares runtimejson as a
- *    required field, so a null design without it caused external API
- *    validation failures downstream (e.g. in get_profile_state, save_progress).
- * 2. global_userid() has been moved inside the class as a private static
- *    method to avoid polluting the global namespace.
+ * Fixed (v 2026032700):
+ * 1. get_quiz_context() called get_coursemodule_from_instance() with
+ *    false (= IGNORE_MISSING) as 4th param and MUST_EXIST as a silently-
+ *    ignored 5th param. The function returned null, and subsequent code
+ *    crashed with a fatal error or unexpected exception.
+ *    Now uses IGNORE_MISSING explicitly and throws a proper moodle_exception
+ *    when the CM record cannot be found.
+ * 2. export_design(null) was missing 'runtimejson' key (from session 2 fix,
+ *    preserved here).
  */
 class api {
 
@@ -29,8 +31,26 @@ class api {
         ];
     }
 
+    /**
+     * Resolve a course-module record for a quiz instance.
+     *
+     * @param int $quizid Quiz instance id.
+     * @return array [$cm, $context]
+     * @throws \moodle_exception When no course_modules entry exists for the quiz.
+     */
     public static function get_quiz_context(int $quizid): array {
-        $cm      = get_coursemodule_from_instance('quiz', $quizid, 0, false, MUST_EXIST);
+        // *** BUG FIX: get_coursemodule_from_instance() has exactly 4 params.
+        // Previous code passed false (4th = IGNORE_MISSING) and MUST_EXIST as
+        // an ignored 5th arg, returning null and crashing. ***
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, IGNORE_MISSING);
+        if (!$cm) {
+            throw new \moodle_exception(
+                'quiznotfound',
+                'local_stackmathgame',
+                '',
+                $quizid
+            );
+        }
         $context = context_module::instance((int)$cm->id);
         return [$cm, $context];
     }
@@ -69,10 +89,6 @@ class api {
 
     public static function export_design(?\stdClass $design): array {
         if (!$design) {
-            // *** BUG FIX: runtimejson was missing here. design_structure() in
-            // get_quiz_config declares it as a required return field. Callers
-            // that receive a null design (quiz with no active design) would
-            // get an external API validation exception. ***
             return [
                 'id'               => 0,
                 'name'             => '',
@@ -163,7 +179,6 @@ class api {
 
     /**
      * Return current user id safely (0 for guests / CLI).
-     * Private helper replacing the old global function global_userid().
      */
     private static function current_userid(): int {
         global $USER;
@@ -172,10 +187,9 @@ class api {
 }
 
 /**
- * Backward-compatible global function kept so any external code that
- * still calls global_userid() does not break immediately.
+ * Backward-compatible global function.
  *
- * @deprecated Use \local_stackmathgame\external\api::validate_quiz_access() instead.
+ * @deprecated Use \local_stackmathgame\external\api methods directly.
  * @return int
  */
 function global_userid(): int {
