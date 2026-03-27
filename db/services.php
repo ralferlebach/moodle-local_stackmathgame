@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
 $functions = [
     'local_stackmathgame_get_quiz_config' => [
         'classname' => 'local_stackmathgame\\external\\get_quiz_config',
