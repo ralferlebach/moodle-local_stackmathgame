@@ -1,20 +1,44 @@
 <?php
-namespace local_stackmathgame\event;
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Plugininfo handler for stackmathgame mode subplugins.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
-class question_solved extends \core\event\base {
-    protected function init(): void {
-        $this->data['crud'] = 'r';
-        $this->data['edulevel'] = self::LEVEL_PARTICIPATING;
-        $this->data['objecttable'] = 'local_stackmathgame_profile';
-    }
+namespace local_stackmathgame\plugininfo;
 
-    public static function get_name(): string {
-        return get_string('event_question_solved', 'local_stackmathgame');
-    }
+/**
+ * Plugininfo handler for stackmathgame mode subplugins.
+ *
+ * @package    local_stackmathgame
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class stackmathgamemode extends \core\plugininfo\base {
 
-    public function get_description(): string {
-        return 'Question solved in STACK Math Game.';
+    /**
+     * Whether the plugin can be uninstalled.
+     *
+     * @return bool Always returns true.
+     */
+    public function is_uninstall_allowed(): bool {
+        return true;
     }
 }
