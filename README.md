@@ -28,10 +28,3 @@ Subplugin support:
 ## Shortcodes
 
 The plugin registers the shortcodes `smgscore`, `smgxp`, `smglevel`, `smgprogress`, `smgnarrative`, `smgavatar`, and `smgleaderboard`. Outside a quiz context the attribute `label="..."` is required.
-
-
-## Optional integration behaviour
-
-- `block_xp` is integrated softly via Moodle events (`progress_updated`, `question_solved`).
-- `block_stash` is integrated softly via a local inventory fallback plus `stash_item_granted` event.
-- Both integrations fail silently when the companion plugins are not installed.
