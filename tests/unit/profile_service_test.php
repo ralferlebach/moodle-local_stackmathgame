@@ -28,7 +28,6 @@ use local_stackmathgame\local\service\profile_service;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class profile_service_test extends advanced_testcase {
-
     /**
      * Level calculation: boundary and typical values.
      *
@@ -47,9 +46,9 @@ final class profile_service_test extends advanced_testcase {
      */
     public static function xp_level_provider(): array {
         return [
-            'zero xp is level 1'        => [0,   1],
-            '50 xp is level 1'          => [50,  1],
-            '99 xp is level 1'          => [99,  1],
+            'zero xp is level 1'        => [0, 1],
+            '50 xp is level 1'          => [50, 1],
+            '99 xp is level 1'          => [99, 1],
             '100 xp is level 2'         => [100, 2],
             '199 xp is level 2'         => [199, 2],
             '200 xp is level 3'         => [200, 3],
@@ -78,7 +77,7 @@ final class profile_service_test extends advanced_testcase {
     public function test_decode_json_field_valid(): void {
         $result = profile_service::decode_json_field('{"key":"value","num":42}');
         $this->assertSame('value', $result['key']);
-        $this->assertSame(42,      $result['num']);
+        $this->assertSame(42, $result['num']);
     }
 
     /**
@@ -123,8 +122,8 @@ final class profile_service_test extends advanced_testcase {
      */
     public function test_deltas_first_correct(): void {
         $d = profile_service::calculate_submit_deltas('', 'gradedright');
-        $this->assertSame(10,  $d['score']);
-        $this->assertSame(5,   $d['xp']);
+        $this->assertSame(10, $d['score']);
+        $this->assertSame(5, $d['xp']);
         $this->assertTrue($d['solved']);
     }
 
@@ -143,8 +142,8 @@ final class profile_service_test extends advanced_testcase {
      */
     public function test_deltas_first_partial(): void {
         $d = profile_service::calculate_submit_deltas('', 'gradedpartial');
-        $this->assertSame(5,     $d['score']);
-        $this->assertSame(2,     $d['xp']);
+        $this->assertSame(5, $d['score']);
+        $this->assertSame(2, $d['xp']);
         $this->assertFalse($d['solved']);
     }
 
@@ -153,8 +152,8 @@ final class profile_service_test extends advanced_testcase {
      */
     public function test_deltas_wrong(): void {
         $d = profile_service::calculate_submit_deltas('', 'gradedwrong');
-        $this->assertSame(0,     $d['score']);
-        $this->assertSame(0,     $d['xp']);
+        $this->assertSame(0, $d['score']);
+        $this->assertSame(0, $d['xp']);
         $this->assertFalse($d['solved']);
     }
 
@@ -198,9 +197,9 @@ final class profile_service_test extends advanced_testcase {
             'xp'           => 150,
         ];
         $summary = profile_service::build_summary($profile);
-        $this->assertSame(3,  $summary['solvedcount'],  '3 gradedright/complete');
-        $this->assertSame(1,  $summary['partialcount'], '1 gradedpartial');
-        $this->assertSame(5,  $summary['trackedslots'], '5 total slots');
+        $this->assertSame(3, $summary['solvedcount'], '3 gradedright/complete');
+        $this->assertSame(1, $summary['partialcount'], '1 gradedpartial');
+        $this->assertSame(5, $summary['trackedslots'], '5 total slots');
         $this->assertSame(50, $summary['levelprogress'], '150 xp -> progress 50');
     }
 }

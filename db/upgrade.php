@@ -75,7 +75,17 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032705, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032706) {
+        // Version 2026032706: AMD build files (amd/build/*.min.js) added.
+        // Previously missing, causing RequireJS to not recognise the modules
+        // and silently skipping the tertiary_nav injection entirely.
+        upgrade_plugin_savepoint(true, 2026032706, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032707) {
+        // Version 2026032707: PHPCS fixes in test files and upgrade.php.
+        upgrade_plugin_savepoint(true, 2026032707, 'local', 'stackmathgame');
+    }
+
     return true;
 }
-
-

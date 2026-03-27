@@ -28,15 +28,14 @@ use local_stackmathgame\external\api;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class api_helper_test extends advanced_testcase {
-
     /**
      * Full payload passes through with correct types.
      */
     public function test_normalise_full_payload(): void {
         $input  = ['questionid' => 7, 'slot' => 3, 'answers' => ['a', 'b']];
         $result = api::normalise_question_payload($input);
-        $this->assertSame(7,          $result['questionid']);
-        $this->assertSame(3,          $result['slot']);
+        $this->assertSame(7, $result['questionid']);
+        $this->assertSame(3, $result['slot']);
         $this->assertSame(['a', 'b'], $result['answers']);
     }
 
@@ -45,8 +44,8 @@ final class api_helper_test extends advanced_testcase {
      */
     public function test_normalise_empty_payload(): void {
         $result = api::normalise_question_payload([]);
-        $this->assertSame(0,  $result['questionid']);
-        $this->assertSame(0,  $result['slot']);
+        $this->assertSame(0, $result['questionid']);
+        $this->assertSame(0, $result['slot']);
         $this->assertSame([], $result['answers']);
     }
 
@@ -56,7 +55,7 @@ final class api_helper_test extends advanced_testcase {
     public function test_normalise_string_values(): void {
         $result = api::normalise_question_payload(['questionid' => '42', 'slot' => '5']);
         $this->assertSame(42, $result['questionid']);
-        $this->assertSame(5,  $result['slot']);
+        $this->assertSame(5, $result['slot']);
     }
 
     /**
@@ -79,10 +78,10 @@ final class api_helper_test extends advanced_testcase {
      */
     public function test_export_design_null_default_values(): void {
         $export = api::export_design(null);
-        $this->assertSame(0,    $export['id']);
-        $this->assertSame('',   $export['name']);
+        $this->assertSame(0, $export['id']);
+        $this->assertSame('', $export['name']);
         $this->assertSame('{}', $export['runtimejson']);
-        $this->assertSame(0,    $export['isbundled']);
+        $this->assertSame(0, $export['isbundled']);
     }
 
     /**
@@ -107,10 +106,10 @@ final class api_helper_test extends advanced_testcase {
             'lastaccess'       => 1700000000,
         ];
         $export = api::export_profile($profile);
-        $this->assertSame(1,   $export['id']);
+        $this->assertSame(1, $export['id']);
         $this->assertSame(100, $export['score']);
         $this->assertSame(250, $export['xp']);
-        $this->assertSame(3,   $export['levelno']);
+        $this->assertSame(3, $export['levelno']);
         $this->assertArrayHasKey('summaryjson', $export);
         $summary = json_decode($export['summaryjson'], true);
         $this->assertIsArray($summary);

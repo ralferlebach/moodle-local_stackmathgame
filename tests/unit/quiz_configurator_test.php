@@ -30,7 +30,6 @@ use local_stackmathgame\game\quiz_configurator;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class quiz_configurator_test extends advanced_testcase {
-
     /**
      * ensure_default_label() creates the default label when it does not exist.
      *
@@ -85,13 +84,13 @@ final class quiz_configurator_test extends advanced_testcase {
         $quizid   = (int)$quiz->id;
 
         $config      = quiz_configurator::ensure_default($quizid);
-        $origLabelId = (int)$config->labelid;
-        $this->assertGreaterThan(0, $origLabelId);
+        $origlabelid = (int)$config->labelid;
+        $this->assertGreaterThan(0, $origlabelid);
 
         quiz_configurator::save_for_quiz($quizid, ['labelid' => 0, 'enabled' => 1]);
 
         $updated = quiz_configurator::get_plugin_config($quizid);
-        $this->assertSame($origLabelId, (int)$updated->labelid, 'labelid=0 must not overwrite');
+        $this->assertSame($origlabelid, (int)$updated->labelid, 'labelid=0 must not overwrite');
         $this->assertSame(1, (int)$updated->enabled, 'enabled flag must be saved');
     }
 }
