@@ -52,3 +52,9 @@ $string['shortcode_smgnarrative_help'] = 'Displays narrative text from the activ
 $string['shortcode_smgavatar_help'] = 'Displays the avatar payload for the current label/profile. Outside a quiz context you must pass label="...". Optional: field="avatarkey".';
 $string['shortcode_smgleaderboard_help'] = 'Displays a leaderboard for a label. Outside a quiz context you must pass label="...". Optional: limit="10".';
 $string['shortcodeslabelrequired'] = 'Outside a quiz context, STACK Math Game shortcodes require a label argument.';
+
+$string['event_progress_updated'] = 'STACK Math Game progress updated';
+$string['event_question_solved'] = 'STACK Math Game question solved';
+$string['event_stash_item_granted'] = 'STACK Math Game stash item granted';
+$string['integration_blockxp'] = 'Level Up! XP bridge';
+$string['integration_blockstash'] = 'Stash bridge';

@@ -40,7 +40,9 @@ class profile_service {
         $ispartial = in_array($newstate, $partialstates, true);
 
         if ($isright && !$wasright) {
-            return ['score' => 10, 'xp' => 5, 'solved' => true];
+            $score = $waspartial ? 5 : 10;
+            $xp = $waspartial ? 3 : 5;
+            return ['score' => $score, 'xp' => $xp, 'solved' => true];
         }
         if ($ispartial && !$wasright && !$waspartial) {
             return ['score' => 5, 'xp' => 2, 'solved' => false];
@@ -65,9 +67,10 @@ class profile_service {
             'solvedcount' => $solved,
             'partialcount' => $partial,
             'trackedslots' => count($slots),
-            'levelprogress' => $profile->xp % 100,
+            'levelprogress' => (int)$profile->xp % 100,
         ];
     }
+
     public static function get_or_create_for_quiz(int $userid, int $quizid): \stdClass {
         $config = quiz_configurator::ensure_default($quizid);
         return self::get_or_create((int)$userid, (int)$config->labelid, $quizid, (int)$config->designid);
@@ -103,10 +106,11 @@ class profile_service {
 
     public static function apply_progress(int $profileid, array $changes): \stdClass {
         global $DB;
+        $transaction = $DB->start_delegated_transaction();
         $profile = $DB->get_record('local_stackmathgame_profile', ['id' => $profileid], '*', MUST_EXIST);
-        $progress = json_decode((string)$profile->progressjson, true) ?: [];
-        $flags = json_decode((string)$profile->flagsjson, true) ?: [];
-        $stats = json_decode((string)$profile->statsjson, true) ?: [];
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $flags = self::decode_json_field($profile->flagsjson ?? '{}');
+        $stats = self::decode_json_field($profile->statsjson ?? '{}');
 
         $profile->score += (int)($changes['scoredelta'] ?? 0);
         $profile->xp += (int)($changes['xpdelta'] ?? 0);
@@ -119,22 +123,20 @@ class profile_service {
         $profile->timemodified = $profile->lastaccess;
 
         if (array_key_exists('progress', $changes)) {
-            $incoming = (array)$changes['progress'];
-            $progress = array_replace_recursive($progress, $incoming);
+            $progress = array_replace_recursive($progress, (array)$changes['progress']);
         }
         if (array_key_exists('flags', $changes)) {
-            $incoming = (array)$changes['flags'];
-            $flags = array_replace_recursive($flags, $incoming);
+            $flags = array_replace_recursive($flags, (array)$changes['flags']);
         }
         if (array_key_exists('stats', $changes)) {
-            $incoming = (array)$changes['stats'];
-            $stats = array_replace_recursive($stats, $incoming);
+            $stats = array_replace_recursive($stats, (array)$changes['stats']);
         }
 
         $profile->progressjson = json_encode($progress, JSON_UNESCAPED_UNICODE);
         $profile->flagsjson = json_encode($flags, JSON_UNESCAPED_UNICODE);
         $profile->statsjson = json_encode($stats, JSON_UNESCAPED_UNICODE);
         $DB->update_record('local_stackmathgame_profile', $profile);
+        $transaction->allow_commit();
         return $DB->get_record('local_stackmathgame_profile', ['id' => $profileid], '*', MUST_EXIST);
     }
 }

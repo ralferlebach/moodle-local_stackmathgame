@@ -55,6 +55,7 @@ class api {
             'lastdesignid' => (int)($profile->lastdesignid ?? 0),
             'lastaccess' => (int)($profile->lastaccess ?? 0),
             'summaryjson' => json_encode($summary, JSON_UNESCAPED_UNICODE),
+            'integrationsjson' => json_encode(\local_stackmathgame\local\integration\availability::export_status(), JSON_UNESCAPED_UNICODE),
         ];
     }
 

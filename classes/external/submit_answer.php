@@ -25,7 +25,7 @@ class submit_answer extends \external_api {
     }
 
     public static function execute(int $attemptid, int $slot, array $answers): array {
-        global $USER;
+        global $USER, $DB;
         require_sesskey();
 
         $attemptobj = \mod_quiz\quiz_attempt::create($attemptid);
@@ -51,128 +51,104 @@ class submit_answer extends \external_api {
         $processed = false;
         $message = get_string('submitansweraccepted', 'local_stackmathgame');
         try {
-            if (!isset($payload['slots'])) {
-                $payload['slots'] = (string)$slot;
-            }
-            if (!isset($payload['attempt'])) {
-                $payload['attempt'] = (string)$attemptid;
-            }
-            if (!isset($payload['sesskey'])) {
-                $payload['sesskey'] = sesskey();
-            }
+            $payload['slots'] = $payload['slots'] ?? (string)$slot;
+            $payload['attempt'] = $payload['attempt'] ?? (string)$attemptid;
+            $payload['sesskey'] = $payload['sesskey'] ?? sesskey();
             $payload['-submit'] = 1;
-
             if (class_exists('mod_quiz_external') && method_exists('mod_quiz_external', 'process_attempt')) {
                 \mod_quiz_external::process_attempt($attemptid, $payload, false, false, []);
                 $processed = true;
                 $message = get_string('submitanswerprocessed', 'local_stackmathgame');
             }
         } catch (\Throwable $e) {
-            $processed = false;
             $message = get_string('submitanswerfallback', 'local_stackmathgame') . ' ' . $e->getMessage();
         }
 
-        // Recreate the attempt object after processing.
         $attemptobj = \mod_quiz\quiz_attempt::create($attemptid);
         $qa = $attemptobj->get_question_attempt($slot);
         $state = (string)$qa->get_state()->get_name();
-        $feedbackhtml = '';
+        $sequencecheck = (int)$qa->get_sequence_check_count();
         $previousstate = \local_stackmathgame\local\service\profile_service::get_slot_state($profile, $slot);
-        $scoredelta = 0;
-        $xpdelta = 0;
-        $cannext = false;
+        $deltas = \local_stackmathgame\local\service\profile_service::calculate_submit_deltas($previousstate, $state);
+        $scoredelta = (int)$deltas['score'];
+        $xpdelta = (int)$deltas['xp'];
+        $cannext = (bool)$deltas['solved'];
+        $canretry = !$cannext;
 
-        if ($processed) {
-            $deltas = \local_stackmathgame\local\service\profile_service::calculate_submit_deltas($previousstate, $state);
-            $scoredelta = (int)$deltas['score'];
-            $xpdelta = (int)$deltas['xp'];
-            $cannext = (bool)$deltas['solved'];
-            $progress = \local_stackmathgame\local\service\profile_service::decode_json_field($profile->progressjson ?? '{}');
-            $slots = (array)($progress['slots'] ?? []);
-            $slotkey = (string)$slot;
-            $previousattempts = 0;
-            if (isset($slots[$slotkey]) && is_array($slots[$slotkey])) {
-                $previousattempts = (int)($slots[$slotkey]['attempts'] ?? 0);
-            }
-            $slotpayload = [
-                'state' => $state,
-                'attempts' => $previousattempts + 1,
-                'solved' => $cannext ? 1 : 0,
-                'lastsubmitted' => time(),
-            ];
-            $profile = \local_stackmathgame\local\service\profile_service::apply_progress((int)$profile->id, [
-                'quizid' => $quizid,
-                'designid' => (int)$config->designid,
-                'scoredelta' => $scoredelta,
-                'xpdelta' => $xpdelta,
-                'progress' => ['slots' => [$slotkey => $slotpayload]],
-                'stats' => ['lastsubmit' => time(), 'laststate' => $state, 'lastslot' => $slot],
-            ]);
-        }
+        $progress = \local_stackmathgame\local\service\profile_service::decode_json_field($profile->progressjson ?? '{}');
+        $slots = (array)($progress['slots'] ?? []);
+        $slotkey = (string)$slot;
+        $slotprogress = (array)($slots[$slotkey] ?? []);
+        $slotprogress['questionid'] = (int)$qa->get_question_id();
+        $slotprogress['state'] = $state;
+        $slotprogress['attempts'] = (int)($slotprogress['attempts'] ?? 0) + 1;
+        $slotprogress['solved'] = !empty($deltas['solved']);
+        $slotprogress['partial'] = in_array($state, ['gradedpartial'], true);
+        $slotprogress['lastsubmitted'] = time();
+        $slotprogress['lastsequencecheck'] = $sequencecheck;
+        $slotprogress['attemptid'] = $attemptid;
+        $slots[$slotkey] = $slotprogress;
+        $progress['slots'] = $slots;
 
-        api::log_event($profile, $quizid, (int)$config->designid, 'answer_submitted', 'external.submit_answer', [
-            'attemptid' => $attemptid,
-            'slot' => $slot,
-            'answers' => array_values($payload),
-            'questionid' => (int)$qa->get_question()->id,
-            'processed' => $processed,
-            'previousstate' => $previousstate,
-            'state' => $state,
-        ], count($answers), $state);
-
-        return [
-            'status' => $processed ? 'processed' : 'accepted',
-            'processed' => $processed,
-            'attemptid' => $attemptid,
+        $profile = \local_stackmathgame\local\service\profile_service::apply_progress((int)$profile->id, [
             'quizid' => $quizid,
-            'slot' => $slot,
-            'questionid' => (int)$qa->get_question()->id,
-            'state' => $state,
-            'sequencecheck' => (int)$qa->get_sequence_check_count(),
-            'answers' => array_map(static function(array $answer): array {
-                return [
-                    'name' => (string)$answer['name'],
-                    'value' => (string)$answer['value'],
-                ];
-            }, $answers),
-            'inputnames' => array_keys($qa->get_qt_data()),
-            'message' => $message,
-            'profile' => api::export_profile($profile),
-            'design' => api::export_design($design),
-            'feedbackhtml' => $feedbackhtml,
+            'designid' => (int)$config->designid,
             'scoredelta' => $scoredelta,
             'xpdelta' => $xpdelta,
-            'canretry' => true,
-            'cannext' => $cannext,
+            'progress' => $progress,
+        ]);
+
+        api::log_event($profile, $quizid, (int)$config->designid, 'answer_submit', 'external_submit', [
+            'questionid' => (int)$qa->get_question_id(),
+            'slot' => $slot,
+            'state' => $state,
+            'processed' => $processed,
+            'sequencecheck' => $sequencecheck,
+        ], $scoredelta, $state);
+
+        $bridges = \local_stackmathgame\local\integration\bridge_dispatcher::on_answer_result(
+            $profile,
+            $quizid,
+            (int)$config->designid,
+            $slot,
+            $slotprogress,
+            $deltas
+        );
+
+        $feedbacksummary = trim(strip_tags((string)$qa->get_current_summary()));
+
+        return [
+            'processed' => $processed ? 1 : 0,
+            'message' => $message,
+            'state' => $state,
+            'previousstate' => $previousstate,
+            'attemptstate' => (string)$attemptobj->get_attempt()->state,
+            'feedbacksummary' => $feedbacksummary,
+            'scoredelta' => $scoredelta,
+            'xpdelta' => $xpdelta,
+            'canretry' => $canretry ? 1 : 0,
+            'cannext' => $cannext ? 1 : 0,
+            'profile' => api::export_profile($profile),
+            'design' => api::export_design($design),
+            'bridgesjson' => json_encode($bridges, JSON_UNESCAPED_UNICODE),
         ];
     }
 
     public static function execute_returns(): \external_single_structure {
         return new \external_single_structure([
-            'status' => new \external_value(PARAM_TEXT, 'Execution status'),
-            'processed' => new \external_value(PARAM_BOOL, 'Whether quiz processing was attempted successfully'),
-            'attemptid' => new \external_value(PARAM_INT, 'Quiz attempt id'),
-            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
-            'slot' => new \external_value(PARAM_INT, 'Question slot'),
-            'questionid' => new \external_value(PARAM_INT, 'Question id'),
-            'state' => new \external_value(PARAM_TEXT, 'Current question state'),
-            'sequencecheck' => new \external_value(PARAM_INT, 'Sequence check count'),
-            'answers' => new \external_multiple_structure(
-                new \external_single_structure([
-                    'name' => new \external_value(PARAM_RAW_TRIMMED, 'Input name'),
-                    'value' => new \external_value(PARAM_RAW, 'Input value'),
-                ])
-            ),
-            'inputnames' => new \external_multiple_structure(new \external_value(PARAM_RAW_TRIMMED, 'Known question input name')),
-            'previousstate' => new \external_value(PARAM_TEXT, 'Previous profile-tracked question state'),
-            'message' => new \external_value(PARAM_TEXT, 'Human-readable message'),
+            'processed' => new \external_value(PARAM_INT, 'Whether attempt processing succeeded'),
+            'message' => new \external_value(PARAM_TEXT, 'Human readable message'),
+            'state' => new \external_value(PARAM_RAW, 'Question state'),
+            'previousstate' => new \external_value(PARAM_RAW, 'Previous tracked slot state'),
+            'attemptstate' => new \external_value(PARAM_RAW, 'Attempt state'),
+            'feedbacksummary' => new \external_value(PARAM_RAW, 'Feedback summary'),
+            'scoredelta' => new \external_value(PARAM_INT, 'Score delta applied'),
+            'xpdelta' => new \external_value(PARAM_INT, 'XP delta applied'),
+            'canretry' => new \external_value(PARAM_INT, 'Whether retry is possible'),
+            'cannext' => new \external_value(PARAM_INT, 'Whether next step is available'),
             'profile' => get_quiz_config::profile_structure(),
             'design' => get_quiz_config::design_structure(),
-            'feedbackhtml' => new \external_value(PARAM_RAW, 'Reserved feedback html channel'),
-            'scoredelta' => new \external_value(PARAM_INT, 'Score delta'),
-            'xpdelta' => new \external_value(PARAM_INT, 'XP delta'),
-            'canretry' => new \external_value(PARAM_BOOL, 'Whether retry remains possible'),
-            'cannext' => new \external_value(PARAM_BOOL, 'Whether the frontend may advance immediately'),
+            'bridgesjson' => new \external_value(PARAM_RAW, 'Integration bridge status JSON'),
         ]);
     }
 }
