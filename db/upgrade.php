@@ -62,5 +62,20 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032700, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032704) {
+        // Version 2026032704: PHP-only fixes.
+        // - Studio icon moved to render_navbar_output() (no fixed positioning).
+        // - Tertiary navigation injection made robust (multi-attempt timeout).
+        // - PHPUnit test files corrected to test local_stackmathgame classes.
+        upgrade_plugin_savepoint(true, 2026032704, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032705) {
+        // Version 2026032705: Adds smg_console_diag.js debug tooling (no schema change).
+        upgrade_plugin_savepoint(true, 2026032705, 'local', 'stackmathgame');
+    }
+
     return true;
 }
+
+

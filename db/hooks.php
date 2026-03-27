@@ -24,15 +24,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+// Note: the studio icon is injected via local_stackmathgame_render_navbar_output()
+// in lib.php (standard Moodle navbar callback). No hook needed for that.
 $callbacks = [
     [
-        'hook' => \core\hook\output\before_http_headers::class,
+        'hook'     => \core\hook\output\before_http_headers::class,
         'callback' => \local_stackmathgame\hook\output_hooks::class . '::inject_game_assets',
-        'priority' => 500,
-    ],
-    [
-        'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
-        'callback' => \local_stackmathgame\hook\output_hooks::class . '::inject_studio_icon',
         'priority' => 500,
     ],
 ];

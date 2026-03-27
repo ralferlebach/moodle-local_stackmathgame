@@ -16,9 +16,12 @@
 /**
  * Injects a Game Settings option into the quiz tertiary navigation selector.
  *
- * Modelled after local_stackmatheditor/configure.php integration.
- * The option is only added once; duplicate injections are guarded by a
- * data-smg attribute on the <option> element.
+ * Modelled after local_stackmatheditor: the option is added to the existing
+ * <select> inside .tertiary-navigation .urlselect. The select form POSTs to
+ * course/jumpto.php; a full absolute URL in the option value is accepted.
+ *
+ * Injection is attempted immediately and, as a fallback after 300 ms, to
+ * handle cases where the tertiary nav is rendered by a deferred Mustache call.
  *
  * @module     local_stackmathgame/tertiary_nav
  * @copyright  2026 Ralf Erlebach
@@ -27,64 +30,87 @@
 define([], function() {
 
     /**
-     * Find the quiz tertiary navigation <select> element.
+     * Selector for the tertiary navigation <select> element.
      *
-     * Moodle renders it inside .tertiary-navigation .urlselect select.
+     * Moodle renders it as: .tertiary-navigation .urlselect select
      *
-     * @returns {Element|null} The select element, or null if not found.
+     * @type {string}
      */
-    function findSelect() {
-        return document.querySelector(
-            '.tertiary-navigation .urlselect select'
-        );
-    }
+    var SELECT_SELECTOR = '.tertiary-navigation .urlselect select';
 
     /**
-     * Inject the Game Settings option into the tertiary nav selector.
+     * Attribute used to mark our injected option (prevents duplicates).
      *
-     * @param {Object} config Module configuration.
-     * @param {number} config.cmid  The course-module ID.
-     * @param {string} config.label The label text for the menu option.
-     * @param {string} config.url   The full URL to navigate to.
-     * @returns {void}
+     * @type {string}
      */
-    function inject(config) {
-        const select = findSelect();
+    var DATA_ATTR = 'data-smg';
+
+    /**
+     * Attempt to inject the Game Settings option into the select element.
+     *
+     * Does nothing if the select is not yet in the DOM or the option
+     * has already been added.
+     *
+     * @param {string} url   Full URL for the quiz_settings.php page.
+     * @param {string} label Display label for the option.
+     * @returns {boolean} True when the option was injected successfully.
+     */
+    function tryInject(url, label) {
+        var select = document.querySelector(SELECT_SELECTOR);
         if (!select) {
-            return;
+            return false;
         }
         // Guard: do not add the option twice.
-        const existing = select.querySelector('option[data-smg="quiz"]');
-        if (existing) {
-            return;
+        if (select.querySelector('option[' + DATA_ATTR + '="quiz"]')) {
+            return true;
         }
-        const option = document.createElement('option');
-        option.value = config.url;
-        option.textContent = config.label;
-        option.setAttribute('data-smg', 'quiz');
+        var option = document.createElement('option');
+        option.value = url;
+        option.textContent = label;
+        option.setAttribute(DATA_ATTR, 'quiz');
         select.appendChild(option);
+        return true;
     }
 
     /**
      * Initialise the tertiary nav injection.
      *
-     * Waits for the DOM to be ready before injecting the option.
-     * The function is called by PHP via $PAGE->requires->js_call_amd().
+     * Called by PHP via $PAGE->requires->js_call_amd().
+     * Tries to inject immediately; if the select is not yet in the DOM
+     * (e.g. rendered by a deferred Mustache template), retries after 300 ms.
      *
-     * @param {Object} config Module configuration from PHP.
-     * @param {number} config.cmid  The course-module ID.
-     * @param {string} config.label The label text for the menu option.
-     * @param {string} config.url   The target URL for the option.
+     * @param {Object} config Configuration object passed from PHP.
+     * @param {number} config.cmid  The course-module ID (unused in URL, for reference).
+     * @param {string} config.label Label text to show in the dropdown.
+     * @param {string} config.url   Absolute URL to navigate to on selection.
      * @returns {void}
      */
     function init(config) {
+        var url   = config.url;
+        var label = config.label;
+
+        // Attempt 1: immediate (works when select is already in DOM).
+        if (tryInject(url, label)) {
+            return;
+        }
+
+        // Attempt 2: after DOMContentLoaded (for inline scripts before DOM ready).
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
-                inject(config);
+                tryInject(url, label);
             });
-        } else {
-            inject(config);
+            return;
         }
+
+        // Attempt 3: 300 ms timeout fallback for deferred Mustache renders.
+        setTimeout(function() {
+            tryInject(url, label);
+        }, 300);
+
+        // Attempt 4: 1 s final fallback.
+        setTimeout(function() {
+            tryInject(url, label);
+        }, 1000);
     }
 
     return {init: init};

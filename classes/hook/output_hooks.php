@@ -30,56 +30,20 @@ use local_stackmathgame\game\theme_manager;
 /**
  * Output hook callbacks.
  *
+ * The studio icon is rendered via the standard Moodle navbar callback
+ * local_stackmathgame_render_navbar_output() in lib.php. That function is
+ * invoked automatically by Moodle's theme layer and does not require a hook.
+ *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class output_hooks {
     /**
-     * Inject a studio link icon into the page header area.
-     *
-     * @param \core\hook\output\before_standard_top_of_body_html_generation $hook The hook instance.
-     * @return void
-     */
-    public static function inject_studio_icon(
-        \core\hook\output\before_standard_top_of_body_html_generation $hook
-    ): void {
-        global $PAGE, $OUTPUT;
-
-        if (during_initial_install() || !isloggedin() || isguestuser()) {
-            return;
-        }
-        if (empty($OUTPUT) || !method_exists($OUTPUT, 'render')) {
-            return;
-        }
-
-        $syscontext = \context_system::instance();
-        if (
-            !self::safe_has_capability('local/stackmathgame:viewstudio', $syscontext)
-            && !self::safe_has_capability('local/stackmathgame:managethemes', $syscontext)
-        ) {
-            return;
-        }
-
-        $url  = new \moodle_url('/local/stackmathgame/studio.php');
-        $icon = new \pix_icon('i/settings', get_string('studio_title', 'local_stackmathgame'));
-        try {
-            $iconhtml = $OUTPUT->render($icon);
-        } catch (\Throwable $e) {
-            debugging('SMG: Could not render studio icon: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            return;
-        }
-        $html = \html_writer::link($url, $iconhtml, [
-            'class' => 'smg-studio-link btn btn-sm btn-outline-secondary ms-2',
-            'title' => get_string('studio_title', 'local_stackmathgame'),
-            'aria-label' => get_string('studio_title', 'local_stackmathgame'),
-            'style' => 'position:fixed;top:8px;right:8px;z-index:9000;',
-        ]);
-        $hook->add_html(\html_writer::div($html, 'smg-studio-link-wrapper'));
-    }
-
-    /**
      * Inject game assets into quiz attempt pages.
+     *
+     * Called by the before_http_headers hook. Only fires on mod-quiz-attempt
+     * pages when the game layer is enabled for the current quiz.
      *
      * @param \core\hook\output\before_http_headers $hook The hook instance.
      * @return void
@@ -112,23 +76,23 @@ class output_hooks {
             'local_stackmathgame'
         );
         $PAGE->requires->js_call_amd('local_stackmathgame/fantasy_quiz', 'init', [[
-            'quizid'       => (int)$PAGE->cm->instance,
-            'cmid'         => (int)$PAGE->cm->id,
-            'userid'       => (int)$USER->id,
-            'labelid'      => (int)($config->labelid ?? 0),
-            'designid'     => (int)($config->designid ?? 0),
-            'sesskey'      => sesskey(),
-            'wwwroot'      => $CFG->wwwroot,
+            'quizid'        => (int)$PAGE->cm->instance,
+            'cmid'          => (int)$PAGE->cm->id,
+            'userid'        => (int)$USER->id,
+            'labelid'       => (int)($config->labelid ?? 0),
+            'designid'      => (int)($config->designid ?? 0),
+            'sesskey'       => sesskey(),
+            'wwwroot'       => $CFG->wwwroot,
             'themeAssetUrl' => $themeurl,
-            'config'       => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
+            'config'        => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
     }
 
     /**
      * Check a capability safely, returning false instead of throwing.
      *
-     * @param string $capability The capability to check.
-     * @param \context $context The context to check against.
+     * @param string   $capability The capability to check.
+     * @param \context $context    The context to check against.
      * @return bool Whether the current user has the capability.
      */
     private static function safe_has_capability(string $capability, \context $context): bool {
