@@ -63,6 +63,7 @@ class get_quiz_config extends \external_api {
             'lastquizid' => new \external_value(PARAM_INT, 'Last quiz id'),
             'lastdesignid' => new \external_value(PARAM_INT, 'Last design id'),
             'lastaccess' => new \external_value(PARAM_INT, 'Last access timestamp'),
+            'summaryjson' => new \external_value(PARAM_RAW, 'Profile summary json'),
         ]);
     }
 
@@ -79,6 +80,7 @@ class get_quiz_config extends \external_api {
             'uijson' => new \external_value(PARAM_RAW, 'UI json'),
             'mechanicsjson' => new \external_value(PARAM_RAW, 'Mechanics json'),
             'assetmanifestjson' => new \external_value(PARAM_RAW, 'Asset manifest json'),
+            'runtimejson' => new \external_value(PARAM_RAW, 'Runtime config json'),
         ]);
     }
 

@@ -77,26 +77,36 @@ class submit_answer extends \external_api {
         $qa = $attemptobj->get_question_attempt($slot);
         $state = (string)$qa->get_state()->get_name();
         $feedbackhtml = '';
+        $previousstate = \local_stackmathgame\local\service\profile_service::get_slot_state($profile, $slot);
         $scoredelta = 0;
         $xpdelta = 0;
         $cannext = false;
 
         if ($processed) {
-            if (in_array($state, ['gradedright', 'complete'], true)) {
-                $scoredelta = 10;
-                $xpdelta = 5;
-                $cannext = true;
-            } else if ($state === 'gradedpartial') {
-                $scoredelta = 5;
-                $xpdelta = 2;
+            $deltas = \local_stackmathgame\local\service\profile_service::calculate_submit_deltas($previousstate, $state);
+            $scoredelta = (int)$deltas['score'];
+            $xpdelta = (int)$deltas['xp'];
+            $cannext = (bool)$deltas['solved'];
+            $progress = \local_stackmathgame\local\service\profile_service::decode_json_field($profile->progressjson ?? '{}');
+            $slots = (array)($progress['slots'] ?? []);
+            $slotkey = (string)$slot;
+            $previousattempts = 0;
+            if (isset($slots[$slotkey]) && is_array($slots[$slotkey])) {
+                $previousattempts = (int)($slots[$slotkey]['attempts'] ?? 0);
             }
+            $slotpayload = [
+                'state' => $state,
+                'attempts' => $previousattempts + 1,
+                'solved' => $cannext ? 1 : 0,
+                'lastsubmitted' => time(),
+            ];
             $profile = \local_stackmathgame\local\service\profile_service::apply_progress((int)$profile->id, [
                 'quizid' => $quizid,
                 'designid' => (int)$config->designid,
                 'scoredelta' => $scoredelta,
                 'xpdelta' => $xpdelta,
-                'progress' => ['slots' => [(string)$slot => $state]],
-                'stats' => ['lastsubmit' => time(), 'laststate' => $state],
+                'progress' => ['slots' => [$slotkey => $slotpayload]],
+                'stats' => ['lastsubmit' => time(), 'laststate' => $state, 'lastslot' => $slot],
             ]);
         }
 
@@ -106,6 +116,7 @@ class submit_answer extends \external_api {
             'answers' => array_values($payload),
             'questionid' => (int)$qa->get_question()->id,
             'processed' => $processed,
+            'previousstate' => $previousstate,
             'state' => $state,
         ], count($answers), $state);
 
@@ -153,6 +164,7 @@ class submit_answer extends \external_api {
                 ])
             ),
             'inputnames' => new \external_multiple_structure(new \external_value(PARAM_RAW_TRIMMED, 'Known question input name')),
+            'previousstate' => new \external_value(PARAM_TEXT, 'Previous profile-tracked question state'),
             'message' => new \external_value(PARAM_TEXT, 'Human-readable message'),
             'profile' => get_quiz_config::profile_structure(),
             'design' => get_quiz_config::design_structure(),

@@ -37,6 +37,7 @@ class api {
     }
 
     public static function export_profile(\stdClass $profile): array {
+        $summary = profile_service::build_summary($profile);
         return [
             'id' => (int)$profile->id,
             'userid' => (int)$profile->userid,
@@ -53,6 +54,7 @@ class api {
             'lastquizid' => (int)($profile->lastquizid ?? 0),
             'lastdesignid' => (int)($profile->lastdesignid ?? 0),
             'lastaccess' => (int)($profile->lastaccess ?? 0),
+            'summaryjson' => json_encode($summary, JSON_UNESCAPED_UNICODE),
         ];
     }
 
@@ -72,6 +74,7 @@ class api {
                 'assetmanifestjson' => '{}',
             ];
         }
+        $config = theme_manager::get_theme_config((int)$design->id);
         return [
             'id' => (int)$design->id,
             'name' => (string)$design->name,
@@ -84,6 +87,14 @@ class api {
             'uijson' => (string)($design->uijson ?? '{}'),
             'mechanicsjson' => (string)($design->mechanicsjson ?? '{}'),
             'assetmanifestjson' => (string)($design->assetmanifestjson ?? '{}'),
+            'runtimejson' => json_encode([
+                'modekey' => (string)($config['modekey'] ?? ''),
+                'themeclass' => (string)($config['themeclass'] ?? ''),
+                'thumbnailurl' => (string)($config['thumbnailurl'] ?? ''),
+                'runtimeassets' => (array)($config['runtimeassets'] ?? []),
+                'ui' => (array)($config['ui'] ?? []),
+                'mechanics' => (array)($config['mechanics'] ?? []),
+            ], JSON_UNESCAPED_UNICODE),
         ];
     }
 

@@ -19,21 +19,38 @@ class prefetch_next_node extends \external_api {
     public static function execute(int $quizid, int $currentslot = 0): array {
         global $DB;
         [, , $config, $profile] = api::validate_quiz_access($quizid);
-        $next = $DB->get_records_select('local_stackmathgame_questionmap', 'quizid = ? AND slotnumber > ?', [$quizid, $currentslot], 'sortorder ASC, slotnumber ASC', '*', 0, 1);
-        $record = $next ? reset($next) : null;
+        $progress = \local_stackmathgame\local\service\profile_service::decode_json_field($profile->progressjson ?? '{}');
+        $slotsprogress = (array)($progress['slots'] ?? []);
+        $next = $DB->get_records_select('local_stackmathgame_questionmap', 'quizid = ? AND slotnumber > ?', [$quizid, $currentslot], 'sortorder ASC, slotnumber ASC');
+        $record = null;
+        foreach ($next as $candidate) {
+            $slotkey = (string)$candidate->slotnumber;
+            $slotstate = '';
+            if (isset($slotsprogress[$slotkey])) {
+                $slotstate = is_array($slotsprogress[$slotkey]) ? (string)($slotsprogress[$slotkey]['state'] ?? '') : (string)$slotsprogress[$slotkey];
+            }
+            if (!in_array($slotstate, ['gradedright', 'complete'], true)) {
+                $record = $candidate;
+                break;
+            }
+        }
+        if (!$record && $next) {
+            $record = reset($next);
+        }
 
         if (!$record) {
             $sql = 'SELECT id, slot AS slotnumber, questionid FROM {quiz_slots} WHERE quizid = ? AND slot > ? ORDER BY slot ASC';
             $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
             $slot = $slots ? reset($slots) : null;
             if ($slot) {
+                $slotstate = \local_stackmathgame\local\service\profile_service::get_slot_state($profile, (int)$slot->slotnumber);
                 $payload = [
                     'slotnumber' => (int)$slot->slotnumber,
                     'questionid' => (int)$slot->questionid,
                     'nodekey' => 'slot_' . (int)$slot->slotnumber,
                     'nodetype' => 'question',
                     'sortorder' => (int)$slot->slotnumber,
-                    'configjson' => '{}',
+                    'configjson' => json_encode(['slotstate' => $slotstate], JSON_UNESCAPED_UNICODE),
                 ];
             } else {
                 $payload = [
@@ -42,7 +59,7 @@ class prefetch_next_node extends \external_api {
                     'nodekey' => '',
                     'nodetype' => 'end',
                     'sortorder' => 0,
-                    'configjson' => '{}',
+                    'configjson' => json_encode(['slotstate' => $slotstate], JSON_UNESCAPED_UNICODE),
                 ];
             }
         } else {

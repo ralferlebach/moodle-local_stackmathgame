@@ -38,3 +38,17 @@ $string['managemechanics'] = 'Manage game mechanics';
 
 $string['submitanswerprocessed'] = 'Answer processed and quiz attempt updated.';
 $string['submitanswerfallback'] = 'Game processing fell back to passive mode.';
+
+$string['runtimemode'] = 'Mode';
+$string['runtimetracked'] = 'Tracked';
+$string['runtimepartial'] = 'Partial';
+$string['runtimesolved'] = 'Solved';
+
+$string['shortcode_smgscore_help'] = 'Outside a quiz context you must pass label="...". Optional: field="score|solvedcount|partialcount|trackedslots|levelprogress".';
+$string['shortcode_smgxp_help'] = 'Outside a quiz context you must pass label="...". Optional: field="xp|levelno|solvedcount|partialcount|trackedslots|levelprogress".';
+$string['shortcode_smglevel_help'] = 'Outside a quiz context you must pass label="...". Optional: field="levelno|levelprogress".';
+$string['shortcode_smgprogress_help'] = 'Outside a quiz context you must pass label="...". Optional: format="summary|json|raw" or field="solvedcount|partialcount|trackedslots|levelprogress".';
+$string['shortcode_smgnarrative_help'] = 'Displays narrative text from the active design. Outside a quiz context you must pass label="...". Optional: scene="world_enter|victory|defeat|boss_intro|reward" and design="designslug".';
+$string['shortcode_smgavatar_help'] = 'Displays the avatar payload for the current label/profile. Outside a quiz context you must pass label="...". Optional: field="avatarkey".';
+$string['shortcode_smgleaderboard_help'] = 'Displays a leaderboard for a label. Outside a quiz context you must pass label="...". Optional: limit="10".';
+$string['shortcodeslabelrequired'] = 'Outside a quiz context, STACK Math Game shortcodes require a label argument.';

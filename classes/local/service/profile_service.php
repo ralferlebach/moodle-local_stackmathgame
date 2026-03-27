@@ -10,6 +10,64 @@ use local_stackmathgame\game\theme_manager;
  * Handles label-bound profile state.
  */
 class profile_service {
+    public static function calculate_level_from_xp(int $xp): int {
+        return max(1, (int)floor($xp / 100) + 1);
+    }
+
+    public static function decode_json_field(?string $value): array {
+        return json_decode((string)$value, true) ?: [];
+    }
+
+    public static function get_slot_state(\stdClass $profile, int $slot): string {
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $slots = (array)($progress['slots'] ?? []);
+        $slotkey = (string)$slot;
+        if (isset($slots[$slotkey]) && is_array($slots[$slotkey])) {
+            return (string)($slots[$slotkey]['state'] ?? '');
+        }
+        if (isset($slots[$slotkey]) && is_scalar($slots[$slotkey])) {
+            return (string)$slots[$slotkey];
+        }
+        return '';
+    }
+
+    public static function calculate_submit_deltas(string $previousstate, string $newstate): array {
+        $rightstates = ['gradedright', 'complete'];
+        $partialstates = ['gradedpartial'];
+        $wasright = in_array($previousstate, $rightstates, true);
+        $isright = in_array($newstate, $rightstates, true);
+        $waspartial = in_array($previousstate, $partialstates, true);
+        $ispartial = in_array($newstate, $partialstates, true);
+
+        if ($isright && !$wasright) {
+            return ['score' => 10, 'xp' => 5, 'solved' => true];
+        }
+        if ($ispartial && !$wasright && !$waspartial) {
+            return ['score' => 5, 'xp' => 2, 'solved' => false];
+        }
+        return ['score' => 0, 'xp' => 0, 'solved' => $wasright || $isright];
+    }
+
+    public static function build_summary(\stdClass $profile): array {
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $slots = (array)($progress['slots'] ?? []);
+        $solved = 0;
+        $partial = 0;
+        foreach ($slots as $slot) {
+            $state = is_array($slot) ? (string)($slot['state'] ?? '') : (string)$slot;
+            if (in_array($state, ['gradedright', 'complete'], true)) {
+                $solved++;
+            } else if ($state === 'gradedpartial') {
+                $partial++;
+            }
+        }
+        return [
+            'solvedcount' => $solved,
+            'partialcount' => $partial,
+            'trackedslots' => count($slots),
+            'levelprogress' => $profile->xp % 100,
+        ];
+    }
     public static function get_or_create_for_quiz(int $userid, int $quizid): \stdClass {
         $config = quiz_configurator::ensure_default($quizid);
         return self::get_or_create((int)$userid, (int)$config->labelid, $quizid, (int)$config->designid);
@@ -54,7 +112,7 @@ class profile_service {
         $profile->xp += (int)($changes['xpdelta'] ?? 0);
         $profile->softcurrency += (int)($changes['softcurrencydelta'] ?? 0);
         $profile->hardcurrency += (int)($changes['hardcurrencydelta'] ?? 0);
-        $profile->levelno = max(1, (int)($changes['levelno'] ?? $profile->levelno));
+        $profile->levelno = max(1, (int)($changes['levelno'] ?? self::calculate_level_from_xp((int)$profile->xp)));
         $profile->lastquizid = isset($changes['quizid']) ? (int)$changes['quizid'] : $profile->lastquizid;
         $profile->lastdesignid = isset($changes['designid']) ? (int)$changes['designid'] : $profile->lastdesignid;
         $profile->lastaccess = time();

@@ -3,10 +3,23 @@ namespace local_stackmathgame\game;
 
 defined('MOODLE_INTERNAL') || die();
 
+use local_stackmathgame\local\packaging\package_registry;
+
 /**
  * Design record handling.
  */
 class theme_manager {
+    /**
+     * Get a design by its slug.
+     *
+     * @param string $slug
+     * @return \stdClass|null
+     */
+    public static function get_theme_by_slug(string $slug): ?\stdClass {
+        global $DB;
+        return $DB->get_record('local_stackmathgame_design', ['slug' => $slug]) ?: null;
+    }
+
     /** @var array<int,?\stdClass> */
     private static array $cache = [];
 
@@ -34,6 +47,7 @@ class theme_manager {
         if (!$theme) {
             return [];
         }
+        $runtimeassets = package_registry::build_runtime_assets((string)$theme->modecomponent, (string)$theme->slug);
         return [
             'design' => [
                 'id' => (int)$theme->id,
@@ -48,6 +62,10 @@ class theme_manager {
             'ui' => json_decode((string)($theme->uijson ?? '{}'), true) ?: [],
             'mechanics' => json_decode((string)($theme->mechanicsjson ?? '{}'), true) ?: [],
             'assets' => json_decode((string)($theme->assetmanifestjson ?? '{}'), true) ?: [],
+            'runtimeassets' => $runtimeassets,
+            'thumbnailurl' => (string)($runtimeassets['thumbnail'] ?? ''),
+            'modekey' => preg_replace('/^stackmathgamemode_/', '', (string)$theme->modecomponent),
+            'themeclass' => 'smg-mode-' . preg_replace('/^stackmathgamemode_/', '', (string)$theme->modecomponent) . ' smg-design-' . preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$theme->slug),
         ];
     }
 
