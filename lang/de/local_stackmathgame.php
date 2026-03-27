@@ -127,7 +127,7 @@ $string['studio_hint_themes']    = 'Verfügbare Designs verwalten und vorschauen
 $string['studio_hint_assets']    = 'Asset-Pakete als ZIP-Datei importieren.';
 $string['studio_hint_mechanics'] = 'Spielmechaniken je Modus konfigurieren.';
 $string['studio_hint_roles']     = 'Lehrende wählen ein Design; Game Designer verwalten die Bibliothek.';
-$string['studio_capsummary']     = 'Ihre Studio-Berechtigungen — Themes: {$a->managethemes}, Narrative: {$a->managenarratives}, Assets: {$a->manageassets}, Mechaniken: {$a->managemechanics}.';
+$string['studio_capsummary']     = 'Ihre Studio-Berechtigungen: managethemes={managethemes}, managenarratives={managenarratives}, manageassets={manageassets}, managemechanics={managemechanics}.';
 $string['studio_nodesigns']      = 'Keine aktiven Designs gefunden. Erstellen Sie eines über „Design bearbeiten" oder importieren Sie ein Paket.';
 $string['studio_nothumbnail']    = 'Kein Vorschaubild';
 $string['studio_bundled']        = 'Bundled';
@@ -175,5 +175,3 @@ $string['privacy:metadata:eventlog:questionid']   = 'Fragen-ID';
 $string['privacy:metadata:eventlog:eventtype']    = 'Ereignistyp';
 $string['privacy:metadata:eventlog:payloadjson']  = 'Ereignis-Nutzlastdaten';
 $string['privacy:metadata:eventlog:timecreated']  = 'Ereigniszeitpunkt';
-$string['quiznotfound'] = 'Das Quiz mit der ID {$a} wurde nicht gefunden oder seine Kursaktivität wurde gelöscht. Eine gespeicherte Spielkonfiguration für dieses Quiz wurde entfernt.';
-$string['returnhome'] = 'Zur Startseite zurück';
