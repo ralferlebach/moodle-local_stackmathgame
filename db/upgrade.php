@@ -136,5 +136,13 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032810, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032811) {
+        // Version 2026032811: PHPUnit + PHPCS fixes.
+        // - stashmap table added to install.xml (was upgrade-only since 2026032808).
+        // - bridge_dispatcher_test: stash fallback now correctly asserts dispatched=true.
+        // - stash_bridge_test: item creation uses block_stash\item persistent directly.
+        upgrade_plugin_savepoint(true, 2026032811, 'local', 'stackmathgame');
+    }
+
     return true;
 }

@@ -212,9 +212,15 @@ final class stash_bridge_test extends advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
 
-        $stashgen = $this->getDataGenerator()->get_plugin_generator('block_stash');
-        $stash = $stashgen->create_stash(['courseid' => $course->id]);
-        $item = $stashgen->create_item(['stashid' => $stash->get_id(), 'name' => 'Test Gem']);
+        // Create stash item directly via the persistent class.
+        // This avoids generator API differences between block_stash versions.
+        $manager = \block_stash\manager::get((int)$course->id);
+        $stash = $manager->get_stash();
+        $item = new \block_stash\item(null, (object)[
+            'stashid' => $stash->get_id(),
+            'name' => 'Test Gem',
+        ]);
+        $item->create();
 
         $DB->insert_record('local_stackmathgame_stashmap', (object)[
             'quizid' => 77,

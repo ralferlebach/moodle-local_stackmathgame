@@ -107,19 +107,26 @@ final class bridge_dispatcher_test extends advanced_testcase {
      * stash_bridge::dispatch() returns dispatched=false without throwing
      * when block_stash is not installed and the slot was solved.
      */
-    public function test_stash_bridge_silent_fail_without_block_stash(): void {
+    public function test_stash_bridge_falls_back_to_local_inventory_without_block_stash(): void {
         if (availability::has_block_stash()) {
             $this->markTestSkipped('block_stash is installed; this test requires it absent.');
         }
+        $this->resetAfterTest();
         $profile = $this->make_profile();
         $result = stash_bridge::dispatch($profile, 10, 1, 3, ['state' => 'gradedright'], [
             'score' => 10,
             'xp' => 5,
             'solved' => true,
         ]);
-        $this->assertFalse(
+        // Without block_stash, the bridge falls back to the local inventory table.
+        // Dispatched is therefore true (local write succeeded), stash=false (no real stash used).
+        $this->assertTrue(
             $result['dispatched'],
-            'dispatched must be false when block_stash absent'
+            'Must dispatch to local inventory when block_stash is absent'
+        );
+        $this->assertFalse(
+            $result['stash'],
+            'Stash flag must be false when falling back to local inventory'
         );
     }
 
@@ -145,6 +152,7 @@ final class bridge_dispatcher_test extends advanced_testcase {
         if (availability::has_block_xp() || availability::has_block_stash()) {
             $this->markTestSkipped('One or both integration plugins are installed.');
         }
+        $this->resetAfterTest();
         $profile = $this->make_profile();
         $result = bridge_dispatcher::on_answer_result(
             $profile,

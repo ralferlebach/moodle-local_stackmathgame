@@ -187,4 +187,3 @@ $string['stashmapping_item']    = 'Stash item';
 $string['stashmapping_noitem']  = '(no item – disabled)';
 $string['stashmapping_qty']     = 'Quantity granted';
 $string['stashmapping_enabled'] = 'Mapping active';
-

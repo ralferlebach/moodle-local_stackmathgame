@@ -29,7 +29,6 @@ use local_stackmathgame\local\service\stash_mapping_service;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class stash_mapping_service_test extends advanced_testcase {
-
     /**
      * get_for_quiz returns empty array when no mappings exist.
      *

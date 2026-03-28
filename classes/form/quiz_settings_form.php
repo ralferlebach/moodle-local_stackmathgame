@@ -136,7 +136,6 @@ class quiz_settings_form extends \moodleform {
             }
         }
 
-
         // Stash integration section (only shown when block_stash is installed).
         if (!empty($customdata['stashitems'])) {
             $stashitems = $customdata['stashitems'];
