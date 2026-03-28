@@ -212,9 +212,22 @@ final class stash_bridge_test extends advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
 
-        // Enable stash for this course using the PHPUnit helper.
-        $manager = \block_stash\manager::get((int)$course->id);
-        $manager->set_enabled();
+        // Enable stash by inserting a block_instances record.
+        // Is_enabled() checks for this record; set_enabled() is not
+        // available in all block_stash versions.
+        $coursecontext = \context_course::instance((int)$course->id);
+        $DB->insert_record('block_instances', (object)[
+            'blockname' => 'stash',
+            'parentcontextid' => $coursecontext->id,
+            'showinsubcontexts' => 0,
+            'requiredbytheme' => 0,
+            'subpagepattern' => null,
+            'defaultregion' => 'side-pre',
+            'defaultweight' => 0,
+            'configdata' => '',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
 
         // Create stash and item directly in the DB to avoid generator version issues.
         $stashid = $DB->insert_record('block_stash', (object)[
