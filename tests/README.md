@@ -1,97 +1,108 @@
-# Tests – local_stackmatheditor
+# Tests – local_stackmathgame
 
 ## Overview
 
-| Suite | Tool | What it covers |
+| Suite | Tool | Coverage |
 |---|---|---|
-| `unit/` | PHPUnit | Pure logic: definitions, config_manager priority chain, enabled modes |
-| `behat/` | Behat + Selenium | Browser: toolbar rendering, pre-fill, configure page, nav selector |
+| `unit/` | PHPUnit | Service classes, bridges, shortcodes, validators |
+| `behat/` | Behat + Selenium | Navigation, Studio access, quiz settings UI |
 
 ---
 
-## Running PHPUnit tests
+## PHPUnit test inventory
 
-Run from the **Moodle root** (not from within the plugin):
+| File | Group | Priority |
+|---|---|---|
+| `profile_service_test.php` | Pure (no DB) | 1 – Critical |
+| `bridge_dispatcher_test.php` | Mixed | 1 – Critical |
+| `capability_test.php` | `local_stackmathgame_db` | 1 – Critical |
+| `api_helper_test.php` | Pure | 2 – High |
+| `narrative_resolver_test.php` | Pure | 2 – High |
+| `shortcode_test.php` | Mixed | 2 – High |
+| `stash_bridge_test.php` | `local_stackmathgame_db` | 2 – High |
+| `stash_mapping_service_test.php` | `local_stackmathgame_db` | 2 – High |
+| `quiz_configurator_test.php` | `local_stackmathgame_db` | 2 – High |
+| `design_validator_test.php` | Pure | 3 – Medium |
+| `design_exporter_test.php` | `local_stackmathgame_db` | 3 – Medium |
+| `config_manager_test.php` | Placeholder | — |
+| `definitions_test.php` | Placeholder | — |
+| `page_helper_test.php` | Placeholder | — |
+| `quiz_helper_test.php` | Placeholder | — |
+
+---
+
+## Running PHPUnit
+
+Run from the **Moodle root**:
 
 ```bash
-# All plugin tests (no DB needed for unit/ suite):
-vendor/bin/phpunit --testsuite local_stackmatheditor
+# All plugin tests:
+vendor/bin/phpunit --testsuite local_stackmathgame
 
-# DB-dependent integration tests only:
-vendor/bin/phpunit --testsuite local_stackmatheditor \
-    --group local_stackmatheditor_db
+# DB-dependent tests only:
+vendor/bin/phpunit --testsuite local_stackmathgame \
+    --group local_stackmathgame_db
 
-# Single test class:
-vendor/bin/phpunit local/stackmatheditor/tests/unit/definitions_test.php
-```
+# Single file:
+vendor/bin/phpunit local/stackmathgame/tests/unit/shortcode_test.php
 
-The `--group local_stackmatheditor_db` tests require:
-
-```bash
-# Initialise the Moodle test DB first (once per environment):
-php admin/tool/phpunit/cli/init.php
+# With block_xp + block_stash (integration CI job):
+# → See .github/workflows/moodle-ci.yml phpunit-with-integrations job
 ```
 
 ### Test groups
 
 | Group | Requires DB | Notes |
 |---|---|---|
-| *(default / no group)* | No | Pure logic, fast, no fixtures |
-| `local_stackmatheditor_db` | Yes | DB read/write via Moodle's test fixtures |
+| *(no group)* | No | Pure logic, fast |
+| `local_stackmathgame_db` | Yes | DB read/write |
 
 ---
 
-## Running Behat tests
+## Running Behat
 
 ```bash
-# Initialise Behat (once per environment):
 php admin/tool/behat/cli/init.php
 
-# Run all plugin scenarios:
+# All plugin scenarios:
 vendor/bin/behat --config behat/behat.yml \
-    --tags @local_stackmatheditor
+    --tags "@local_stackmathgame and not @broken"
 
-# Run only rendering scenarios:
+# Studio access only:
 vendor/bin/behat --config behat/behat.yml \
-    --tags "@local_stackmatheditor and @javascript" \
-    local/stackmatheditor/tests/behat/editor_rendering.feature
+    --tags "@local_stackmathgame" \
+    local/stackmathgame/tests/behat/studio_access.feature
 
-# Run toolbar configuration scenarios:
+# Quiz settings:
 vendor/bin/behat --config behat/behat.yml \
-    --tags "@local_stackmatheditor" \
-    local/stackmatheditor/tests/behat/configure_toolbar.feature
+    local/stackmathgame/tests/behat/quiz_game_settings.feature
 ```
-
-Behat requires:
-- A running Selenium/WebDriver instance (Chrome recommended).
-- `qtype_stack` installed and at least one STACK question in the test DB.
-- `$CFG->behat_prefix` configured in `config.php`.
 
 ---
 
-## CI / GitHub Actions
+## Silent-fail integration tests
 
-A suggested workflow (`.github/workflows/ci.yml` in the Moodle root or as a
-standalone `moodle-plugin-ci` run):
+Bridge tests that require optional plugins use `markTestSkipped` when the
+plugin is absent. Both CI jobs (`phpunit` and `phpunit-with-integrations`)
+run the same test files; the `markTestSkipped` calls ensure the standard
+job stays green without the optional plugins installed.
 
-```yaml
-- name: Run PHPUnit unit tests (no DB)
-  run: vendor/bin/phpunit --testsuite local_stackmatheditor
+| Test | Without block_xp/stash | With block_xp/stash |
+|---|---|---|
+| `test_xp_bridge_silent_fail_without_block_xp` | Runs (asserts available=false) | Skipped |
+| `test_xp_bridge_fires_events_when_block_xp_installed` | Skipped | Runs |
+| `test_dispatch_awards_real_stash_item_when_mapped` | Skipped | Runs |
 
-- name: Run PHPUnit DB tests
-  run: vendor/bin/phpunit --testsuite local_stackmatheditor \
-       --group local_stackmatheditor_db
+---
 
-- name: Run Behat tests
-  run: vendor/bin/behat --tags @local_stackmatheditor \
-       --config behat/behat.yml
-```
+## Import/Export validation tests
 
-For `moodle-plugin-ci`, add to `.moodle-plugin-ci.yml`:
+`design_validator_test.php` uses fixture ZIP files in `tests/fixtures/`:
 
-```yaml
-phpunit:
-  extra: "--testsuite local_stackmatheditor"
-behat:
-  extra: "--tags @local_stackmatheditor"
-```
+| Fixture | Expected result |
+|---|---|
+| `demo_design_valid.zip` | 0 errors |
+| `demo_design_invalid.zip` | Error: missing modecomponent |
+| `demo_design_corrupt.zip` | Error: not a valid ZIP |
+
+No Moodle DB required — fixture-based tests run fast.

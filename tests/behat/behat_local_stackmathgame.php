@@ -76,4 +76,33 @@ class behat_local_stackmathgame extends behat_base {
             $this->getSession()
         );
     }
+    /**
+     * Verify the game settings option exists in the quiz tertiary nav select.
+     *
+     * @Then I should see :label in the quiz tertiary nav
+     * @param string $label
+     */
+    public function i_should_see_in_the_quiz_tertiary_nav(string $label): void {
+        $page = $this->getSession()->getPage();
+        $select = $page->find('css', '.tertiary-navigation .urlselect select');
+        if (!$select) {
+            throw new \Behat\Mink\Exception\ExpectationException(
+                'Tertiary navigation select not found',
+                $this->getSession()
+            );
+        }
+        $found = false;
+        foreach ($select->findAll('css', 'option') as $option) {
+            if (strpos(trim($option->getText()), $label) !== false) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            throw new \Behat\Mink\Exception\ExpectationException(
+                "Option containing '$label' not found in quiz tertiary nav",
+                $this->getSession()
+            );
+        }
+    }
 }

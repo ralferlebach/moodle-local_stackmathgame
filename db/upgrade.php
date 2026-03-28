@@ -78,7 +78,7 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     if ($oldversion < 2026032706) {
         // Version 2026032706: AMD build files (amd/build/*.min.js) added.
         // Previously missing, causing RequireJS to not recognise the modules
-        // And silently skipping the tertiary_nav injection entirely.
+        // and silently skipping the tertiary_nav injection entirely.
         upgrade_plugin_savepoint(true, 2026032706, 'local', 'stackmathgame');
     }
 
@@ -89,8 +89,8 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
 
     if ($oldversion < 2026032708) {
         // Version 2026032708: PHPCS fixes in test files; AMD injection moved
-        // From extend_settings_navigation to before_http_headers hook for
-        // Reliable tertiary navigation injection on quiz management pages.
+        // from extend_settings_navigation to before_http_headers hook for
+        // reliable tertiary navigation injection on quiz management pages.
         upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
     }
 
@@ -102,15 +102,13 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032804, 'local', 'stackmathgame');
     }
 
-    if ($oldversion < 2026032814) {
-        // Step I: Navigation + Narrative.
-        // - lib.php: js_call_amd removed from extend_settings_navigation to prevent
-        // Duplicate tertiary nav entries. The before_http_headers hook is the sole
-        // Source of the AMD call (uses optional_param cmid, works on quiz/edit.php).
-        // - narrative_resolver: new service class with canonical scene constants.
-        // Shortcodes::narrative() and get_narrative::execute() use it (DRY).
-        // - capability_test: smoke tests for all three navigation access tiers.
-        upgrade_plugin_savepoint(true, 2026032814, 'local', 'stackmathgame');
+    if ($oldversion < 2026032819) {
+        // Step III: Testing strategy.
+        // - shortcode_test.php: covers smgscore/smgxp/smgnarrative/smgprogress/smglevel.
+        // - Behat: studio_access.feature, quiz_game_settings.feature.
+        // - behat_local_stackmathgame.php: step for tertiary nav assertion.
+        // - tests/README.md: full test inventory with priority matrix.
+        upgrade_plugin_savepoint(true, 2026032819, 'local', 'stackmathgame');
     }
 
     return true;
