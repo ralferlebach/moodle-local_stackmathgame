@@ -32,6 +32,8 @@ use advanced_testcase;
  */
 final class capability_test extends advanced_testcase {
     /**
+     * Manager has viewstudio at system level.
+     *
      * @group local_stackmathgame_db
      */
     public function test_viewstudio_granted_to_manager(): void {
@@ -50,6 +52,8 @@ final class capability_test extends advanced_testcase {
     }
 
     /**
+     * Editing teacher does not have viewstudio at system level.
+     *
      * @group local_stackmathgame_db
      */
     public function test_viewstudio_denied_to_editingteacher(): void {
@@ -64,6 +68,8 @@ final class capability_test extends advanced_testcase {
     }
 
     /**
+     * Editing teacher has configurequiz in quiz module context.
+     *
      * @group local_stackmathgame_db
      */
     public function test_configurequiz_granted_to_editingteacher(): void {
@@ -79,6 +85,8 @@ final class capability_test extends advanced_testcase {
     }
 
     /**
+     * Student does not have configurequiz in quiz module context.
+     *
      * @group local_stackmathgame_db
      */
     public function test_configurequiz_denied_to_student(): void {
@@ -94,6 +102,8 @@ final class capability_test extends advanced_testcase {
     }
 
     /**
+     * Student has play capability in quiz module context.
+     *
      * @group local_stackmathgame_db
      */
     public function test_play_granted_to_student(): void {
@@ -109,6 +119,8 @@ final class capability_test extends advanced_testcase {
     }
 
     /**
+     * Editing teacher does not have managenarratives (designer-only).
+     *
      * @group local_stackmathgame_db
      */
     public function test_managenarratives_denied_to_teacher(): void {

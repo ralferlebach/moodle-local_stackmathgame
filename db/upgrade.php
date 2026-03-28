@@ -78,7 +78,7 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     if ($oldversion < 2026032706) {
         // Version 2026032706: AMD build files (amd/build/*.min.js) added.
         // Previously missing, causing RequireJS to not recognise the modules
-        // and silently skipping the tertiary_nav injection entirely.
+        // And silently skipping the tertiary_nav injection entirely.
         upgrade_plugin_savepoint(true, 2026032706, 'local', 'stackmathgame');
     }
 
@@ -89,8 +89,8 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
 
     if ($oldversion < 2026032708) {
         // Version 2026032708: PHPCS fixes in test files; AMD injection moved
-        // from extend_settings_navigation to before_http_headers hook for
-        // reliable tertiary navigation injection on quiz management pages.
+        // From extend_settings_navigation to before_http_headers hook for
+        // Reliable tertiary navigation injection on quiz management pages.
         upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
     }
 
@@ -105,10 +105,10 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     if ($oldversion < 2026032814) {
         // Step I: Navigation + Narrative.
         // - lib.php: js_call_amd removed from extend_settings_navigation to prevent
-        //   duplicate tertiary nav entries. The before_http_headers hook is the sole
-        //   source of the AMD call (uses optional_param cmid, works on quiz/edit.php).
+        // Duplicate tertiary nav entries. The before_http_headers hook is the sole
+        // Source of the AMD call (uses optional_param cmid, works on quiz/edit.php).
         // - narrative_resolver: new service class with canonical scene constants.
-        //   shortcodes::narrative() and get_narrative::execute() use it (DRY).
+        // Shortcodes::narrative() and get_narrative::execute() use it (DRY).
         // - capability_test: smoke tests for all three navigation access tiers.
         upgrade_plugin_savepoint(true, 2026032814, 'local', 'stackmathgame');
     }

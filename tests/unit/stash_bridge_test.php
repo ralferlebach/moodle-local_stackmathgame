@@ -214,7 +214,7 @@ final class stash_bridge_test extends advanced_testcase {
 
         // Enable stash by inserting a block_instances record.
         // Is_enabled() checks for this record; set_enabled() is not
-        // available in all block_stash versions.
+        // Available in all block_stash versions.
         $coursecontext = \context_course::instance((int)$course->id);
         $DB->insert_record('block_instances', (object)[
             'blockname' => 'stash',
@@ -279,21 +279,13 @@ final class stash_bridge_test extends advanced_testcase {
     /**
      * Verify stash_bridge uses cron_setup_user for the admin context switch.
      */
-    public function test_stash_bridge_uses_cron_setup_user(): void {
+    public function test_stash_bridge_uses_direct_db_writes(): void {
         $file = __DIR__ . '/../../classes/local/integration/stash_bridge.php';
         $this->assertFileExists($file);
         $content = file_get_contents($file);
-        $this->assertStringContainsString('cron_setup_user()', $content);
-    }
-
-    /**
-     * Verify stash_bridge restores the original user in a finally block.
-     */
-    public function test_stash_bridge_restores_user_in_finally(): void {
-        $content = file_get_contents(
-            __DIR__ . '/../../classes/local/integration/stash_bridge.php'
-        );
-        $this->assertStringContainsString('finally', $content);
-        $this->assertStringContainsString('set_user($originaluser)', $content);
+        $this->assertStringContainsString('block_stash_user_items', $content,
+            'stash_bridge must write directly to block_stash_user_items');
+        $this->assertStringNotContainsString('cron_setup_user', $content,
+            'stash_bridge must not use cron_setup_user (deprecated)');
     }
 }

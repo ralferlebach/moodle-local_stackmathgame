@@ -78,13 +78,30 @@ final class stash_mapping_service {
             return [];
         }
         try {
-            $manager = \block_stash\manager::get($courseid);
-            if (!$manager->is_enabled()) {
+            global $DB;
+            // Check block_stash block exists in this course.
+            $ctx = \context_course::instance($courseid, IGNORE_MISSING);
+            if (!$ctx) {
+                return [];
+            }
+            if (!$DB->record_exists('block_instances', [
+                'blockname' => 'stash',
+                'parentcontextid' => $ctx->id,
+            ])) {
+                return [];
+            }
+            // Read items directly to avoid persistent-class API version differences.
+            $stash = $DB->get_record('block_stash', ['courseid' => $courseid]);
+            if (!$stash) {
+                return [];
+            }
+            $dbitems = $DB->get_records('block_stash_items', ['stashid' => $stash->id], 'name ASC');
+            if (!$dbitems) {
                 return [];
             }
             $options = [0 => get_string('stashmapping_noitem', 'local_stackmathgame')];
-            foreach ($manager->get_items() as $item) {
-                $options[(int)$item->get_id()] = format_string($item->get_name());
+            foreach ($dbitems as $dbitem) {
+                $options[(int)$dbitem->id] = format_string($dbitem->name);
             }
             return $options;
         } catch (\Throwable $e) {

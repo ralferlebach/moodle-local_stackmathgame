@@ -27,14 +27,9 @@ namespace local_stackmathgame\local\integration;
 /**
  * Grants stash items when a question slot is solved.
  *
- * When block_stash is installed and a mapping exists in local_stackmathgame_stashmap,
- * this bridge awards the configured item quantity via the block_stash manager API.
- * The manager requires the CAN_MANAGE capability, which is obtained by temporarily
- * switching to the site admin user (cron pattern) and restoring afterwards.
- *
- * When block_stash is absent or no mapping is configured, the bridge falls back to
- * writing a local inventory record in local_stackmathgame_inventory, preserving the
- * pre-existing behaviour.
+ * Uses direct DB writes to block_stash_user_items rather than the block_stash
+ * persistent-class API (which varies between plugin versions). No capability
+ * switching via cron_setup_user() is required.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -50,7 +45,7 @@ final class stash_bridge {
      * @param int       $slot     The question slot number.
      * @param array     $slotdata Slot state data.
      * @param array     $deltas   Score/XP deltas from the answer.
-     * @return array Result with keys 'available', 'dispatched', 'itemkey', 'stash'.
+     * @return array Result with keys 'available', 'dispatched', 'stash'.
      */
     public static function dispatch(
         \stdClass $profile,
@@ -66,7 +61,6 @@ final class stash_bridge {
             return ['available' => $stashavailable, 'dispatched' => false, 'stash' => false];
         }
 
-        // Try the real block_stash path if a mapping is configured.
         if ($stashavailable) {
             $stashresult = self::dispatch_to_block_stash($profile, $quizid, $slot);
             if ($stashresult !== null) {
@@ -81,7 +75,6 @@ final class stash_bridge {
             }
         }
 
-        // Fallback: write to the local inventory table.
         $itemkey = self::dispatch_to_local_inventory($profile, $slot, $slotdata);
         self::fire_event($profile, $quizid, $designid, $slot, $itemkey);
 
@@ -94,24 +87,22 @@ final class stash_bridge {
     }
 
     /**
-     * Look up a stash mapping and award the item via block_stash manager.
+     * Award a block_stash item via direct DB writes.
      *
-     * Temporarily switches to the site admin user to obtain the CAN_MANAGE
-     * capability required by block_stash\manager::update_user_item_amount().
-     * This follows the same pattern used by Moodle cron tasks that need to
-     * perform privileged operations on behalf of enrolled users.
+     * Looks up the stashmap for this quiz/slot. Increments block_stash_user_items
+     * directly, bypassing the persistent-class API to avoid version incompatibilities.
      *
-     * @param \stdClass $profile The game profile (userid used for award target).
-     * @param int       $quizid  The quiz ID (used for mapping lookup).
+     * @param \stdClass $profile The game profile.
+     * @param int       $quizid  The quiz ID.
      * @param int       $slot    The question slot number.
-     * @return array|null Mapping data array on success, null if no mapping found or error.
+     * @return array|null Mapping info on success, null on failure or no mapping.
      */
     private static function dispatch_to_block_stash(
         \stdClass $profile,
         int $quizid,
         int $slot
     ): ?array {
-        global $DB, $USER;
+        global $DB;
 
         $mapping = $DB->get_record('local_stackmathgame_stashmap', [
             'quizid' => $quizid,
@@ -122,26 +113,23 @@ final class stash_bridge {
             return null;
         }
 
-        // Temporarily switch to admin to satisfy block_stash::require_manage().
-        $originaluser = $USER;
-        cron_setup_user();
+        $coursectx = \context_course::instance((int)$mapping->stashcourseid, IGNORE_MISSING);
+        if (!$coursectx) {
+            return null;
+        }
+        if (!$DB->record_exists('block_instances', [
+            'blockname' => 'stash',
+            'parentcontextid' => $coursectx->id,
+        ])) {
+            return null;
+        }
 
         try {
-            $manager = \block_stash\manager::get((int)$mapping->stashcourseid);
-
-            if (!$manager->is_enabled()) {
-                return null;
-            }
-
-            // Determine new quantity: get current amount and add the grant quantity.
-            $useritem = $manager->get_user_item((int)$profile->userid, (int)$mapping->stashitemid);
-            $newqty = (int)$useritem->get_quantity() + (int)$mapping->grantquantity;
-            $manager->update_user_item_amount(
-                (int)$mapping->stashitemid,
+            self::award_user_item_direct(
                 (int)$profile->userid,
-                $newqty
+                (int)$mapping->stashitemid,
+                (int)$mapping->grantquantity
             );
-
             return [
                 'itemkey' => 'stash_item_' . (int)$mapping->stashitemid,
                 'stashitemid' => (int)$mapping->stashitemid,
@@ -152,19 +140,50 @@ final class stash_bridge {
                 DEBUG_DEVELOPER
             );
             return null;
-        } finally {
-            // Always restore the original user, even if an exception occurred.
-            \core\session\manager::set_user($originaluser);
         }
     }
 
     /**
-     * Write a local inventory record as a fallback when block_stash is absent
-     * or no mapping is configured for the quiz/slot.
+     * Write or update a block_stash_user_items row directly.
+     *
+     * @param int $userid   The recipient user ID.
+     * @param int $itemid   The block_stash item ID.
+     * @param int $quantity The quantity to add.
+     * @return void
+     */
+    private static function award_user_item_direct(int $userid, int $itemid, int $quantity): void {
+        global $DB;
+
+        $now = time();
+        $existing = $DB->get_record('block_stash_user_items', [
+            'userid' => $userid,
+            'itemid' => $itemid,
+        ]);
+
+        if ($existing) {
+            $DB->update_record('block_stash_user_items', (object)[
+                'id' => $existing->id,
+                'quantity' => (int)$existing->quantity + $quantity,
+                'timemodified' => $now,
+            ]);
+        } else {
+            $DB->insert_record('block_stash_user_items', (object)[
+                'itemid' => $itemid,
+                'userid' => $userid,
+                'quantity' => $quantity,
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'version' => '0',
+            ]);
+        }
+    }
+
+    /**
+     * Write a local inventory record as fallback.
      *
      * @param \stdClass $profile  The game profile.
      * @param int       $slot     The question slot.
-     * @param array     $slotdata Slot state data (may contain stashitemkey).
+     * @param array     $slotdata Slot state data.
      * @return string The itemkey used.
      */
     private static function dispatch_to_local_inventory(
@@ -195,10 +214,7 @@ final class stash_bridge {
                 'profileid' => (int)$profile->id,
                 'itemkey' => $itemkey,
                 'quantity' => 1,
-                'statejson' => json_encode(
-                    ['source' => 'stackmathgame'],
-                    JSON_UNESCAPED_UNICODE
-                ),
+                'statejson' => json_encode(['source' => 'stackmathgame'], JSON_UNESCAPED_UNICODE),
                 'timecreated' => $now,
                 'timemodified' => $now,
             ]);

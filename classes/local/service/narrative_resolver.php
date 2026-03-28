@@ -40,10 +40,8 @@ namespace local_stackmathgame\local\service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class narrative_resolver {
-    // ── Canonical scene keys ────────────────────────────────────────────────
-    // These are the standardised slot names that GameDesigners populate in
-    // The Design Studio. Any additional keys are silently ignored by the UI
-    // But still accessible via the resolver.
+    // Canonical scene keys: standardised slot names that GameDesigners populate
+    // In the Design Studio. Non-canonical keys are silently accepted by the resolver.
 
     /** Student first enters the world / campaign. */
     const SCENE_WORLD_ENTER = 'world_enter';

@@ -105,5 +105,4 @@ function local_stackmathgame_extend_settings_navigation(
         'local_stackmathgame_settings',
         new pix_icon('i/settings', '')
     );
-
 }
