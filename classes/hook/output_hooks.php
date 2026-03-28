@@ -110,10 +110,21 @@ class output_hooks {
     ): void {
         global $PAGE, $CFG, $USER;
 
-        if (during_initial_install() || empty($PAGE->cm) || empty($PAGE->pagetype)) {
+        if (during_initial_install() || empty($PAGE->cm)) {
             return;
         }
-        if ($PAGE->pagetype !== 'mod-quiz-attempt' || $PAGE->cm->modname !== 'quiz') {
+        // Detect quiz attempt pages via SCRIPT_FILENAME rather than $PAGE->pagetype,
+        // Because pagetype may not be set yet when before_http_headers fires.
+        $script = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+        if ($script !== 'attempt.php' || $PAGE->cm->modname !== 'quiz') {
+            return;
+        }
+        // Also accept 'mod-quiz-attempt' when pagetype IS set (belt and braces).
+        if (
+            !empty($PAGE->pagetype)
+            && $PAGE->pagetype !== 'mod-quiz-attempt'
+            && $PAGE->pagetype !== 'mod-quiz-startattempt'
+        ) {
             return;
         }
         $cmid = (int)$PAGE->cm->id;
@@ -121,7 +132,8 @@ class output_hooks {
             return;
         }
 
-        $config = quiz_configurator::ensure_default((int)$PAGE->cm->instance);
+        // Cmid is now the source of truth for config lookups.
+        $config = quiz_configurator::ensure_default($cmid);
         if (!$config || empty($config->enabled)) {
             return;
         }
@@ -134,7 +146,6 @@ class output_hooks {
             'local_stackmathgame'
         );
         $PAGE->requires->js_call_amd('local_stackmathgame/game_engine', 'init', [[
-            'quizid' => (int)$PAGE->cm->instance,
             'cmid' => $cmid,
             'userid' => (int)$USER->id,
             'labelid' => (int)($config->labelid ?? 0),

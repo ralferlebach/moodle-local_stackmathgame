@@ -35,14 +35,22 @@ namespace local_stackmathgame\local\service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class slot_config_schema {
+    /** Scene type: instruction slide, no answer required. */
     const SCENE_TYPE_INSTRUCTION = 'instruction';
-    const SCENE_TYPE_CHALLENGE   = 'challenge';
-    const SCENE_TYPE_MINIBOSS    = 'miniboss';
-    const SCENE_TYPE_BOSS        = 'boss';
-    const SCENE_TYPE_REWARD      = 'reward';
-    const SCENE_TYPE_TRANSITION  = 'transition';
-    const SCENE_TYPE_OUTRO       = 'outro';
+    /** Scene type: standard challenge question. */
+    const SCENE_TYPE_CHALLENGE = 'challenge';
+    /** Scene type: harder challenge (mini-boss). */
+    const SCENE_TYPE_MINIBOSS = 'miniboss';
+    /** Scene type: final challenge in a chapter. */
+    const SCENE_TYPE_BOSS = 'boss';
+    /** Scene type: reward scene, no answer required. */
+    const SCENE_TYPE_REWARD = 'reward';
+    /** Scene type: transition between chapters. */
+    const SCENE_TYPE_TRANSITION = 'transition';
+    /** Scene type: final scene of the quiz campaign. */
+    const SCENE_TYPE_OUTRO = 'outro';
 
+    /** All valid scene type values. */
     const SCENE_TYPES = [
         self::SCENE_TYPE_INSTRUCTION,
         self::SCENE_TYPE_CHALLENGE,
@@ -53,20 +61,28 @@ final class slot_config_schema {
         self::SCENE_TYPE_OUTRO,
     ];
 
+    /** Branching mode: go to the next slot in linear order. */
     const BRANCH_MODE_LINEAR = 'linear';
-    const BRANCH_MODE_SLOT   = 'slot';
-    const BRANCH_MODE_END    = 'end';
+    /** Branching mode: jump to a specific slot number. */
+    const BRANCH_MODE_SLOT = 'slot';
+    /** Branching mode: end the quiz. */
+    const BRANCH_MODE_END = 'end';
 
+    /** All valid branching mode values. */
     const BRANCH_MODES = [
         self::BRANCH_MODE_LINEAR,
         self::BRANCH_MODE_SLOT,
         self::BRANCH_MODE_END,
     ];
 
+    /** Outcome: question answered correctly. */
     const OUTCOME_GRADEDRIGHT = 'gradedright';
+    /** Outcome: question answered incorrectly. */
     const OUTCOME_GRADEDWRONG = 'gradedwrong';
-    const OUTCOME_COMPLETE    = 'complete';
-    const OUTCOME_DEFAULT     = 'default';
+    /** Outcome: attempt marked complete. */
+    const OUTCOME_COMPLETE = 'complete';
+    /** Outcome: fallback when no specific outcome applies. */
+    const OUTCOME_DEFAULT = 'default';
 
     /**
      * Parse and normalise a configjson string.
@@ -156,13 +172,13 @@ final class slot_config_schema {
      */
     private static function normalise(array $data): array {
         $defaults = self::defaults();
-        $data['version']   = (int)($data['version'] ?? 1);
-        $data['enabled']   = isset($data['enabled']) ? (bool)$data['enabled'] : true;
-        $data['scene']     = array_merge($defaults['scene'],     (array)($data['scene']     ?? []));
+        $data['version'] = (int)($data['version'] ?? 1);
+        $data['enabled'] = isset($data['enabled']) ? (bool)$data['enabled'] : true;
+        $data['scene'] = array_merge($defaults['scene'], (array)($data['scene'] ?? []));
         $data['branching'] = array_merge($defaults['branching'], (array)($data['branching'] ?? []));
-        $data['rewards']   = array_merge($defaults['rewards'],   (array)($data['rewards']   ?? []));
+        $data['rewards'] = array_merge($defaults['rewards'], (array)($data['rewards'] ?? []));
         $data['narrative'] = array_merge($defaults['narrative'], (array)($data['narrative'] ?? []));
-        $data['display']   = array_merge($defaults['display'],   (array)($data['display']   ?? []));
+        $data['display'] = array_merge($defaults['display'], (array)($data['display'] ?? []));
         return $data;
     }
 }

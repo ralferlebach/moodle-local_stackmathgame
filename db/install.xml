@@ -97,11 +97,11 @@
       </INDEXES>
     </TABLE>
 
-    <TABLE NAME="local_stackmathgame_quizcfg" COMMENT="Quiz specific game configuration.">
+    <TABLE NAME="local_stackmathgame_cfg" COMMENT="Quiz specific game configuration.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
@@ -156,7 +156,7 @@
     <TABLE NAME="local_stackmathgame_questionmap" COMMENT="Maps quiz slots to mode-neutral game nodes.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="slotnumber" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="false"/>
@@ -356,27 +356,6 @@
       <INDEXES>
         <INDEX NAME="lsmg_pkg_design_ver_uix" UNIQUE="true" FIELDS="designid,packageversion"/>
         <INDEX NAME="packageidentifier_ix" UNIQUE="false" FIELDS="packageidentifier"/>
-      </INDEXES>
-    </TABLE>
-
-    <TABLE NAME="local_stackmathgame_stashmap" COMMENT="Maps quiz slots to block_stash items for optional reward integration.">
-      <FIELDS>
-        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="slotnumber" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="stashcourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="stashitemid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="grantquantity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="mode" TYPE="char" LENGTH="30" NOTNULL="true" DEFAULT="firstsolve"/>
-        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="quizid_slot_ix" UNIQUE="false" FIELDS="quizid,slotnumber"/>
       </INDEXES>
     </TABLE>
 

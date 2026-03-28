@@ -38,9 +38,29 @@ class quiz_configurator {
      * @param int $quizid The quiz instance ID.
      * @return \stdClass|null The configuration record, or null.
      */
-    public static function get_plugin_config(int $quizid): ?\stdClass {
+    /**
+     * Resolve the course-module id from a quiz instance id.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return int The cmid, or 0 if not found.
+     */
+    public static function cmid_from_quizid(int $quizid): int {
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
+        return $cm ? (int)$cm->id : 0;
+    }
+
+    /**
+     * Retrieve the game configuration for a course-module, or null if none exists.
+     *
+     * The cmid is the source of truth. All lookups use cmid; quizid is
+     * derived when quiz-specific tables must be queried.
+     *
+     * @param int $cmid The course-module ID.
+     * @return \stdClass|null The configuration record, or null.
+     */
+    public static function get_plugin_config(int $cmid): ?\stdClass {
         global $DB;
-        return $DB->get_record('local_stackmathgame_quizcfg', ['quizid' => $quizid]) ?: null;
+        return $DB->get_record('local_stackmathgame_cfg', ['cmid' => $cmid]) ?: null;
     }
 
     /**
@@ -49,10 +69,10 @@ class quiz_configurator {
      * @param int $quizid The quiz instance ID.
      * @return \stdClass The configuration record.
      */
-    public static function ensure_default(int $quizid): \stdClass {
+    public static function ensure_default(int $cmid): \stdClass {
         global $DB, $USER;
 
-        $record = self::get_plugin_config($quizid);
+        $record = self::get_plugin_config($cmid);
         if ($record) {
             return $record;
         }
@@ -63,7 +83,7 @@ class quiz_configurator {
         $now      = time();
         $data     = (object)[
             'courseid'          => (int)$quiz->course,
-            'quizid'            => $quizid,
+            'cmid'              => $cmid,
             'labelid'           => $labelid,
             'designid'          => $designid,
             'enabled'           => 0,
@@ -76,8 +96,8 @@ class quiz_configurator {
             'modifiedby'        => empty($USER->id) ? null : (int)$USER->id,
         ];
 
-        $id = $DB->insert_record('local_stackmathgame_quizcfg', $data);
-        return $DB->get_record('local_stackmathgame_quizcfg', ['id' => $id], '*', MUST_EXIST);
+        $id = $DB->insert_record('local_stackmathgame_cfg', $data);
+        return $DB->get_record('local_stackmathgame_cfg', ['id' => $id], '*', MUST_EXIST);
     }
 
     /**
@@ -89,10 +109,10 @@ class quiz_configurator {
      * @param array $data   Form data to persist.
      * @return \stdClass The updated configuration record.
      */
-    public static function save_for_quiz(int $quizid, array $data): \stdClass {
+    public static function save_for_quiz(int $cmid, array $data): \stdClass {
         global $DB, $USER;
 
-        $record = self::ensure_default($quizid);
+        $record = self::ensure_default($cmid);
 
         // Guard: if labelid=0, preserve the existing value to avoid FK violation.
         $newlabelid = (int)($data['labelid'] ?? 0);
@@ -122,8 +142,8 @@ class quiz_configurator {
             'modifiedby'        => empty($USER->id) ? null : (int)$USER->id,
         ];
 
-        $DB->update_record('local_stackmathgame_quizcfg', $update);
-        return self::get_plugin_config($quizid);
+        $DB->update_record('local_stackmathgame_cfg', $update);
+        return self::get_plugin_config($cmid);
     }
 
     /**

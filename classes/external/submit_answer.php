@@ -75,7 +75,8 @@ class submit_answer extends \external_api {
         require_capability('local/stackmathgame:play', $context);
 
         $quizid  = (int)$attemptobj->get_quizid();
-        $config  = \local_stackmathgame\game\quiz_configurator::ensure_default($quizid);
+        $cmid    = \local_stackmathgame\game\quiz_configurator::cmid_from_quizid($quizid);
+        $config  = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
         $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
             (int)$USER->id,
             $quizid
@@ -136,7 +137,6 @@ class submit_answer extends \external_api {
 
         $attemptobj    = \mod_quiz\quiz_attempt::create($attemptid);
         $qa            = $attemptobj->get_question_attempt($slot);
-        // Cast to string via question_state::__toString() — works for all
         // States including question_state_todo which has no get_name().
         $state = (string)$qa->get_state();
         $feedbackhtml  = '';
@@ -226,7 +226,13 @@ class submit_answer extends \external_api {
                 },
                 $answers
             ),
-            'inputnames'    => array_keys($qa->get_qt_data()),
+            'inputnames'    => (function() use ($qa): array {
+                try {
+                    return array_keys($qa->get_qt_data());
+                } catch (\Throwable $qterr) {
+                    return [];
+                }
+            })(),
             'previousstate' => $previousstate,
             'message'       => $message,
             'profile'       => api::export_profile($profile),
