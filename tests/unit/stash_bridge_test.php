@@ -283,9 +283,15 @@ final class stash_bridge_test extends advanced_testcase {
         $file = __DIR__ . '/../../classes/local/integration/stash_bridge.php';
         $this->assertFileExists($file);
         $content = file_get_contents($file);
-        $this->assertStringContainsString('block_stash_user_items', $content,
-            'stash_bridge must write directly to block_stash_user_items');
-        $this->assertStringNotContainsString('cron_setup_user', $content,
-            'stash_bridge must not use cron_setup_user (deprecated)');
+        $this->assertStringContainsString(
+            'block_stash_user_items',
+            $content,
+            'stash_bridge must write directly to block_stash_user_items'
+        );
+        $this->assertStringNotContainsString(
+            'cron_setup_user',
+            $content,
+            'stash_bridge must not use cron_setup_user (deprecated)'
+        );
     }
 }

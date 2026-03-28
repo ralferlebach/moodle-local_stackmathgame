@@ -25,6 +25,7 @@
 namespace local_stackmathgame\studio;
 
 use local_stackmathgame\game\theme_manager;
+use local_stackmathgame\studio\design_validator;
 
 /**
  * Imports zipped design bundles into the local_stackmathgame_design table.
@@ -79,6 +80,10 @@ class theme_importer {
         $tmpzippath = $tmpdir . '/' . $filename;
         $file->copy_content_to($tmpzippath);
 
+        $narrativejson  = '{}';
+        $uijson         = '{}';
+        $mechanicsjson  = '{}';
+
         if (is_readable($tmpzippath) && class_exists('ZipArchive')) {
             $zip = new \ZipArchive();
             if ($zip->open($tmpzippath) === true) {
@@ -86,7 +91,36 @@ class theme_importer {
                 if ($manifestraw !== false) {
                     $manifest = json_decode($manifestraw, true) ?: [];
                 }
+                // Validate the ZIP before proceeding.
                 $zip->close();
+
+                $errors = design_validator::validate_zip($tmpzippath);
+                if (!empty($errors)) {
+                    return [
+                        'success'  => false,
+                        'designid' => null,
+                        'error'    => implode(' ', $errors),
+                    ];
+                }
+
+                // Re-open to read payload files.
+                if ($zip->open($tmpzippath) === true) {
+                    foreach (['narrative.json' => 'narrativejson',
+                              'ui.json'        => 'uijson',
+                              'mechanics.json' => 'mechanicsjson'] as $file => $field) {
+                        $raw = $zip->getFromName($file);
+                        if ($raw !== false) {
+                            $decoded = json_decode($raw, true);
+                            if (is_array($decoded)) {
+                                $$field = json_encode(
+                                    $decoded,
+                                    JSON_UNESCAPED_UNICODE
+                                );
+                            }
+                        }
+                    }
+                    $zip->close();
+                }
             }
         }
 
@@ -131,6 +165,9 @@ class theme_importer {
                     'imported' => $now,
                     'manifest' => $manifest,
                 ], JSON_UNESCAPED_UNICODE),
+                'narrativejson' => $narrativejson,
+                'uijson'        => $uijson,
+                'mechanicsjson' => $mechanicsjson,
                 'timemodified'  => $now,
                 'modifiedby'    => (int)$USER->id,
             ]);
@@ -145,9 +182,9 @@ class theme_importer {
                 'isbundled'        => 0,
                 'isactive'         => 1,
                 'versioncode'      => $version,
-                'narrativejson'    => '{}',
-                'uijson'           => '{}',
-                'mechanicsjson'    => '{}',
+                'narrativejson'    => $narrativejson,
+                'uijson'           => $uijson,
+                'mechanicsjson'    => $mechanicsjson,
                 'assetmanifestjson' => json_encode($assetslots, JSON_UNESCAPED_UNICODE),
                 'importmetajson'   => json_encode([
                     'origin'   => 'upload',

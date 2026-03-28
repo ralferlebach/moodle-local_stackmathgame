@@ -53,8 +53,8 @@ if ($action === 'export' && $designid > 0) {
     require_sesskey();
     require_capability('local/stackmathgame:managethemes', $syscontext);
 
-    $design = \local_stackmathgame\studio\theme_manager_studio::export_one($designid);
-    if (!$design) {
+    $zipcontent = \local_stackmathgame\studio\design_exporter::build_zip($designid);
+    if ($zipcontent === null) {
         redirect(
             new moodle_url('/local/stackmathgame/studio.php'),
             get_string('errordesignnotfound', 'local_stackmathgame'),
@@ -63,15 +63,14 @@ if ($action === 'export' && $designid > 0) {
         );
     }
 
-    $json     = json_encode($design, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    $filename = 'smg_design_' .
-                clean_param((string)($design['slug'] ?? 'export'), PARAM_ALPHANUMEXT) .
-                '.json';
+    $design   = \local_stackmathgame\studio\theme_manager_studio::export_one($designid);
+    $slug     = (string)($design['slug'] ?? 'design');
+    $filename = \local_stackmathgame\studio\design_exporter::get_filename($designid, $slug);
 
-    header('Content-Type: application/json');
+    header('Content-Type: application/zip');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Content-Length: ' . strlen($json));
-    echo $json;
+    header('Content-Length: ' . strlen($zipcontent));
+    echo $zipcontent;
     exit;
 }
 

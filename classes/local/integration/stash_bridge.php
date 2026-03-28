@@ -117,10 +117,12 @@ final class stash_bridge {
         if (!$coursectx) {
             return null;
         }
-        if (!$DB->record_exists('block_instances', [
-            'blockname' => 'stash',
-            'parentcontextid' => $coursectx->id,
-        ])) {
+        if (
+            !$DB->record_exists('block_instances', [
+                'blockname' => 'stash',
+                'parentcontextid' => $coursectx->id,
+            ])
+        ) {
             return null;
         }
 

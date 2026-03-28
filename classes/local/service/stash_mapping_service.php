@@ -84,10 +84,12 @@ final class stash_mapping_service {
             if (!$ctx) {
                 return [];
             }
-            if (!$DB->record_exists('block_instances', [
-                'blockname' => 'stash',
-                'parentcontextid' => $ctx->id,
-            ])) {
+            if (
+                !$DB->record_exists('block_instances', [
+                    'blockname' => 'stash',
+                    'parentcontextid' => $ctx->id,
+                ])
+            ) {
                 return [];
             }
             // Read items directly to avoid persistent-class API version differences.
