@@ -102,14 +102,32 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032804, 'local', 'stackmathgame');
     }
 
-    if ($oldversion < 2026032805) {
-        // Version 2026032805 – Step A: wire bridge_dispatcher into submit_answer.
-        // bridge_dispatcher::on_answer_result() is now called after each processed
-        // answer. The call is wrapped in try/catch so optional integration failures
-        // (block_xp, block_stash) can never interrupt the quiz attempt flow.
-        // xp_bridge fires Moodle events which block_xp collects automatically via
-        // its event observer rules – no direct PHP API call is needed or used.
-        upgrade_plugin_savepoint(true, 2026032805, 'local', 'stackmathgame');
+    if ($oldversion < 2026032808) {
+        // Step B: add local_stackmathgame_stashmap table.
+        // Maps quiz slots to block_stash items so the stash_bridge can award
+        // real items when block_stash is installed and a mapping is configured.
+        $dbman = $DB->get_manager();
+        $table = new xmldb_table('local_stackmathgame_stashmap');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+        $table->add_field('quizid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('slotnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('stashcourseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('stashitemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('grantquantity', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '1');
+        $table->add_field('mode', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, 'firstsolve');
+        $table->add_field('enabled', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1');
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_index('quizid_slot', XMLDB_INDEX_NOTUNIQUE, ['quizid', 'slotnumber']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026032808, 'local', 'stackmathgame');
     }
 
     return true;
