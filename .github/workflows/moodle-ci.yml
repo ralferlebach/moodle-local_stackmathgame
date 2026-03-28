@@ -6,27 +6,15 @@
 #   PHP:    8.2, 8.3, 8.4  (8.4 nur für Moodle ≥ 5.1, siehe exclude)
 #   DB:     MariaDB 10.11  |  PostgreSQL 16
 #
-# Abhängigkeiten:
-#   qtype_stack                → branch master (maths/moodle-qtype_stack)
-#   qbehaviour_stackmathgame   → branch master (ralferlebach/moodle-qbehaviour_stackmathgame)
-#   qbehaviour_adaptivemultipart → branch master (maths/moodle-qbehaviour_adaptivemultipart)
-#   Maxima ≥ 5.46 via apt + Versionscheck
-#   gnuplot       → für STACK-Plot-Rendering
+# Abhängigkeiten (immer):
+#   qtype_stack                → branch master
+#   qbehaviour_stackmathgame   → branch main
+#   qbehaviour_adaptivemultipart → branch master
 #
-# WICHTIG:
-#   - moodle-plugin-ci install --plugin ./plugin registriert das Plugin.
-#     Nachfolgende Subcommands (phpunit, behat, grunt) werden OHNE
-#     Plugin-Argument aufgerufen – sie kennen das Plugin bereits.
-#   - Ab Moodle 4.5 verlangt MariaDB den Treiber "mariadb" (NICHT "mysqli").
-#   - MariaDB-Service OHNE MYSQL_DATABASE → moodle-plugin-ci erstellt
-#     die DB selbst.
-#   - PostgreSQL-Service mit POSTGRES_DB=postgres → DB "moodle" wird
-#     NICHT vorab erstellt.
-#   - max_input_vars=5000 via ini-values (Moodle-Mindestanforderung).
-#   - --branch (nicht --moodle!) übergibt den Moodle-Branch.
-#   - Maxima + gnuplot in ALLEN Jobs mit qtype_stack.
-#   - en_AU.UTF-8 Locale muss installiert werden (Moodle-Core-
-#     Anforderung für PHPUnit/Behat Test-Suite-Initialisierung).
+# Optionale Integrationen (phpunit-with-integrations):
+#   block_xp                   → branch master (FMCorz/moodle-block_xp)
+#   block_stash                → branch master (FMCorz/moodle-block_stash)
+#   Testet silent-fail NICHT aktiv, sondern event-firing WITH plugins present.
 ##############################################################################
 
 name: Moodle Plugin CI
@@ -109,7 +97,6 @@ jobs:
         with:
           node-version: '20'
 
-      # Moodle Core benötigt en_AU.UTF-8 für Test-Suite-Initialisierung
       - name: Install required locale
         run: |
           sudo locale-gen en_AU.UTF-8
@@ -193,9 +180,12 @@ jobs:
           fi
           echo "AMD build OK: $(ls plugin/amd/src/*.js | wc -l) Datei(en) verifiziert."
 
-  # ── 2. PHPUnit ────────────────────────────────────────────────────────────
+  # ── 2a. PHPUnit – ohne optionale Integrationen ────────────────────────────
+  # Testet den Normalbetrieb: block_xp und block_stash sind NICHT installiert.
+  # Alle Bridge-Tests müssen dabei silent-fail zeigen (markTestSkipped oder
+  # available=false / dispatched=false).
   phpunit:
-    name: "PHPUnit (${{ matrix.moodle }} / PHP ${{ matrix.php }} / ${{ matrix.db.engine }})"
+    name: "PHPUnit – ohne Integrationen (${{ matrix.moodle }} / PHP ${{ matrix.php }} / ${{ matrix.db.engine }})"
     runs-on: ubuntu-24.04
     needs: [lint-php, lint-js]
     strategy:
@@ -247,7 +237,6 @@ jobs:
           ini-values: max_input_vars=5000
           coverage: none
 
-      # Moodle Core benötigt en_AU.UTF-8 für PHPUnit-Initialisierung
       - name: Install required locale
         run: |
           sudo locale-gen en_AU.UTF-8
@@ -288,6 +277,8 @@ jobs:
       - name: Register qbehaviour_adaptivemultipart
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
 
+      # block_xp und block_stash werden NICHT registriert – das ist der Sinn dieses Jobs.
+
       - name: Install Moodle ${{ matrix.moodle }}
         run: |
           moodle-plugin-ci install \
@@ -300,15 +291,113 @@ jobs:
             --db-name  moodle \
             --branch   ${{ matrix.moodle }}
 
-      # KEIN Plugin-Argument: install --plugin hat es bereits registriert.
-      - name: PHPUnit – all tests
+      - name: PHPUnit – alle Tests (ohne block_xp / block_stash)
+        run: moodle-plugin-ci phpunit
+
+  # ── 2b. PHPUnit – MIT block_xp + block_stash ─────────────────────────────
+  # Schlanker Job (nur Moodle 4.5 + PHP 8.2 + MariaDB) der prüft, ob die
+  # Bridges korrekt feuern wenn die optionalen Plugins tatsächlich installiert
+  # sind. Testet insbesondere:
+  #   • availability::has_block_xp() / has_block_stash() → true
+  #   • xp_bridge::dispatch() feuert progress_updated + question_solved Events
+  #   • question_solved feuert NICHT bei solved=false
+  #   • stash_bridge::dispatch() feuert bei solved=true (lokale Inventartabelle)
+  phpunit-with-integrations:
+    name: "PHPUnit – MIT block_xp + block_stash (MOODLE_405_STABLE / PHP 8.2 / MariaDB)"
+    runs-on: ubuntu-24.04
+    needs: [lint-php, lint-js]
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo, pdo_mysql, gd, xml, zip, intl
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Install required locale
+        run: |
+          sudo locale-gen en_AU.UTF-8
+          sudo update-locale
+
+      - name: Install Maxima (≥ 5.46) and gnuplot
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y maxima gnuplot
+          VER=$(maxima --version 2>&1 | grep -oP '\d+\.\d+(\.\d+)?' | head -1)
+          echo "Installed Maxima $VER"
+          python3 -c "
+          v = tuple(int(x) for x in '${VER}'.split('.'))
+          assert v >= (5, 46), f'Maxima {v} < required (5, 46)'
+          print(f'Maxima {v}: OK')
+          "
+
+      - name: Install moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev moodlehq/moodle-plugin-ci ci ${{ env.MOODLE_CI }}
+          echo "$GITHUB_WORKSPACE/ci/bin"        >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ci/vendor/bin" >> "$GITHUB_PATH"
+
+      - name: Set TRAVIS_BRANCH for moodle-plugin-ci
+        run: |
+          BRANCH_NAME=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="default-branch"
+          fi
+          echo "TRAVIS_BRANCH=$BRANCH_NAME" >> "$GITHUB_ENV"
+
+      - name: Register qtype_stack
+        run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
+
+      - name: Register qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
+
+      - name: Register qbehaviour_adaptivemultipart
+        run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+
+      # Optionale Integrationen – NUR in diesem Job
+      - name: Register block_xp (optional integration)
+        run: moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
+
+      - name: Register block_stash (optional integration)
+        run: moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_stash
+
+      - name: Install Moodle MOODLE_405_STABLE
+        run: |
+          moodle-plugin-ci install \
+            --plugin   ./plugin \
+            --db-type  mariadb \
+            --db-host  127.0.0.1 \
+            --db-port  3306 \
+            --db-user  root \
+            --db-pass  root \
+            --db-name  moodle \
+            --branch   MOODLE_405_STABLE
+
+      - name: PHPUnit – Bridge-Tests MIT block_xp + block_stash
         run: moodle-plugin-ci phpunit
 
   # ── 3. Behat ──────────────────────────────────────────────────────────────
   behat:
     name: "Behat (${{ matrix.moodle }} / PHP 8.2 / Chrome)"
     runs-on: ubuntu-24.04
-    needs: [phpunit]
+    needs: [phpunit, phpunit-with-integrations]
     strategy:
       fail-fast: false
       matrix:
@@ -346,7 +435,6 @@ jobs:
           ini-values: max_input_vars=5000
           coverage: none
 
-      # Moodle Core benötigt en_AU.UTF-8 für Behat-Initialisierung
       - name: Install required locale
         run: |
           sudo locale-gen en_AU.UTF-8
@@ -399,7 +487,6 @@ jobs:
             --db-name  moodle \
             --branch   ${{ matrix.moodle }}
 
-      # KEIN Plugin-Argument: install --plugin hat es bereits registriert.
       - name: Behat – all plugin scenarios
         run: |
           moodle-plugin-ci behat \
