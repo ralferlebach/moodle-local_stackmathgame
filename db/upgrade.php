@@ -130,5 +130,11 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032808, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032810) {
+        // Step C: no schema change – stash mappings use the table created in 2026032808.
+        // This savepoint marks the addition of the mapping UI in quiz_settings.php.
+        upgrade_plugin_savepoint(true, 2026032810, 'local', 'stackmathgame');
+    }
+
     return true;
 }

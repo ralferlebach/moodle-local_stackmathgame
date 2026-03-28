@@ -115,6 +115,12 @@ foreach ($labelrecords as $lrec) {
     $labeloptions[(int)$lrec->id] = format_string($lrec->name);
 }
 
+$stashslots = \local_stackmathgame\local\service\stash_mapping_service::get_quiz_slots($quizid);
+$stashitems = \local_stackmathgame\local\service\stash_mapping_service::get_stash_items_for_course(
+    (int)$course->id
+);
+$stashmappings = \local_stackmathgame\local\service\stash_mapping_service::get_for_quiz($quizid);
+
 $customdata = [
     'config'          => $config,
     'designs'         => $designs,
@@ -123,6 +129,9 @@ $customdata = [
     'canmanagelabels' => $canmanagelabels,
     'quizid'          => $quizid,
     'cmid'            => $cmid,
+    'stashslots'      => $stashslots,
+    'stashitems'      => $stashitems,
+    'stashmappings'   => $stashmappings,
 ];
 
 $form      = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
@@ -166,6 +175,25 @@ if ($data = $form->get_data()) {
     }
 
     \local_stackmathgame\game\quiz_configurator::save_for_quiz($quizid, (array)$data);
+
+    // Save stash slot mappings (only when block_stash is installed).
+    if (!empty($stashitems)) {
+        $mappingentries = [];
+        foreach ($stashslots as $slot) {
+            $prefix = 'stashmap_' . $slot . '_';
+            $mappingentries[] = [
+                'slotnumber'   => $slot,
+                'stashitemid'  => (int)($data->{$prefix . 'itemid'} ?? 0),
+                'grantquantity' => max(1, (int)($data->{$prefix . 'qty'} ?? 1)),
+                'enabled'      => empty($data->{$prefix . 'enabled'}) ? 0 : 1,
+            ];
+        }
+        \local_stackmathgame\local\service\stash_mapping_service::save_for_quiz(
+            $quizid,
+            (int)$course->id,
+            $mappingentries
+        );
+    }
 
     redirect(
         $pageurl,

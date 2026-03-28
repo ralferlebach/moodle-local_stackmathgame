@@ -177,3 +177,14 @@ $string['privacy:metadata:eventlog:questionid']      = 'Question ID';
 $string['privacy:metadata:eventlog:eventtype']       = 'Event type';
 $string['privacy:metadata:eventlog:payloadjson']     = 'Event payload data';
 $string['privacy:metadata:eventlog:timecreated']     = 'Event time';
+
+// Stash mapping UI strings (Step C).
+$string['stashmapping_header']  = 'Stash item rewards (block_stash integration)';
+$string['stashmapping_desc']    = 'Assign a block_stash item to each question slot. When a student solves that slot for the first time, the item is added to their stash inventory. Requires block_stash to be installed and enabled in this course.';
+$string['stashmapping_noslots'] = 'No question slots found for this quiz. Add questions first.';
+$string['stashmapping_slot']    = 'Slot {$a}';
+$string['stashmapping_item']    = 'Stash item';
+$string['stashmapping_noitem']  = '(no item – disabled)';
+$string['stashmapping_qty']     = 'Quantity granted';
+$string['stashmapping_enabled'] = 'Mapping active';
+
