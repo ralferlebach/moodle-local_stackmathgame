@@ -145,7 +145,7 @@ jobs:
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
       - name: Register qbehaviour_stackmathgame
-        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
 
       - name: Register qbehaviour_adaptivemultipart
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
@@ -283,7 +283,7 @@ jobs:
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
       - name: Register qbehaviour_stackmathgame
-        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
 
       - name: Register qbehaviour_adaptivemultipart
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
@@ -382,7 +382,7 @@ jobs:
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
       - name: Register qbehaviour_stackmathgame
-        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
 
       - name: Register qbehaviour_adaptivemultipart
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
