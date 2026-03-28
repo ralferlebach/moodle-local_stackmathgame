@@ -41,7 +41,6 @@ namespace local_stackmathgame\local\integration;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class stash_bridge {
-
     /**
      * Dispatch a stash item grant after a question slot is solved.
      *

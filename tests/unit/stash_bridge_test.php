@@ -60,7 +60,12 @@ final class stash_bridge_test extends advanced_testcase {
         }
         $profile = $this->make_profile(2);
         $result = stash_bridge::dispatch(
-            $profile, 10, 1, 3, [], ['solved' => false, 'score' => 0, 'xp' => 0]
+            $profile,
+            10,
+            1,
+            3,
+            [],
+            ['solved' => false, 'score' => 0, 'xp' => 0]
         );
         $this->assertFalse($result['dispatched']);
         $this->assertFalse($result['stash']);
@@ -81,7 +86,12 @@ final class stash_bridge_test extends advanced_testcase {
         $profile = $this->make_profile((int)$user->id);
 
         $result = stash_bridge::dispatch(
-            $profile, 10, 1, 3, [], ['solved' => true, 'score' => 10, 'xp' => 5]
+            $profile,
+            10,
+            1,
+            3,
+            [],
+            ['solved' => true, 'score' => 10, 'xp' => 5]
         );
 
         $this->assertTrue($result['dispatched']);
@@ -136,7 +146,12 @@ final class stash_bridge_test extends advanced_testcase {
         $profile = $this->make_profile((int)$user->id);
 
         stash_bridge::dispatch(
-            $profile, 0, 1, 5, [], ['solved' => true, 'score' => 10, 'xp' => 5]
+            $profile,
+            0,
+            1,
+            5,
+            [],
+            ['solved' => true, 'score' => 10, 'xp' => 5]
         );
 
         $events = $sink->get_events();
@@ -163,7 +178,12 @@ final class stash_bridge_test extends advanced_testcase {
         $profile = $this->make_profile((int)$user->id);
 
         $result = stash_bridge::dispatch(
-            $profile, 99999, 1, 3, [], ['solved' => true, 'score' => 10, 'xp' => 5]
+            $profile,
+            99999,
+            1,
+            3,
+            [],
+            ['solved' => true, 'score' => 10, 'xp' => 5]
         );
 
         $this->assertTrue($result['dispatched']);
@@ -210,7 +230,12 @@ final class stash_bridge_test extends advanced_testcase {
 
         $profile = $this->make_profile((int)$user->id);
         $result = stash_bridge::dispatch(
-            $profile, 77, 1, 3, [], ['solved' => true, 'score' => 10, 'xp' => 5]
+            $profile,
+            77,
+            1,
+            3,
+            [],
+            ['solved' => true, 'score' => 10, 'xp' => 5]
         );
 
         $this->assertTrue($result['dispatched']);
