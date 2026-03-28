@@ -102,5 +102,15 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032804, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032805) {
+        // Version 2026032805 – Step A: wire bridge_dispatcher into submit_answer.
+        // bridge_dispatcher::on_answer_result() is now called after each processed
+        // answer. The call is wrapped in try/catch so optional integration failures
+        // (block_xp, block_stash) can never interrupt the quiz attempt flow.
+        // xp_bridge fires Moodle events which block_xp collects automatically via
+        // its event observer rules – no direct PHP API call is needed or used.
+        upgrade_plugin_savepoint(true, 2026032805, 'local', 'stackmathgame');
+    }
+
     return true;
 }
