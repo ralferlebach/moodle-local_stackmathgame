@@ -2,17 +2,17 @@
 // This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// It under the terms of the GNU General Public License as published by
+// The Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// But WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// Along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace local_stackmathgame\tests\unit;
 
@@ -63,14 +63,12 @@ final class bridge_dispatcher_test extends advanced_testcase {
         ];
     }
 
-    // ── availability::has_block_xp / has_block_stash ────────────────────────
-
     /**
      * Availability check returns false when block_xp is not installed.
      * This is the common case in CI where only stackmathgame is installed.
      */
     public function test_has_block_xp_false_when_not_installed(): void {
-        // block_xp is not installed in a standard CI run.
+        // Block_xp is not installed in a standard CI run.
         if (availability::has_block_xp()) {
             $this->markTestSkipped('block_xp is installed; this test requires it absent.');
         }
@@ -86,8 +84,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
         }
         $this->assertFalse(availability::has_block_stash());
     }
-
-    // ── xp_bridge – silent fail when block_xp absent ────────────────────────
 
     /**
      * xp_bridge::dispatch() returns available=false and dispatched=false
@@ -106,8 +102,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
         $this->assertFalse($result['available'], 'available must be false when block_xp absent');
         $this->assertFalse($result['dispatched'], 'dispatched must be false when block_xp absent');
     }
-
-    // ── stash_bridge – silent fail when block_stash absent ──────────────────
 
     /**
      * stash_bridge::dispatch() returns dispatched=false without throwing
@@ -142,8 +136,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
         ]);
         $this->assertFalse($result['dispatched'], 'stash must not dispatch when solved=false');
     }
-
-    // ── bridge_dispatcher – aggregates both bridges ──────────────────────────
 
     /**
      * bridge_dispatcher::on_answer_result() returns a result array with
@@ -186,8 +178,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
         $this->assertFalse($result['stash']['dispatched']);
     }
 
-    // ── xp_bridge WITH block_xp installed ───────────────────────────────────
-
     /**
      * When block_xp IS installed, xp_bridge fires Moodle events.
      * block_xp collects XP via its own event observer – we verify the event
@@ -208,7 +198,7 @@ final class bridge_dispatcher_test extends advanced_testcase {
 
         $result = xp_bridge::dispatch(
             $profile,
-            0,  // quizid=0 → falls back to system context, no CM lookup needed.
+            0, // Quizid=0 falls back to system context, no CM lookup needed.
             1,
             3,
             ['state' => 'gradedright', 'questionid' => 5],
@@ -229,7 +219,7 @@ final class bridge_dispatcher_test extends advanced_testcase {
             'progress_updated event must fire when xp_bridge dispatches'
         );
 
-        // question_solved should also fire (solved=true).
+        // Question_solved should also fire (solved=true).
         $this->assertContains(
             '\\local_stackmathgame\\event\\question_solved',
             $eventnames,
@@ -276,8 +266,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
             'question_solved must NOT fire when solved=false'
         );
     }
-
-    // ── Integration: bridge_dispatcher is wired into submit_answer ───────────
 
     /**
      * Verify that the submit_answer.php source contains a bridge_dispatcher call.
