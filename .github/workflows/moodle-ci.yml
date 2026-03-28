@@ -1,5 +1,5 @@
 ##############################################################################
-# GitHub Actions CI – local_stackmatheditor
+# GitHub Actions CI – local_stackmathgame
 #
 # Matrix:
 #   Moodle: MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_501_STABLE
@@ -7,7 +7,9 @@
 #   DB:     MariaDB 10.11  |  PostgreSQL 16
 #
 # Abhängigkeiten:
-#   qtype_stack  → branch master
+#   qtype_stack                → branch master (maths/moodle-qtype_stack)
+#   qbehaviour_stackmathgame   → branch master (ralferlebach/moodle-qbehaviour_stackmathgame)
+#   qbehaviour_adaptivemultipart → branch master (maths/moodle-qbehaviour_adaptivemultipart)
 #   Maxima ≥ 5.46 via apt + Versionscheck
 #   gnuplot       → für STACK-Plot-Rendering
 #
@@ -142,6 +144,12 @@ jobs:
       - name: Register qtype_stack
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
+      - name: Register qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+
+      - name: Register qbehaviour_adaptivemultipart
+        run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+
       - name: Install Moodle (grunt-Config)
         run: |
           moodle-plugin-ci install \
@@ -274,6 +282,12 @@ jobs:
       - name: Register qtype_stack
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
+      - name: Register qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+
+      - name: Register qbehaviour_adaptivemultipart
+        run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+
       - name: Install Moodle ${{ matrix.moodle }}
         run: |
           moodle-plugin-ci install \
@@ -367,6 +381,12 @@ jobs:
       - name: Register qtype_stack
         run: moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
 
+      - name: Register qbehaviour_stackmathgame
+        run: moodle-plugin-ci add-plugin --branch master ralferlebach/moodle-qbehaviour_stackmathgame
+
+      - name: Register qbehaviour_adaptivemultipart
+        run: moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+
       - name: Install Moodle ${{ matrix.moodle }}
         run: |
           moodle-plugin-ci install \
@@ -384,7 +404,7 @@ jobs:
         run: |
           moodle-plugin-ci behat \
             --profile chrome \
-            --tags "@local_stackmatheditor and not @broken"
+            --tags "@local_stackmathgame and not @broken"
 
       - name: Upload failure screenshots
         if: failure()
