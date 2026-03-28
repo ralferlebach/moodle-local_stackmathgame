@@ -102,46 +102,15 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032804, 'local', 'stackmathgame');
     }
 
-    if ($oldversion < 2026032808) {
-        // Step B: add local_stackmathgame_stashmap table.
-        // Maps quiz slots to block_stash items so the stash_bridge can award
-        // real items when block_stash is installed and a mapping is configured.
-        $dbman = $DB->get_manager();
-        $table = new xmldb_table('local_stackmathgame_stashmap');
-
-        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
-        $table->add_field('quizid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('slotnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('stashcourseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('stashitemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('grantquantity', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '1');
-        $table->add_field('mode', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, 'firstsolve');
-        $table->add_field('enabled', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1');
-        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-
-        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_index('quizid_slot', XMLDB_INDEX_NOTUNIQUE, ['quizid', 'slotnumber']);
-
-        if (!$dbman->table_exists($table)) {
-            $dbman->create_table($table);
-        }
-
-        upgrade_plugin_savepoint(true, 2026032808, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032810) {
-        // Step C: no schema change – stash mappings use the table created in 2026032808.
-        // This savepoint marks the addition of the mapping UI in quiz_settings.php.
-        upgrade_plugin_savepoint(true, 2026032810, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032811) {
-        // Version 2026032811: PHPUnit + PHPCS fixes.
-        // - stashmap table added to install.xml (was upgrade-only since 2026032808).
-        // - bridge_dispatcher_test: stash fallback now correctly asserts dispatched=true.
-        // - stash_bridge_test: item creation uses block_stash\item persistent directly.
-        upgrade_plugin_savepoint(true, 2026032811, 'local', 'stackmathgame');
+    if ($oldversion < 2026032814) {
+        // Step I: Navigation + Narrative.
+        // - lib.php: js_call_amd removed from extend_settings_navigation to prevent
+        //   duplicate tertiary nav entries. The before_http_headers hook is the sole
+        //   source of the AMD call (uses optional_param cmid, works on quiz/edit.php).
+        // - narrative_resolver: new service class with canonical scene constants.
+        //   shortcodes::narrative() and get_narrative::execute() use it (DRY).
+        // - capability_test: smoke tests for all three navigation access tiers.
+        upgrade_plugin_savepoint(true, 2026032814, 'local', 'stackmathgame');
     }
 
     return true;

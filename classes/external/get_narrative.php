@@ -24,6 +24,8 @@
 
 namespace local_stackmathgame\external;
 
+use local_stackmathgame\local\service\narrative_resolver;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
@@ -57,8 +59,7 @@ class get_narrative extends \external_api {
      */
     public static function execute(int $quizid, string $scene): array {
         [, , $config, $profile, $design] = api::validate_quiz_access($quizid);
-        $narrative = json_decode((string)($design->narrativejson ?? '{}'), true) ?: [];
-        $lines     = $narrative[$scene] ?? [];
+        $lines = narrative_resolver::resolve($design, $scene);
         if (!is_array($lines)) {
             $lines = [$lines];
         }

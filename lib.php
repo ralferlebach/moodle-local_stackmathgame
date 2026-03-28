@@ -57,12 +57,20 @@ function local_stackmathgame_render_navbar_output(\renderer_base $renderer): str
 }
 
 /**
- * Add quiz-level game settings to the navigation and inject the tertiary nav option.
+ * Add quiz-level game settings link to the gear navigation menu.
  *
- * This callback runs after $PAGE->cm is fully populated, making it the correct
- * place to call js_call_amd for the tertiary navigation dropdown injection.
- * The before_http_headers hook does NOT reliably have $PAGE->cm on quiz
- * management pages and is therefore not used for the tertiary nav injection.
+ * Navigation architecture for local_stackmathgame:
+ *
+ *   render_navbar_output()          → Studio icon in the global navbar (top-right).
+ *                                     Single source: always called by the theme.
+ *
+ *   extend_settings_navigation()   → "Game settings" link in the quiz gear menu.
+ *                                     Adds only the menu link, NOT the dropdown inject.
+ *
+ *   output_hooks::inject_tertiary_nav() → Tertiary nav dropdown entry on quiz pages.
+ *     Uses before_http_headers + optional_param('cmid') because $PAGE->cm is NOT
+ *     populated when that hook fires on quiz management pages. This is the sole
+ *     source of the AMD call; duplicating it here caused double entries.
  *
  * @param settings_navigation $settingsnav The settings navigation tree.
  * @param context $context The current context.
@@ -98,12 +106,4 @@ function local_stackmathgame_extend_settings_navigation(
         new pix_icon('i/settings', '')
     );
 
-    // Inject an option into the quiz tertiary navigation dropdown via AMD.
-    // This call is made here rather than in before_http_headers because
-    // $PAGE->cm is guaranteed to be populated at this point.
-    $PAGE->requires->js_call_amd('local_stackmathgame/tertiary_nav', 'init', [[
-        'cmid' => $cmid,
-        'label' => get_string('gamesettings', 'local_stackmathgame'),
-        'url' => $url->out(false),
-    ]]);
 }

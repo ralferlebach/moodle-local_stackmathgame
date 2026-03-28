@@ -27,6 +27,7 @@ namespace local_stackmathgame;
 use context;
 use local_stackmathgame\game\quiz_configurator;
 use local_stackmathgame\game\theme_manager;
+use local_stackmathgame\local\service\narrative_resolver;
 use local_stackmathgame\local\service\profile_service;
 
 /**
@@ -286,28 +287,15 @@ class shortcodes {
     ): string {
         $profile   = self::resolve_profile($args, $env);
         $design    = self::resolve_design($args, $env, $profile);
-        if (!$design) {
-            return $content !== null ? $next($content) : '';
-        }
-        $narrative = json_decode((string)($design->narrativejson ?? '{}'), true) ?: [];
-        $scene     = trim((string)($args['scene'] ?? 'world_enter'));
-        $lines     = $narrative[$scene] ?? [];
-        if (!is_array($lines)) {
-            $lines = [$lines];
-        }
-        $lines = array_values(array_filter(
-            array_map('strval', $lines),
-            static function (string $line): bool {
-                return trim($line) !== '';
-            }
-        ));
+        $scene     = trim((string)($args['scene'] ?? narrative_resolver::SCENE_WORLD_ENTER));
+        $separator = (string)($args['separator'] ?? ' ');
+        $lines     = narrative_resolver::resolve($design, $scene);
         if ($content !== null && trim($content) !== '') {
             array_unshift($lines, $next($content));
         }
         if (empty($lines)) {
-            return '';
+            return $content !== null ? $next($content) : '';
         }
-        $separator = (string)($args['separator'] ?? ' ');
         return implode($separator, $lines);
     }
 
