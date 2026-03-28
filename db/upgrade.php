@@ -94,11 +94,13 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
     }
 
-    if ($oldversion < 2026032800) {
-        // Version 2026032800: Fix PHPUnit stub files (TestCaseNames.Missing);
-        // move tertiary nav js_call_amd to extend_settings_navigation (reliable
-        // $PAGE->cm); remove hook-based inject_tertiary_nav (fired too early).
-        upgrade_plugin_savepoint(true, 2026032800, 'local', 'stackmathgame');
+    if ($oldversion < 2026032803) {
+        // Version 2026032803: Fix tertiary nav injection.
+        // $PAGE->cm is not set when before_http_headers fires on quiz/edit.php.
+        // Use optional_param('cmid') from the URL instead (same technique as
+        // local_stackmatheditor). Removes broken before_footer_html_generation
+        // hook reference (class does not exist in Moodle 4.5).
+        upgrade_plugin_savepoint(true, 2026032803, 'local', 'stackmathgame');
     }
 
     return true;

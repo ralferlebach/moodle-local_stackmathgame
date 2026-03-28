@@ -17,10 +17,6 @@
 /**
  * Hook callback definitions for local_stackmathgame.
  *
- * Note: the tertiary navigation injection and studio icon are NOT hooks.
- * - Tertiary nav: called from local_stackmathgame_extend_settings_navigation() in lib.php.
- * - Studio icon:  called from local_stackmathgame_render_navbar_output() in lib.php.
- *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -30,6 +26,14 @@ defined('MOODLE_INTERNAL') || die();
 
 $callbacks = [
     [
+        // Tertiary nav: reads cmid via optional_param() from URL because $PAGE->cm
+        // is not populated yet when before_http_headers fires on quiz management pages.
+        'hook' => \core\hook\output\before_http_headers::class,
+        'callback' => \local_stackmathgame\hook\output_hooks::class . '::inject_tertiary_nav',
+        'priority' => 600,
+    ],
+    [
+        // Game assets: attempt pages only; pagetype is reliable there.
         'hook' => \core\hook\output\before_http_headers::class,
         'callback' => \local_stackmathgame\hook\output_hooks::class . '::inject_game_assets',
         'priority' => 500,

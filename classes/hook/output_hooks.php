@@ -30,9 +30,13 @@ use local_stackmathgame\game\theme_manager;
 /**
  * Output hook callbacks.
  *
- * Studio icon: rendered via local_stackmathgame_render_navbar_output() in lib.php.
- * Tertiary nav injection: handled in local_stackmathgame_extend_settings_navigation()
- *   in lib.php, where $PAGE->cm is guaranteed to be populated.
+ * Tertiary nav injection:
+ *   Uses before_http_headers with optional_param('cmid') from the URL.
+ *   On quiz management pages (edit.php, view.php etc.) $PAGE->cm is NOT yet
+ *   populated when before_http_headers fires. The same technique is used by
+ *   local_stackmatheditor: read cmid from the URL, verify the CM via a DB
+ *   lookup, then call js_call_amd. This outputs the AMD require() call into
+ *   the page HTML so tertiary_nav.js runs and injects the dropdown option.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -40,10 +44,63 @@ use local_stackmathgame\game\theme_manager;
  */
 class output_hooks {
     /**
+     * Inject Game Settings option into the quiz tertiary navigation dropdown.
+     *
+     * Reads cmid from the URL (not from $PAGE->cm which is null at this point).
+     * Performs a lightweight DB lookup to confirm the CM is a quiz and check
+     * the configurequiz capability before emitting the js_call_amd call.
+     *
+     * @param \core\hook\output\before_http_headers $hook The hook instance.
+     * @return void
+     */
+    public static function inject_tertiary_nav(
+        \core\hook\output\before_http_headers $hook
+    ): void {
+        global $PAGE;
+
+        if (during_initial_install()) {
+            return;
+        }
+
+        // Get cmid from the request URL (not from $PAGE->cm – it is not set yet).
+        $cmid = optional_param('cmid', 0, PARAM_INT);
+        if ($cmid <= 0) {
+            return;
+        }
+
+        // Exclude attempt pages – they use inject_game_assets instead.
+        if ((string)($PAGE->pagetype ?? '') === 'mod-quiz-attempt') {
+            return;
+        }
+
+        // Verify this cmid belongs to a quiz (fast single-row DB lookup).
+        $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return;
+        }
+
+        // Capability check.
+        $context = \context_module::instance($cmid);
+        if (!has_capability('local/stackmathgame:configurequiz', $context)) {
+            return;
+        }
+
+        $url = new \moodle_url('/local/stackmathgame/quiz_settings.php', [
+            'cmid' => $cmid,
+        ]);
+
+        $PAGE->requires->js_call_amd('local_stackmathgame/tertiary_nav', 'init', [[
+            'cmid' => $cmid,
+            'label' => get_string('gamesettings', 'local_stackmathgame'),
+            'url' => $url->out(false),
+        ]]);
+    }
+
+    /**
      * Inject game assets into quiz attempt pages.
      *
-     * Fires via before_http_headers. Only active on mod-quiz-attempt pages
-     * where pagetype is set and the game layer is enabled for the quiz.
+     * Fires via before_http_headers. The pagetype 'mod-quiz-attempt' is set
+     * reliably on attempt pages.
      *
      * @param \core\hook\output\before_http_headers $hook The hook instance.
      * @return void
