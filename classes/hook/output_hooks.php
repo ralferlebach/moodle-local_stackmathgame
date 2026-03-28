@@ -41,10 +41,10 @@ class output_hooks {
     /**
      * Inject the Game Settings option into the quiz tertiary navigation.
      *
-     * Fires via before_http_headers on all quiz management pages (edit,
-     * view, etc.) where the tertiary navigation dropdown is present.
-     * Using a hook is more reliable than extend_settings_navigation because
-     * the hook fires unconditionally before page output begins.
+     * Fires on all quiz management pages (edit, view, etc.) where the
+     * tertiary navigation dropdown is present. The pagetype check only
+     * excludes attempt pages, since M.cfg.pagetype may be empty on some
+     * quiz management pages depending on Moodle configuration.
      *
      * @param \core\hook\output\before_http_headers $hook The hook instance.
      * @return void
@@ -60,26 +60,29 @@ class output_hooks {
         if ($PAGE->cm->modname !== 'quiz') {
             return;
         }
-        // Only inject on quiz management pages, not on attempt pages.
+        // Exclude attempt pages (they have their own game layer injection).
         $pagetype = (string)($PAGE->pagetype ?? '');
-        if (strpos($pagetype, 'mod-quiz-') !== 0 || $pagetype === 'mod-quiz-attempt') {
+        if ($pagetype === 'mod-quiz-attempt') {
             return;
         }
-        if (!self::safe_has_capability(
-            'local/stackmathgame:configurequiz',
-            \context_module::instance((int)$PAGE->cm->id)
-        )) {
+        $cmid = (int)$PAGE->cm->id;
+        if (
+            !self::safe_has_capability(
+                'local/stackmathgame:configurequiz',
+                \context_module::instance($cmid)
+            )
+        ) {
             return;
         }
 
         $settingsurl = new \moodle_url('/local/stackmathgame/quiz_settings.php', [
-            'cmid' => (int)$PAGE->cm->id,
+            'cmid' => $cmid,
         ]);
 
         $PAGE->requires->js_call_amd('local_stackmathgame/tertiary_nav', 'init', [[
-            'cmid'  => (int)$PAGE->cm->id,
+            'cmid' => $cmid,
             'label' => get_string('gamesettings', 'local_stackmathgame'),
-            'url'   => $settingsurl->out(false),
+            'url' => $settingsurl->out(false),
         ]]);
     }
 
@@ -100,10 +103,13 @@ class output_hooks {
         if ($PAGE->pagetype !== 'mod-quiz-attempt' || $PAGE->cm->modname !== 'quiz') {
             return;
         }
-        if (!self::safe_has_capability(
-            'local/stackmathgame:play',
-            \context_module::instance((int)$PAGE->cm->id)
-        )) {
+        $cmid = (int)$PAGE->cm->id;
+        if (
+            !self::safe_has_capability(
+                'local/stackmathgame:play',
+                \context_module::instance($cmid)
+            )
+        ) {
             return;
         }
 
@@ -121,7 +127,7 @@ class output_hooks {
         );
         $PAGE->requires->js_call_amd('local_stackmathgame/fantasy_quiz', 'init', [[
             'quizid' => (int)$PAGE->cm->instance,
-            'cmid' => (int)$PAGE->cm->id,
+            'cmid' => $cmid,
             'userid' => (int)$USER->id,
             'labelid' => (int)($config->labelid ?? 0),
             'designid' => (int)($config->designid ?? 0),

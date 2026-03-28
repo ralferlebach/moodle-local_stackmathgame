@@ -59,9 +59,8 @@ function local_stackmathgame_render_navbar_output(\renderer_base $renderer): str
 /**
  * Add quiz-level game settings link to the settings navigation tree.
  *
- * The tertiary navigation dropdown injection is handled separately via the
- * before_http_headers hook in classes/hook/output_hooks.php, which is more
- * reliable than doing it here.
+ * The tertiary navigation injection is handled by the before_http_headers
+ * hook in classes/hook/output_hooks.php::inject_tertiary_nav().
  *
  * @param settings_navigation $settingsnav The settings navigation tree.
  * @param context $context The current context.

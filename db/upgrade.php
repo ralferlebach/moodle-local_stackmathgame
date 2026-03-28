@@ -94,5 +94,13 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032709) {
+        // Version 2026032709: Replace wrong stackmatheditor test file stubs;
+        // fix output_hooks.php PSR12 multi-line if formatting;
+        // relax pagetype check to fire on all quiz pages (not just mod-quiz-*);
+        // remove duplicate js_call_amd from extend_settings_navigation.
+        upgrade_plugin_savepoint(true, 2026032709, 'local', 'stackmathgame');
+    }
+
     return true;
 }
