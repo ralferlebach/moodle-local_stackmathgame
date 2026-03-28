@@ -133,7 +133,7 @@ class output_hooks {
             ['nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready'],
             'local_stackmathgame'
         );
-        $PAGE->requires->js_call_amd('local_stackmathgame/fantasy_quiz', 'init', [[
+        $PAGE->requires->js_call_amd('local_stackmathgame/game_engine', 'init', [[
             'quizid' => (int)$PAGE->cm->instance,
             'cmid' => $cmid,
             'userid' => (int)$USER->id,

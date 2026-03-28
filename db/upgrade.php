@@ -23,92 +23,18 @@
  */
 
 /**
- * Upgrade the plugin database schema.
+ * Upgrade the plugin.
  *
- * Version history:
- *   2026032700 - PHP-only bug fixes; removes orphaned quizcfg rows.
- *
- * @param int $oldversion Previously installed version.
- * @return bool True on success.
+ * @param int $oldversion The old version.
+ * @return bool
  */
 function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
-    global $DB;
-
-    if ($oldversion < 2026032700) {
-        $sql = "SELECT qcfg.id, qcfg.quizid
-                  FROM {local_stackmathgame_quizcfg} qcfg
-                 WHERE NOT EXISTS (
-                       SELECT 1
-                         FROM {course_modules} cm
-                         JOIN {modules} md ON md.id = cm.module
-                        WHERE cm.instance = qcfg.quizid
-                          AND md.name = :modname
-                 )";
-
-        $orphans = $DB->get_records_sql($sql, ['modname' => 'quiz']);
-
-        if (!empty($orphans)) {
-            $orphanids = array_column($orphans, 'id');
-            $quizids = implode(', ', array_unique(array_column($orphans, 'quizid')));
-            debugging(
-                'local_stackmathgame upgrade 2026032700: removing ' . count($orphanids) .
-                ' orphaned quizcfg row(s) for quiz IDs [' . $quizids . '].',
-                DEBUG_DEVELOPER
-            );
-            [$insql, $inparams] = $DB->get_in_or_equal($orphanids);
-            $DB->delete_records_select('local_stackmathgame_quizcfg', "id $insql", $inparams);
-        }
-
-        upgrade_plugin_savepoint(true, 2026032700, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032704) {
-        // Version 2026032704: PHP-only fixes.
-        // - Studio icon moved to render_navbar_output() (no fixed positioning).
-        // - Tertiary navigation injection made robust (multi-attempt timeout).
-        // - PHPUnit test files corrected to test local_stackmathgame classes.
-        upgrade_plugin_savepoint(true, 2026032704, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032705) {
-        // Version 2026032705: Adds smg_console_diag.js debug tooling (no schema change).
-        upgrade_plugin_savepoint(true, 2026032705, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032706) {
-        // Version 2026032706: AMD build files (amd/build/*.min.js) added.
-        // Previously missing, causing RequireJS to not recognise the modules
-        // and silently skipping the tertiary_nav injection entirely.
-        upgrade_plugin_savepoint(true, 2026032706, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032707) {
-        // Version 2026032707: PHPCS fixes in test files and upgrade.php.
-        upgrade_plugin_savepoint(true, 2026032707, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032708) {
-        // Version 2026032708: PHPCS fixes in test files; AMD injection moved
-        // from extend_settings_navigation to before_http_headers hook for
-        // reliable tertiary navigation injection on quiz management pages.
-        upgrade_plugin_savepoint(true, 2026032708, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032804) {
-        // Version 2026032804: Fix Behat test files.
-        // - Renamed behat_local_stackmatheditor.php to behat_local_stackmathgame.php.
-        // - Replaced @local_stackmatheditor tags with @local_stackmathgame.
-        // - Replaced stackmatheditor feature content with stackmathgame scenarios.
-        upgrade_plugin_savepoint(true, 2026032804, 'local', 'stackmathgame');
-    }
-
-    if ($oldversion < 2026032819) {
-        // Step III: Testing strategy.
-        // - shortcode_test.php: covers smgscore/smgxp/smgnarrative/smgprogress/smglevel.
-        // - Behat: studio_access.feature, quiz_game_settings.feature.
-        // - behat_local_stackmathgame.php: step for tertiary nav assertion.
-        // - tests/README.md: full test inventory with priority matrix.
-        upgrade_plugin_savepoint(true, 2026032819, 'local', 'stackmathgame');
+    if ($oldversion < 2026032825) {
+        // Patch 2026032825: two runtime bug fixes.
+        // - submit_answer: question_state_todo::get_name() replaced with string cast.
+        // - game_engine.js: getCurrentSlot() derives slot from Moodle DOM id attribute
+        //   "question-{attempt}-{slot}" so slot is never 0 on attempt pages.
+        upgrade_plugin_savepoint(true, 2026032825, 'local', 'stackmathgame');
     }
 
     return true;

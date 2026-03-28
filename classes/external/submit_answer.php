@@ -136,7 +136,9 @@ class submit_answer extends \external_api {
 
         $attemptobj    = \mod_quiz\quiz_attempt::create($attemptid);
         $qa            = $attemptobj->get_question_attempt($slot);
-        $state         = (string)$qa->get_state()->get_name();
+        // Cast to string via question_state::__toString() — works for all
+        // States including question_state_todo which has no get_name().
+        $state = (string)$qa->get_state();
         $feedbackhtml  = '';
         $previousstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
             $profile,
@@ -185,28 +187,6 @@ class submit_answer extends \external_api {
                     ],
                 ]
             );
-        }
-
-        // Dispatch optional integration bridges (block_xp, block_stash).
-        // This call is wrapped in try/catch so that a failure in any optional
-        // integration never interrupts the quiz attempt flow.
-        if ($processed) {
-            try {
-                \local_stackmathgame\local\integration\bridge_dispatcher::on_answer_result(
-                    $profile,
-                    $quizid,
-                    (int)$config->designid,
-                    $slot,
-                    $slotpayload,
-                    $deltas
-                );
-            } catch (\Throwable $bridgeerr) {
-                // Optional integration failure must not break the quiz flow.
-                debugging(
-                    'local_stackmathgame bridge_dispatcher failed: ' . $bridgeerr->getMessage(),
-                    DEBUG_DEVELOPER
-                );
-            }
         }
 
         api::log_event(

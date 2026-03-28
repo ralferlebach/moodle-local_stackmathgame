@@ -160,34 +160,70 @@ class theme_manager {
      */
     public static function seed_default_theme(): void {
         global $DB;
-        if ($DB->record_exists('local_stackmathgame_design', ['slug' => 'rpg_default'])) {
-            return;
-        }
         $now = time();
-        $DB->insert_record('local_stackmathgame_design', (object)[
-            'name'               => 'RPG Default',
-            'slug'               => 'rpg_default',
-            'modecomponent'      => 'stackmathgamemode_rpg',
-            'description'        => 'Default RPG design bundled with local_stackmathgame.',
-            'thumbnailfilename'  => null,
-            'thumbnailfileitemid' => null,
-            'isbundled'          => 1,
-            'isactive'           => 1,
-            'versioncode'        => 1,
-            'narrativejson'      => json_encode([
-                'world_enter' => ['Welcome to the adventure.'],
-                'victory'     => ['Well done.'],
-                'defeat'      => ['Try again.'],
-            ], JSON_UNESCAPED_UNICODE),
-            'uijson'             => json_encode(['theme' => 'rpg_default'], JSON_UNESCAPED_UNICODE),
-            'mechanicsjson'      => json_encode(['version' => 1], JSON_UNESCAPED_UNICODE),
-            'assetmanifestjson'  => json_encode(['source' => 'bundled'], JSON_UNESCAPED_UNICODE),
-            'importmetajson'     => json_encode(['origin' => 'seed'], JSON_UNESCAPED_UNICODE),
-            'timecreated'        => $now,
-            'timemodified'       => $now,
-            'createdby'          => null,
-            'modifiedby'         => null,
-        ]);
+        $designs = [
+            [
+                'name'          => 'RPG Default',
+                'slug'          => 'rpg_default',
+                'modecomponent' => 'stackmathgamemode_rpg',
+                'description'   => 'Fantasy-RPG: Mana, Feenbefreiung und Teleportation.',
+                'narrativejson' => json_encode([
+                    'world_enter' => ['Willkommen, mutiger Held! Das Abenteuer beginnt.'],
+                    'victory'     => ['Sehr gut! Du hast das Monster verwandelt.'],
+                    'defeat'      => ['Versuche es noch einmal!'],
+                    'boss_intro'  => ['Ein mächtiger Endgegner erscheint.'],
+                    'boss_clear'  => ['Du hast den Endgegner besiegt!'],
+                ], JSON_UNESCAPED_UNICODE),
+                'uijson'        => json_encode(['theme' => 'rpg_default'], JSON_UNESCAPED_UNICODE),
+                'mechanicsjson' => json_encode(['mode' => 'rpg', 'version' => 1], JSON_UNESCAPED_UNICODE),
+            ],
+            [
+                'name'          => 'ExitGame Default',
+                'slug'          => 'exitgames_default',
+                'modecomponent' => 'stackmathgamemode_exitgames',
+                'description'   => 'ExitGame: adaptiv verzweigendes Quiz mit Sprechblasen-Feedback.',
+                'narrativejson' => json_encode([
+                    'world_enter' => ['Willkommen im Rätselraum. Löse die Aufgaben, um zu entkommen!'],
+                    'victory'     => ['Du hast das letzte Schloss geöffnet!'],
+                    'defeat'      => ['Schau dir den nächsten Hinweis an.'],
+                    'boss_intro'  => ['Die finale Herausforderung wartet.'],
+                ], JSON_UNESCAPED_UNICODE),
+                'uijson'        => json_encode(['theme' => 'exitgames_default'], JSON_UNESCAPED_UNICODE),
+                'mechanicsjson' => json_encode(['mode' => 'exitgames', 'version' => 1], JSON_UNESCAPED_UNICODE),
+            ],
+            [
+                'name'          => 'WiseWizzard Default',
+                'slug'          => 'wisewizzard_default',
+                'modecomponent' => 'stackmathgamemode_wisewizzard',
+                'description'   => 'WiseGuy Tutor: freundlicher Tutor begleitet durchs Tutorial.',
+                'narrativejson' => json_encode([
+                    'world_enter' => ['Hallo! Ich bin dein Lernbegleiter. Lass uns zusammen üben.'],
+                    'victory'     => ['Hervorragend! Du hast es verstanden.'],
+                    'defeat'      => ['Nicht ganz – schau dir den Tipp an. Du schaffst das!'],
+                ], JSON_UNESCAPED_UNICODE),
+                'uijson'        => json_encode(['theme' => 'wisewizzard_default'], JSON_UNESCAPED_UNICODE),
+                'mechanicsjson' => json_encode(['mode' => 'wisewizzard', 'version' => 1], JSON_UNESCAPED_UNICODE),
+            ],
+        ];
+
+        foreach ($designs as $design) {
+            if ($DB->record_exists('local_stackmathgame_design', ['slug' => $design['slug']])) {
+                continue;
+            }
+            $DB->insert_record('local_stackmathgame_design', (object)array_merge($design, [
+                'thumbnailfilename'   => null,
+                'thumbnailfileitemid' => null,
+                'isbundled'           => 1,
+                'isactive'            => 1,
+                'versioncode'         => 1,
+                'assetmanifestjson'   => json_encode(['source' => 'bundled'], JSON_UNESCAPED_UNICODE),
+                'importmetajson'      => json_encode(['origin' => 'seed'], JSON_UNESCAPED_UNICODE),
+                'timecreated'         => $now,
+                'timemodified'        => $now,
+                'createdby'           => null,
+                'modifiedby'          => null,
+            ]));
+        }
         self::purge_cache();
     }
 }
