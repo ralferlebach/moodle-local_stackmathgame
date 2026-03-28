@@ -105,9 +105,12 @@ class theme_importer {
 
                 // Re-open to read payload files.
                 if ($zip->open($tmpzippath) === true) {
-                    foreach (['narrative.json' => 'narrativejson',
-                              'ui.json'        => 'uijson',
-                              'mechanics.json' => 'mechanicsjson'] as $file => $field) {
+                    $payloadmap = [
+                        'narrative.json' => 'narrativejson',
+                        'ui.json'        => 'uijson',
+                        'mechanics.json' => 'mechanicsjson',
+                    ];
+                    foreach ($payloadmap as $file => $field) {
                         $raw = $zip->getFromName($file);
                         if ($raw !== false) {
                             $decoded = json_decode($raw, true);
