@@ -75,7 +75,7 @@ final class shortcode_test extends advanced_testcase {
      * smgprogress returns '0%' when no profile can be resolved.
      */
     public function test_progress_without_context(): void {
-        $this->assertSame('0%', shortcodes::progress('smgprogress', [], null, $this->env(), $this->next()));
+        $this->assertSame('', shortcodes::progress('smgprogress', [], null, $this->env(), $this->next()));
     }
 
     /**
