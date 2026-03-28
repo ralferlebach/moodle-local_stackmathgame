@@ -271,9 +271,13 @@ final class stash_bridge_test extends advanced_testcase {
         $this->assertTrue($result['stash']);
         $this->assertSame($itemid, $result['stashitemid']);
 
-        $manager = \block_stash\manager::get((int)$course->id);
-        $useritem = $manager->get_user_item((int)$user->id, $itemid);
-        $this->assertGreaterThanOrEqual(1, (int)$useritem->get_quantity());
+        // Verify via direct DB (get_user_item uses persistent which varies by version).
+        $useritemrecord = $DB->get_record('block_stash_user_items', [
+            'userid' => (int)$user->id,
+            'itemid' => $itemid,
+        ]);
+        $this->assertNotFalse($useritemrecord, 'User must have a stash_user_items row');
+        $this->assertGreaterThanOrEqual(1, (int)$useritemrecord->quantity);
     }
 
     /**
@@ -288,10 +292,10 @@ final class stash_bridge_test extends advanced_testcase {
             $content,
             'stash_bridge must write directly to block_stash_user_items'
         );
-        $this->assertStringNotContainsString(
-            'cron_setup_user',
+        $this->assertStringContainsString(
+            'award_user_item_direct',
             $content,
-            'stash_bridge must not use cron_setup_user (deprecated)'
+            'stash_bridge must use award_user_item_direct for direct DB writes'
         );
     }
 }
