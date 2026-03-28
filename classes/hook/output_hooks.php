@@ -30,8 +30,9 @@ use local_stackmathgame\game\theme_manager;
 /**
  * Output hook callbacks.
  *
- * The studio icon is rendered via local_stackmathgame_render_navbar_output()
- * in lib.php (standard Moodle navbar callback).
+ * Studio icon: rendered via local_stackmathgame_render_navbar_output() in lib.php.
+ * Tertiary nav injection: handled in local_stackmathgame_extend_settings_navigation()
+ *   in lib.php, where $PAGE->cm is guaranteed to be populated.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -39,55 +40,10 @@ use local_stackmathgame\game\theme_manager;
  */
 class output_hooks {
     /**
-     * Inject the Game Settings option into the quiz tertiary navigation.
-     *
-     * Fires on all quiz management pages (edit, view, etc.) where the
-     * tertiary navigation dropdown is present. The pagetype check only
-     * excludes attempt pages, since M.cfg.pagetype may be empty on some
-     * quiz management pages depending on Moodle configuration.
-     *
-     * @param \core\hook\output\before_http_headers $hook The hook instance.
-     * @return void
-     */
-    public static function inject_tertiary_nav(
-        \core\hook\output\before_http_headers $hook
-    ): void {
-        global $PAGE;
-
-        if (during_initial_install() || empty($PAGE->cm)) {
-            return;
-        }
-        if ($PAGE->cm->modname !== 'quiz') {
-            return;
-        }
-        // Exclude attempt pages (they have their own game layer injection).
-        $pagetype = (string)($PAGE->pagetype ?? '');
-        if ($pagetype === 'mod-quiz-attempt') {
-            return;
-        }
-        $cmid = (int)$PAGE->cm->id;
-        if (
-            !self::safe_has_capability(
-                'local/stackmathgame:configurequiz',
-                \context_module::instance($cmid)
-            )
-        ) {
-            return;
-        }
-
-        $settingsurl = new \moodle_url('/local/stackmathgame/quiz_settings.php', [
-            'cmid' => $cmid,
-        ]);
-
-        $PAGE->requires->js_call_amd('local_stackmathgame/tertiary_nav', 'init', [[
-            'cmid' => $cmid,
-            'label' => get_string('gamesettings', 'local_stackmathgame'),
-            'url' => $settingsurl->out(false),
-        ]]);
-    }
-
-    /**
      * Inject game assets into quiz attempt pages.
+     *
+     * Fires via before_http_headers. Only active on mod-quiz-attempt pages
+     * where pagetype is set and the game layer is enabled for the quiz.
      *
      * @param \core\hook\output\before_http_headers $hook The hook instance.
      * @return void
@@ -104,12 +60,7 @@ class output_hooks {
             return;
         }
         $cmid = (int)$PAGE->cm->id;
-        if (
-            !self::safe_has_capability(
-                'local/stackmathgame:play',
-                \context_module::instance($cmid)
-            )
-        ) {
+        if (!has_capability('local/stackmathgame:play', \context_module::instance($cmid))) {
             return;
         }
 
@@ -136,20 +87,5 @@ class output_hooks {
             'themeAssetUrl' => $themeurl,
             'config' => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
-    }
-
-    /**
-     * Check a capability safely, returning false instead of throwing.
-     *
-     * @param string $capability The capability to check.
-     * @param \context $context The context to check against.
-     * @return bool Whether the current user has the capability.
-     */
-    private static function safe_has_capability(string $capability, \context $context): bool {
-        global $USER;
-        if (empty($USER->id)) {
-            return false;
-        }
-        return has_capability($capability, $context);
     }
 }

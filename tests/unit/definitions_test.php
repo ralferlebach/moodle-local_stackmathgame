@@ -14,11 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace local_stackmathgame\tests\unit;
+
+use advanced_testcase;
+
 /**
- * Placeholder file. This test file has been superseded and contains no tests.
+ * Stub placeholder. Tests from a different plugin were previously stored
+ * here by mistake. This file satisfies the Moodle PHPUnit naming rule and
+ * skips immediately so it has no effect on the test suite.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @coversNothing
  */
-// Intentionally empty - no test cases in this file.
+final class definitions_test extends advanced_testcase {
+    /**
+     * Placeholder: skipped unconditionally.
+     */
+    public function test_placeholder(): void {
+        $this->markTestSkipped('Placeholder file – no tests here.');
+    }
+}
