@@ -212,21 +212,31 @@ final class stash_bridge_test extends advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
 
-        // Create stash item directly via the persistent class.
-        // This avoids generator API differences between block_stash versions.
+        // Enable stash for this course using the PHPUnit helper.
         $manager = \block_stash\manager::get((int)$course->id);
-        $stash = $manager->get_stash();
-        $item = new \block_stash\item(null, (object)[
-            'stashid' => $stash->get_id(),
-            'name' => 'Test Gem',
+        $manager->set_enabled();
+
+        // Create stash and item directly in the DB to avoid generator version issues.
+        $stashid = $DB->insert_record('block_stash', (object)[
+            'courseid' => (int)$course->id,
+            'timecreated' => time(),
+            'timemodified' => time(),
         ]);
-        $item->create();
+        $itemid = $DB->insert_record('block_stash_items', (object)[
+            'stashid' => $stashid,
+            'name' => 'Test Gem',
+            'detail' => '',
+            'detailformat' => FORMAT_HTML,
+            'amounttopickup' => 0,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
 
         $DB->insert_record('local_stackmathgame_stashmap', (object)[
             'quizid' => 77,
             'slotnumber' => 3,
             'stashcourseid' => (int)$course->id,
-            'stashitemid' => (int)$item->get_id(),
+            'stashitemid' => $itemid,
             'grantquantity' => 1,
             'mode' => 'firstsolve',
             'enabled' => 1,
@@ -246,10 +256,10 @@ final class stash_bridge_test extends advanced_testcase {
 
         $this->assertTrue($result['dispatched']);
         $this->assertTrue($result['stash']);
-        $this->assertSame((int)$item->get_id(), $result['stashitemid']);
+        $this->assertSame($itemid, $result['stashitemid']);
 
         $manager = \block_stash\manager::get((int)$course->id);
-        $useritem = $manager->get_user_item((int)$user->id, (int)$item->get_id());
+        $useritem = $manager->get_user_item((int)$user->id, $itemid);
         $this->assertGreaterThanOrEqual(1, (int)$useritem->get_quantity());
     }
 

@@ -182,6 +182,7 @@ final class stash_mapping_service_test extends advanced_testcase {
      * @group local_stackmathgame_db
      */
     public function test_get_stash_items_returns_list_with_block_stash(): void {
+        global $DB;
         if (!availability::has_block_stash()) {
             $this->markTestSkipped('block_stash not installed.');
         }
@@ -189,9 +190,27 @@ final class stash_mapping_service_test extends advanced_testcase {
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
-        $stashgen = $this->getDataGenerator()->get_plugin_generator('block_stash');
-        $stash = $stashgen->create_stash(['courseid' => $course->id]);
-        $stashgen->create_item(['stashid' => $stash->get_id(), 'name' => 'Magic Sword']);
+        // Enable stash and create item directly in DB to avoid generator version issues.
+        $manager = \block_stash\manager::get((int)$course->id);
+        $manager->set_enabled();
+
+        $stashid = $DB->insert_record('block_stash', (object)[
+            'courseid' => (int)$course->id,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+        $DB->insert_record('block_stash_items', (object)[
+            'stashid' => $stashid,
+            'name' => 'Magic Sword',
+            'detail' => '',
+            'detailformat' => FORMAT_HTML,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        // Force reload of manager to pick up new stash record.
+        $manager = \block_stash\manager::get((int)$course->id, true);
+        $manager->set_enabled();
 
         $items = stash_mapping_service::get_stash_items_for_course((int)$course->id);
         $this->assertNotEmpty($items);
