@@ -297,12 +297,15 @@ final class bridge_dispatcher_test extends advanced_testcase {
     public function test_submit_answer_bridge_call_is_protected(): void {
         $file = __DIR__ . '/../../classes/external/submit_answer.php';
         $content = file_get_contents($file);
-        // The try/catch must surround the bridge_dispatcher call.
-        $trypos = strrpos($content, 'try {');
+        // The relevant try/catch must surround the bridge_dispatcher call.
         $bridgepos = strpos($content, 'bridge_dispatcher::on_answer_result(');
-        $catchpos = strpos($content, '} catch (\\Throwable $bridgeerr)');
-        $this->assertNotFalse($trypos, 'try block not found in submit_answer.php');
         $this->assertNotFalse($bridgepos, 'bridge_dispatcher call not found');
+
+        $beforebridge = substr($content, 0, $bridgepos);
+        $trypos = strrpos($beforebridge, 'try {');
+        $catchpos = strpos($content, '} catch (\Throwable $bridgeerr)', $bridgepos);
+
+        $this->assertNotFalse($trypos, 'try block not found in submit_answer.php');
         $this->assertNotFalse($catchpos, 'catch block not found');
         $this->assertGreaterThan(
             $trypos,
