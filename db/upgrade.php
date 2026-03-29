@@ -174,5 +174,33 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032836, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032838) {
+        $table = new xmldb_table('local_stackmathgame_stashmap');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('quizid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('slotnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('stashcourseid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('stashitemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('grantquantity', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('mode', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'firstsolve');
+            $table->add_field('enabled', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('quizid_fk', XMLDB_KEY_FOREIGN, ['quizid'], 'quiz', ['id']);
+            $table->add_key('stashcourseid_fk', XMLDB_KEY_FOREIGN, ['stashcourseid'], 'course', ['id']);
+
+            $table->add_index('lsmg_smap_quiz_slot_uix', XMLDB_INDEX_UNIQUE, ['quizid', 'slotnumber']);
+            $table->add_index('lsmg_smap_item_ix', XMLDB_INDEX_NOTUNIQUE, ['stashitemid', 'enabled']);
+
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026032838, 'local', 'stackmathgame');
+    }
+
     return true;
 }

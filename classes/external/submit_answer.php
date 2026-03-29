@@ -187,6 +187,30 @@ class submit_answer extends \external_api {
                     ],
                 ]
             );
+
+            try {
+                \local_stackmathgame\local\integration\bridge_dispatcher::on_answer_result(
+                    $profile,
+                    $quizid,
+                    (int)$config->designid,
+                    $slot,
+                    [
+                        'state' => $state,
+                        'questionid' => (int)$qa->get_question()->id,
+                        'config' => [],
+                    ],
+                    [
+                        'score' => $scoredelta,
+                        'xp' => $xpdelta,
+                        'solved' => $cannext,
+                    ]
+                );
+            } catch (\Throwable $bridgeerr) {
+                debugging(
+                    'local_stackmathgame bridge dispatch failed: ' . $bridgeerr->getMessage(),
+                    DEBUG_DEVELOPER
+                );
+            }
         }
 
         api::log_event(

@@ -62,14 +62,14 @@ final class quiz_configurator_test extends advanced_testcase {
     }
 
     /**
-     * get_plugin_config() returns null for a quizid with no config record.
+     * get_plugin_config() returns null for a cmid with no config record.
      *
      * @group local_stackmathgame_db
      */
     public function test_get_plugin_config_null_for_missing(): void {
         $this->resetAfterTest();
         $result = quiz_configurator::get_plugin_config(PHP_INT_MAX);
-        $this->assertNull($result, 'Should return null for unknown quizid');
+        $this->assertNull($result, 'Should return null for unknown cmid');
     }
 
     /**
@@ -82,14 +82,16 @@ final class quiz_configurator_test extends advanced_testcase {
         $courseid = $this->getDataGenerator()->create_course()->id;
         $quiz     = $this->getDataGenerator()->create_module('quiz', ['course' => $courseid]);
         $quizid   = (int)$quiz->id;
+        $cm       = get_coursemodule_from_instance('quiz', $quizid, $courseid, false, MUST_EXIST);
+        $cmid     = (int)$cm->id;
 
-        $config      = quiz_configurator::ensure_default($quizid);
+        $config      = quiz_configurator::ensure_default($cmid);
         $origlabelid = (int)$config->labelid;
         $this->assertGreaterThan(0, $origlabelid);
 
-        quiz_configurator::save_for_quiz($quizid, ['labelid' => 0, 'enabled' => 1]);
+        quiz_configurator::save_for_quiz($cmid, ['labelid' => 0, 'enabled' => 1]);
 
-        $updated = quiz_configurator::get_plugin_config($quizid);
+        $updated = quiz_configurator::get_plugin_config($cmid);
         $this->assertSame($origlabelid, (int)$updated->labelid, 'labelid=0 must not overwrite');
         $this->assertSame(1, (int)$updated->enabled, 'enabled flag must be saved');
     }
