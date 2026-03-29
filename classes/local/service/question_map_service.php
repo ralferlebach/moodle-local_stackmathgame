@@ -90,7 +90,7 @@ final class question_map_service {
         }
 
         if ($deleteids) {
-            list($insql, $params) = $DB->get_in_or_equal($deleteids, SQL_PARAMS_NAMED);
+            [$insql, $params] = $DB->get_in_or_equal($deleteids, SQL_PARAMS_NAMED);
             $DB->delete_records_select('local_stackmathgame_questionmap', 'id ' . $insql, $params);
             $summary['deleted'] += count($deleteids);
         }
