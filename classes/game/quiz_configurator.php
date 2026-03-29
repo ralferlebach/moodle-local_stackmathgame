@@ -50,6 +50,20 @@ class quiz_configurator {
     }
 
     /**
+     * Resolve a course-module record and validate that it belongs to a quiz.
+     *
+     * @param int $cmid The course-module ID.
+     * @return \stdClass The course-module record.
+     */
+    public static function get_supported_cm(int $cmid): \stdClass {
+        $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            throw new \moodle_exception('invalidcoursemodule');
+        }
+        return $cm;
+    }
+
+    /**
      * Retrieve the game configuration for a course-module, or null if none exists.
      *
      * The cmid is the source of truth. All lookups use cmid; quizid is
@@ -64,9 +78,9 @@ class quiz_configurator {
     }
 
     /**
-     * Ensure a default configuration row exists for the given quiz and return it.
+     * Ensure a default configuration row exists for the given course-module.
      *
-     * @param int $quizid The quiz instance ID.
+     * @param int $cmid The course-module ID.
      * @return \stdClass The configuration record.
      */
     public static function ensure_default(int $cmid): \stdClass {
@@ -77,12 +91,13 @@ class quiz_configurator {
             return $record;
         }
 
-        $quiz     = $DB->get_record('quiz', ['id' => $quizid], 'id,course', MUST_EXIST);
+        $cm       = self::get_supported_cm($cmid);
+        $courseid = (int)$cm->course;
         $labelid  = self::ensure_default_label();
         $designid = theme_manager::ensure_default_design();
         $now      = time();
         $data     = (object)[
-            'courseid'          => (int)$quiz->course,
+            'courseid'          => $courseid,
             'cmid'              => $cmid,
             'labelid'           => $labelid,
             'designid'          => $designid,
@@ -101,7 +116,7 @@ class quiz_configurator {
     }
 
     /**
-     * Persist updated settings for a quiz game configuration.
+     * Persist updated settings for a course-module game configuration.
      *
      * Guards against labelid=0 to prevent FK violations (PostgreSQL).
      *

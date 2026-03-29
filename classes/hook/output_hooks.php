@@ -110,15 +110,32 @@ class output_hooks {
     ): void {
         global $PAGE, $CFG, $USER;
 
-        if (during_initial_install() || empty($PAGE->cm)) {
+        if (during_initial_install()) {
             return;
         }
+
         // Detect quiz attempt pages via SCRIPT_FILENAME rather than $PAGE->pagetype,
-        // Because pagetype may not be set yet when before_http_headers fires.
+        // because pagetype may not be set yet when before_http_headers fires.
         $script = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
-        if ($script !== 'attempt.php' || $PAGE->cm->modname !== 'quiz') {
+        if ($script !== 'attempt.php') {
             return;
         }
+
+        // Resolve the activity via cmid from the request first. On attempt pages
+        // $PAGE->cm is not reliable yet at before_http_headers time.
+        $cmid = optional_param('cmid', 0, PARAM_INT);
+        if ($cmid <= 0 && !empty($PAGE->cm)) {
+            $cmid = (int)$PAGE->cm->id;
+        }
+        if ($cmid <= 0) {
+            return;
+        }
+
+        $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return;
+        }
+
         // Also accept 'mod-quiz-attempt' when pagetype IS set (belt and braces).
         if (
             !empty($PAGE->pagetype)
@@ -127,12 +144,16 @@ class output_hooks {
         ) {
             return;
         }
-        $cmid = (int)$PAGE->cm->id;
-        if (!has_capability('local/stackmathgame:play', \context_module::instance($cmid))) {
+
+        $context = \context_module::instance($cmid);
+        if (!has_capability('local/stackmathgame:play', $context)) {
             return;
         }
 
-        // Cmid is now the source of truth for config lookups.
+        $quizid = (int)$cm->instance;
+
+        // Cmid is the source of truth for config lookups; quizid is still passed
+        // to the frontend because the current web-service contract is quiz-based.
         $config = quiz_configurator::ensure_default($cmid);
         if (!$config || empty($config->enabled)) {
             return;
@@ -147,6 +168,9 @@ class output_hooks {
         );
         $PAGE->requires->js_call_amd('local_stackmathgame/game_engine', 'init', [[
             'cmid' => $cmid,
+            'quizid' => $quizid,
+            'instanceid' => $quizid,
+            'modname' => 'quiz',
             'userid' => (int)$USER->id,
             'labelid' => (int)($config->labelid ?? 0),
             'designid' => (int)($config->designid ?? 0),
@@ -156,4 +180,5 @@ class output_hooks {
             'config' => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
     }
+
 }

@@ -138,7 +138,11 @@ class profile_service {
      * @return \stdClass The profile record.
      */
     public static function get_or_create_for_quiz(int $userid, int $quizid): \stdClass {
-        $config = quiz_configurator::ensure_default($quizid);
+        $cmid = quiz_configurator::cmid_from_quizid($quizid);
+        if ($cmid <= 0) {
+            throw new \moodle_exception('quiznotfound', 'local_stackmathgame', '', $quizid);
+        }
+        $config = quiz_configurator::ensure_default($cmid);
         return self::get_or_create(
             (int)$userid,
             (int)$config->labelid,

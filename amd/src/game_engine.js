@@ -424,6 +424,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
      */
     function init(config) {
         state.config = config || {};
+        if (!state.config.quizid && state.config.instanceid) {
+            state.config.quizid = state.config.instanceid;
+        }
         if (!state.config.quizid) {
             return;
         }

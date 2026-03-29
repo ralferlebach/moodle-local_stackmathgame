@@ -88,5 +88,20 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032829, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032830) {
+        // Patch 2026032830: stabilise attempt-page injection and repair cmid lookups.
+        // - inject_game_assets resolves cmid from the request instead of requiring $PAGE->cm.
+        // - game_engine bootstrap receives quizid + instanceid again.
+        // - ensure_default callers now pass cmid consistently.
+        upgrade_plugin_savepoint(true, 2026032830, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032831) {
+        // Patch 2026032831: adapt prefetch_next_node to Moodle quiz_slots schema.
+        // - quiz_slots.question is used on newer Moodle versions.
+        // - fall back to quiz_slots.questionid on older schemas.
+        upgrade_plugin_savepoint(true, 2026032831, 'local', 'stackmathgame');
+    }
+
     return true;
 }

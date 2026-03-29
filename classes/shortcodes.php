@@ -82,7 +82,11 @@ class shortcodes {
         if (!$quizid) {
             return null;
         }
-        $config = quiz_configurator::ensure_default($quizid);
+        $cmid = quiz_configurator::cmid_from_quizid($quizid);
+        if ($cmid <= 0) {
+            return null;
+        }
+        $config = quiz_configurator::ensure_default($cmid);
         return $DB->get_record('local_stackmathgame_label', ['id' => (int)$config->labelid]) ?: null;
     }
 
@@ -120,7 +124,11 @@ class shortcodes {
     protected static function resolve_design(array $args, object $env, ?\stdClass $profile): ?\stdClass {
         $quizid = self::resolve_quizid_from_env($env);
         if ($quizid) {
-            $config = quiz_configurator::ensure_default($quizid);
+            $cmid = quiz_configurator::cmid_from_quizid($quizid);
+            if ($cmid <= 0) {
+                return null;
+            }
+            $config = quiz_configurator::ensure_default($cmid);
             return theme_manager::get_theme((int)$config->designid);
         }
         if (!empty($args['design'])) {

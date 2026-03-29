@@ -54,6 +54,26 @@ class prefetch_next_node extends \external_api {
     }
 
     /**
+     * Resolve the question column name used by mdl_quiz_slots on this Moodle version.
+     *
+     * Moodle 4.x+ uses quiz_slots.question; older code expected quiz_slots.questionid.
+     *
+     * @return string|null Safe SQL identifier or null if neither column exists.
+     */
+    private static function get_quiz_slots_question_column(): ?string {
+        global $DB;
+
+        $columns = $DB->get_columns('quiz_slots');
+        if (isset($columns['question'])) {
+            return 'question';
+        }
+        if (isset($columns['questionid'])) {
+            return 'questionid';
+        }
+        return null;
+    }
+
+    /**
      * Execute the function.
      *
      * @param int $quizid      The quiz instance ID.
@@ -96,12 +116,16 @@ class prefetch_next_node extends \external_api {
         }
 
         if (!$record) {
-            $sql   = 'SELECT id, slot AS slotnumber, questionid'
-                   . '  FROM {quiz_slots}'
-                   . ' WHERE quizid = ? AND slot > ?'
-                   . ' ORDER BY slot ASC';
-            $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
-            $slot  = $slots ? reset($slots) : null;
+            $questioncolumn = self::get_quiz_slots_question_column();
+            $slot = null;
+            if ($questioncolumn !== null) {
+                $sql   = 'SELECT id, slot AS slotnumber, ' . $questioncolumn . ' AS questionid'
+                       . '  FROM {quiz_slots}'
+                       . ' WHERE quizid = ? AND slot > ?'
+                       . ' ORDER BY slot ASC';
+                $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
+                $slot  = $slots ? reset($slots) : null;
+            }
 
             if ($slot) {
                 $slotstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
