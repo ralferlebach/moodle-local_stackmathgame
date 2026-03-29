@@ -217,6 +217,10 @@ class api {
     public static function get_question_map(int $cmid, int $quizid): array {
         global $DB;
 
+        if ($cmid > 0) {
+            \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+        }
+
         [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         if ($keyvalue <= 0) {
             return [];
@@ -251,6 +255,10 @@ class api {
      */
     public static function get_question_map_after_slot(int $cmid, int $quizid, int $currentslot): array {
         global $DB;
+
+        if ($cmid > 0) {
+            \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+        }
 
         [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         if ($keyvalue <= 0) {

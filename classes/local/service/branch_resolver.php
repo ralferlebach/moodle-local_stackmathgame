@@ -70,6 +70,8 @@ final class branch_resolver {
             $outcome = slot_config_schema::OUTCOME_DEFAULT;
         }
 
+        question_map_service::ensure_for_cmid($cmid);
+
         [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         $maprow = $DB->get_record(
             'local_stackmathgame_questionmap',
@@ -100,6 +102,8 @@ final class branch_resolver {
      */
     public static function get_quiz_slot_configs(int $cmid, int $quizid): array {
         global $DB;
+
+        question_map_service::ensure_for_cmid($cmid);
 
         [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         $result = [];
