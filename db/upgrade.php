@@ -129,9 +129,11 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         $cmidfield = new xmldb_field('cmid');
         $quizidfield = new xmldb_field('quizid');
 
-        if ($dbman->table_exists($table)
-                && $dbman->field_exists($table, $cmidfield)
-                && $dbman->field_exists($table, $quizidfield)) {
+        if (
+            $dbman->table_exists($table)
+            && $dbman->field_exists($table, $cmidfield)
+            && $dbman->field_exists($table, $quizidfield)
+        ) {
             $rows = $DB->get_records_select(
                 'local_stackmathgame_questionmap',
                 'cmid IS NULL OR cmid = 0',
