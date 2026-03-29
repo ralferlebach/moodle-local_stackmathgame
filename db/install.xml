@@ -4,6 +4,35 @@
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
+      <TABLE NAME="local_stackmathgame" COMMENT="Course-module game configuration. Cmid is the source of truth.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="requiresbehaviour" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
+        <FIELD NAME="teacherdisplayname" TYPE="char" LENGTH="255" NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="courseid_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
+        <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
+        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
+        <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="lsmg_cfg_enabled_ix" UNIQUE="false" FIELDS="enabled"/>
+      </INDEXES>
+    </TABLE>
+
     <TABLE NAME="local_stackmathgame_label" COMMENT="Global labels used to share progress across quizzes.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
@@ -97,36 +126,6 @@
       </INDEXES>
     </TABLE>
 
-    <TABLE NAME="local_stackmathgame_cfg" COMMENT="Quiz specific game configuration.">
-      <FIELDS>
-        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="designid" TYPE="int" LENGTH="10" NOTNULL="true"/>
-        <FIELD NAME="enabled" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="requiresbehaviour" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1"/>
-        <FIELD NAME="configjson" TYPE="text" NOTNULL="false"/>
-        <FIELD NAME="teacherdisplayname" TYPE="char" LENGTH="255" NOTNULL="false"/>
-        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
-        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false"/>
-        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="courseid_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/>
-        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
-        <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
-        <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
-        <KEY NAME="createdby_fk" TYPE="foreign" FIELDS="createdby" REFTABLE="user" REFFIELDS="id"/>
-        <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="lsmg_qcfg_enabled_ix" UNIQUE="false" FIELDS="enabled"/>
-      </INDEXES>
-    </TABLE>
-
     <TABLE NAME="local_stackmathgame_design_asset" COMMENT="Design assets inventory.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
@@ -169,14 +168,13 @@
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
         <KEY NAME="questionid_fk" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
         <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="lsmg_qmap_quiz_slot_uix" UNIQUE="true" FIELDS="quizid,slotnumber"/>
-        <INDEX NAME="lsmg_qmap_quiz_node_uix" UNIQUE="true" FIELDS="quizid,nodekey"/>
-        <INDEX NAME="lsmg_qmap_quiz_type_ix" UNIQUE="false" FIELDS="quizid,nodetype"/>
+        <INDEX NAME="lsmg_qmap_cmid_slot_uix" UNIQUE="true" FIELDS="cmid,slotnumber"/>
+        <INDEX NAME="lsmg_qmap_cmid_node_uix" UNIQUE="true" FIELDS="cmid,nodekey"/>
+        <INDEX NAME="lsmg_qmap_cmid_type_ix" UNIQUE="false" FIELDS="cmid,nodetype"/>
       </INDEXES>
     </TABLE>
 
@@ -200,7 +198,6 @@
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
         <KEY NAME="userid_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
         <KEY NAME="labelid_fk" TYPE="foreign" FIELDS="labelid" REFTABLE="local_stackmathgame_label" REFFIELDS="id"/>
-        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
         <KEY NAME="questionid_fk" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
         <KEY NAME="profileid_fk" TYPE="foreign" FIELDS="profileid" REFTABLE="local_stackmathgame_profile" REFFIELDS="id"/>
         <KEY NAME="designid_fk" TYPE="foreign" FIELDS="designid" REFTABLE="local_stackmathgame_design" REFFIELDS="id"/>

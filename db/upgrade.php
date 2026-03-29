@@ -2,17 +2,17 @@
 // This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
-// It under the terms of the GNU General Public License as published by
-// The Free Software Foundation, either version 3 of the License, or
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // Moodle is distributed in the hope that it will be useful,
-// But WITHOUT ANY WARRANTY; without even the implied warranty of
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// Along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * Upgrade steps for local_stackmathgame.
@@ -33,7 +33,7 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026032827) {
-        // Rename local_stackmathgame_quizcfg → local_stackmathgame_cfg
+        // Rename local_stackmathgame_quizcfg → local_stackmathgame
         // And replace quizid (FK to quiz) with cmid (FK to course_modules).
         // Cmid is the source of truth: it encodes courseid, moduletype, and
         // The instance id (quizid), so no Umbau is needed when other activity
@@ -57,10 +57,10 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
             }
 
             // Rename the table.
-            $dbman->rename_table($oldtable, 'local_stackmathgame_cfg');
+            $dbman->rename_table($oldtable, 'local_stackmathgame');
 
             // Add unique index on cmid.
-            $newtable = new xmldb_table('local_stackmathgame_cfg');
+            $newtable = new xmldb_table('local_stackmathgame');
             $index = new xmldb_index('lsmg_cfg_cmid_uix', XMLDB_INDEX_UNIQUE, ['cmid']);
             if (!$dbman->index_exists($newtable, $index)) {
                 $dbman->add_index($newtable, $index);
@@ -68,6 +68,24 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         }
 
         upgrade_plugin_savepoint(true, 2026032827, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032828) {
+        // Patch 2026032828: fix submit_answer to use cmid for config lookup.
+        // - submit_answer: use $cm->id (from attempt object) for ensure_default().
+        // - api.php: validate_quiz_access uses $cm->id instead of quizid.
+        // - submit_answer: function () space + get_qt_data try/catch + state cast.
+        // - upgrade.php: license URL http → https.
+        upgrade_plugin_savepoint(true, 2026032828, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032829) {
+        // Patch 2026032829: fix install.xml quizid references.
+        // - local_stackmathgame: removed orphan quizid_fk key and quizid index.
+        // - local_stackmathgame_questionmap: indexes renamed from quizid,* to cmid,*.
+        // - submit_answer: function () space after keyword.
+        // - upgrade.php: boilerplate restored (regex had capitalised lowercase lines).
+        upgrade_plugin_savepoint(true, 2026032829, 'local', 'stackmathgame');
     }
 
     return true;

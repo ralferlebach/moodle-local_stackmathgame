@@ -60,7 +60,7 @@ class quiz_configurator {
      */
     public static function get_plugin_config(int $cmid): ?\stdClass {
         global $DB;
-        return $DB->get_record('local_stackmathgame_cfg', ['cmid' => $cmid]) ?: null;
+        return $DB->get_record('local_stackmathgame', ['cmid' => $cmid]) ?: null;
     }
 
     /**
@@ -96,8 +96,8 @@ class quiz_configurator {
             'modifiedby'        => empty($USER->id) ? null : (int)$USER->id,
         ];
 
-        $id = $DB->insert_record('local_stackmathgame_cfg', $data);
-        return $DB->get_record('local_stackmathgame_cfg', ['id' => $id], '*', MUST_EXIST);
+        $id = $DB->insert_record('local_stackmathgame', $data);
+        return $DB->get_record('local_stackmathgame', ['id' => $id], '*', MUST_EXIST);
     }
 
     /**
@@ -142,7 +142,7 @@ class quiz_configurator {
             'modifiedby'        => empty($USER->id) ? null : (int)$USER->id,
         ];
 
-        $DB->update_record('local_stackmathgame_cfg', $update);
+        $DB->update_record('local_stackmathgame', $update);
         return self::get_plugin_config($cmid);
     }
 

@@ -57,7 +57,7 @@ if (!$cm) {
 
     try {
         if ($quizid > 0) {
-            $DB->delete_records('local_stackmathgame_cfg', ['cmid' => $cmid]);
+            $DB->delete_records('local_stackmathgame', ['cmid' => $cmid]);
         }
     } catch (Throwable $e) {
         debugging('Could not remove orphaned quizcfg: ' . $e->getMessage(), DEBUG_DEVELOPER);

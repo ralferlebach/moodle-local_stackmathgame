@@ -75,8 +75,8 @@ class submit_answer extends \external_api {
         require_capability('local/stackmathgame:play', $context);
 
         $quizid  = (int)$attemptobj->get_quizid();
-        $cmid    = \local_stackmathgame\game\quiz_configurator::cmid_from_quizid($quizid);
-        $config  = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
+        // Use cmid as source of truth for config lookup (patch 2026032827).
+        $config  = \local_stackmathgame\game\quiz_configurator::ensure_default((int)$cm->id);
         $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
             (int)$USER->id,
             $quizid
@@ -226,7 +226,7 @@ class submit_answer extends \external_api {
                 },
                 $answers
             ),
-            'inputnames'    => (function() use ($qa): array {
+            'inputnames'    => (function () use ($qa): array {
                 try {
                     return array_keys($qa->get_qt_data());
                 } catch (\Throwable $qterr) {

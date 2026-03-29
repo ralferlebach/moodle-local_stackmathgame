@@ -81,7 +81,8 @@ class api {
         [$cm, $context] = self::get_quiz_context($quizid);
         \external_api::validate_context($context);
         require_capability('local/stackmathgame:play', $context);
-        $config  = quiz_configurator::ensure_default($quizid);
+        // Resolve cmid: source of truth for config lookups since patch 2026032827.
+        $config  = quiz_configurator::ensure_default((int)$cm->id);
         $profile = profile_service::get_or_create_for_quiz(self::current_userid(), $quizid);
         $design  = theme_manager::get_theme((int)$config->designid);
         return [$cm, $context, $config, $profile, $design];
