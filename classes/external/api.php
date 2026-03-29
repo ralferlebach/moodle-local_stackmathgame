@@ -46,8 +46,8 @@ class api {
     public static function normalise_question_payload(array $payload): array {
         return [
             'questionid' => (int)($payload['questionid'] ?? 0),
-            'slot'       => (int)($payload['slot'] ?? 0),
-            'answers'    => (array)($payload['answers'] ?? []),
+            'slot' => (int)($payload['slot'] ?? 0),
+            'answers' => (array)($payload['answers'] ?? []),
         ];
     }
 
@@ -63,7 +63,7 @@ class api {
      * @throws \moodle_exception When no course_modules entry exists.
      */
     public static function get_quiz_context(int $quizid): array {
-        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, IGNORE_MISSING);
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
         if (!$cm) {
             throw new \moodle_exception('quiznotfound', 'local_stackmathgame', '', $quizid);
         }
@@ -81,10 +81,9 @@ class api {
         [$cm, $context] = self::get_quiz_context($quizid);
         \external_api::validate_context($context);
         require_capability('local/stackmathgame:play', $context);
-        // Resolve cmid: source of truth for config lookups since patch 2026032827.
-        $config  = quiz_configurator::ensure_default((int)$cm->id);
+        $config = quiz_configurator::ensure_default((int)$cm->id);
         $profile = profile_service::get_or_create_for_quiz(self::current_userid(), $quizid);
-        $design  = theme_manager::get_theme((int)$config->designid);
+        $design = theme_manager::get_theme((int)$config->designid);
         return [$cm, $context, $config, $profile, $design];
     }
 
@@ -97,22 +96,22 @@ class api {
     public static function export_profile(\stdClass $profile): array {
         $summary = profile_service::build_summary($profile);
         return [
-            'id'               => (int)$profile->id,
-            'userid'           => (int)$profile->userid,
-            'labelid'          => (int)$profile->labelid,
-            'score'            => (int)$profile->score,
-            'xp'               => (int)$profile->xp,
-            'levelno'          => (int)$profile->levelno,
-            'softcurrency'     => (int)$profile->softcurrency,
-            'hardcurrency'     => (int)$profile->hardcurrency,
+            'id' => (int)$profile->id,
+            'userid' => (int)$profile->userid,
+            'labelid' => (int)$profile->labelid,
+            'score' => (int)$profile->score,
+            'xp' => (int)$profile->xp,
+            'levelno' => (int)$profile->levelno,
+            'softcurrency' => (int)$profile->softcurrency,
+            'hardcurrency' => (int)$profile->hardcurrency,
             'avatarconfigjson' => (string)($profile->avatarconfigjson ?? '{}'),
-            'progressjson'     => (string)($profile->progressjson ?? '{}'),
-            'statsjson'        => (string)($profile->statsjson ?? '{}'),
-            'flagsjson'        => (string)($profile->flagsjson ?? '{}'),
-            'lastquizid'       => (int)($profile->lastquizid ?? 0),
-            'lastdesignid'     => (int)($profile->lastdesignid ?? 0),
-            'lastaccess'       => (int)($profile->lastaccess ?? 0),
-            'summaryjson'      => json_encode($summary, JSON_UNESCAPED_UNICODE),
+            'progressjson' => (string)($profile->progressjson ?? '{}'),
+            'statsjson' => (string)($profile->statsjson ?? '{}'),
+            'flagsjson' => (string)($profile->flagsjson ?? '{}'),
+            'lastquizid' => (int)($profile->lastquizid ?? 0),
+            'lastdesignid' => (int)($profile->lastdesignid ?? 0),
+            'lastaccess' => (int)($profile->lastaccess ?? 0),
+            'summaryjson' => json_encode($summary, JSON_UNESCAPED_UNICODE),
         ];
     }
 
@@ -127,40 +126,40 @@ class api {
     public static function export_design(?\stdClass $design): array {
         if (!$design) {
             return [
-                'id'               => 0,
-                'name'             => '',
-                'slug'             => '',
-                'modecomponent'    => '',
-                'description'      => '',
-                'isbundled'        => 0,
-                'isactive'         => 0,
-                'narrativejson'    => '{}',
-                'uijson'           => '{}',
-                'mechanicsjson'    => '{}',
+                'id' => 0,
+                'name' => '',
+                'slug' => '',
+                'modecomponent' => '',
+                'description' => '',
+                'isbundled' => 0,
+                'isactive' => 0,
+                'narrativejson' => '{}',
+                'uijson' => '{}',
+                'mechanicsjson' => '{}',
                 'assetmanifestjson' => '{}',
-                'runtimejson'      => '{}',
+                'runtimejson' => '{}',
             ];
         }
         $config = theme_manager::get_theme_config((int)$design->id);
         return [
-            'id'               => (int)$design->id,
-            'name'             => (string)$design->name,
-            'slug'             => (string)$design->slug,
-            'modecomponent'    => (string)$design->modecomponent,
-            'description'      => (string)($design->description ?? ''),
-            'isbundled'        => (int)$design->isbundled,
-            'isactive'         => (int)$design->isactive,
-            'narrativejson'    => (string)($design->narrativejson ?? '{}'),
-            'uijson'           => (string)($design->uijson ?? '{}'),
-            'mechanicsjson'    => (string)($design->mechanicsjson ?? '{}'),
+            'id' => (int)$design->id,
+            'name' => (string)$design->name,
+            'slug' => (string)$design->slug,
+            'modecomponent' => (string)$design->modecomponent,
+            'description' => (string)($design->description ?? ''),
+            'isbundled' => (int)$design->isbundled,
+            'isactive' => (int)$design->isactive,
+            'narrativejson' => (string)($design->narrativejson ?? '{}'),
+            'uijson' => (string)($design->uijson ?? '{}'),
+            'mechanicsjson' => (string)($design->mechanicsjson ?? '{}'),
             'assetmanifestjson' => (string)($design->assetmanifestjson ?? '{}'),
-            'runtimejson'      => json_encode([
-                'modekey'       => (string)($config['modekey'] ?? ''),
-                'themeclass'    => (string)($config['themeclass'] ?? ''),
-                'thumbnailurl'  => (string)($config['thumbnailurl'] ?? ''),
+            'runtimejson' => json_encode([
+                'modekey' => (string)($config['modekey'] ?? ''),
+                'themeclass' => (string)($config['themeclass'] ?? ''),
+                'thumbnailurl' => (string)($config['thumbnailurl'] ?? ''),
                 'runtimeassets' => (array)($config['runtimeassets'] ?? []),
-                'ui'            => (array)($config['ui'] ?? []),
-                'mechanics'     => (array)($config['mechanics'] ?? []),
+                'ui' => (array)($config['ui'] ?? []),
+                'mechanics' => (array)($config['mechanics'] ?? []),
             ], JSON_UNESCAPED_UNICODE),
         ];
     }
@@ -168,14 +167,14 @@ class api {
     /**
      * Append a row to the game event log.
      *
-     * @param \stdClass $profile   The profile record.
-     * @param int       $quizid    The quiz ID.
-     * @param int       $designid  The active design ID.
-     * @param string    $eventtype Short event type string.
-     * @param string    $source    Dotted source path for debugging.
-     * @param array     $payload   Optional context payload.
-     * @param int       $valueint  Optional numeric value.
-     * @param string    $valuechar Optional char value.
+     * @param \stdClass $profile The profile record.
+     * @param int $quizid The quiz ID.
+     * @param int $designid The active design ID.
+     * @param string $eventtype Short event type string.
+     * @param string $source Dotted source path for debugging.
+     * @param array $payload Optional context payload.
+     * @param int $valueint Optional numeric value.
+     * @param string $valuechar Optional char value.
      * @return void
      */
     public static function log_event(
@@ -190,32 +189,42 @@ class api {
     ): void {
         global $DB;
         $DB->insert_record('local_stackmathgame_eventlog', (object)[
-            'userid'      => (int)$profile->userid,
-            'labelid'     => (int)$profile->labelid,
-            'quizid'      => $quizid,
-            'questionid'  => empty($payload['questionid']) ? null : (int)$payload['questionid'],
-            'profileid'   => (int)$profile->id,
-            'designid'    => $designid ?: null,
-            'eventtype'   => $eventtype,
-            'source'      => $source,
-            'valueint'    => $valueint ?: null,
-            'valuechar'   => $valuechar ?: null,
+            'userid' => (int)$profile->userid,
+            'labelid' => (int)$profile->labelid,
+            'quizid' => $quizid,
+            'questionid' => empty($payload['questionid']) ? null : (int)$payload['questionid'],
+            'profileid' => (int)$profile->id,
+            'designid' => $designid ?: null,
+            'eventtype' => $eventtype,
+            'source' => $source,
+            'valueint' => $valueint ?: null,
+            'valuechar' => $valuechar ?: null,
             'payloadjson' => json_encode($payload, JSON_UNESCAPED_UNICODE),
             'timecreated' => time(),
         ]);
     }
 
     /**
-     * Build the question map array for a quiz.
+     * Build the question map array for a quiz attempt context.
      *
-     * @param int $quizid The quiz ID.
+     * Uses cmid when the migrated schema is present, and falls back to quizid
+     * for installations where the additive migration has not yet completed.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
      * @return array Array of node arrays ordered by sortorder, slotnumber.
      */
-    public static function get_question_map(int $quizid): array {
+    public static function get_question_map(int $cmid, int $quizid): array {
         global $DB;
+
+        [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
+        if ($keyvalue <= 0) {
+            return [];
+        }
+
         $records = $DB->get_records(
             'local_stackmathgame_questionmap',
-            ['quizid' => $quizid],
+            [$keyfield => $keyvalue],
             'sortorder ASC, slotnumber ASC'
         );
         $result = [];
@@ -223,13 +232,70 @@ class api {
             $result[] = [
                 'slotnumber' => (int)$record->slotnumber,
                 'questionid' => (int)$record->questionid,
-                'nodekey'    => (string)$record->nodekey,
-                'nodetype'   => (string)$record->nodetype,
-                'sortorder'  => (int)$record->sortorder,
+                'nodekey' => (string)$record->nodekey,
+                'nodetype' => (string)$record->nodetype,
+                'sortorder' => (int)$record->sortorder,
                 'configjson' => (string)($record->configjson ?? '{}'),
             ];
         }
         return $result;
+    }
+
+    /**
+     * Return question-map records after a slot for the active lookup key.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $currentslot The current slot number.
+     * @return array Array of record objects keyed by id.
+     */
+    public static function get_question_map_after_slot(int $cmid, int $quizid, int $currentslot): array {
+        global $DB;
+
+        [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
+        if ($keyvalue <= 0) {
+            return [];
+        }
+
+        return $DB->get_records_select(
+            'local_stackmathgame_questionmap',
+            $keyfield . ' = ? AND slotnumber > ?',
+            [$keyvalue, $currentslot],
+            'sortorder ASC, slotnumber ASC'
+        );
+    }
+
+    /**
+     * Return the lookup condition for local_stackmathgame_questionmap.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @return array Two-element array: [fieldname, value].
+     */
+    public static function questionmap_lookup(int $cmid, int $quizid): array {
+        if (self::questionmap_uses_cmid()) {
+            return ['cmid', $cmid];
+        }
+        return ['quizid', $quizid];
+    }
+
+    /**
+     * Return whether the migrated question map schema is available.
+     *
+     * @return bool True when local_stackmathgame_questionmap.cmid exists.
+     */
+    public static function questionmap_uses_cmid(): bool {
+        global $DB;
+
+        static $usescmid = null;
+        if ($usescmid !== null) {
+            return $usescmid;
+        }
+
+        $table = new \xmldb_table('local_stackmathgame_questionmap');
+        $field = new \xmldb_field('cmid');
+        $usescmid = $DB->get_manager()->field_exists($table, $field);
+        return $usescmid;
     }
 
     /**

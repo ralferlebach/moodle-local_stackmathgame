@@ -24,6 +24,9 @@
 
 namespace local_stackmathgame\external;
 
+use xmldb_field;
+use xmldb_table;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
@@ -43,7 +46,7 @@ class prefetch_next_node extends \external_api {
      */
     public static function execute_parameters(): \external_function_parameters {
         return new \external_function_parameters([
-            'quizid'      => new \external_value(PARAM_INT, 'Quiz id'),
+            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
             'currentslot' => new \external_value(
                 PARAM_INT,
                 'Current slot number',
@@ -54,52 +57,27 @@ class prefetch_next_node extends \external_api {
     }
 
     /**
-     * Resolve the question column name used by mdl_quiz_slots on this Moodle version.
-     *
-     * Moodle 4.x+ uses quiz_slots.question; older code expected quiz_slots.questionid.
-     *
-     * @return string|null Safe SQL identifier or null if neither column exists.
-     */
-    private static function get_quiz_slots_question_column(): ?string {
-        global $DB;
-
-        $columns = $DB->get_columns('quiz_slots');
-        if (isset($columns['question'])) {
-            return 'question';
-        }
-        if (isset($columns['questionid'])) {
-            return 'questionid';
-        }
-        return null;
-    }
-
-    /**
      * Execute the function.
      *
-     * @param int $quizid      The quiz instance ID.
+     * @param int $quizid The quiz instance ID.
      * @param int $currentslot The currently active slot.
      * @return array The next-node payload.
      */
     public static function execute(int $quizid, int $currentslot = 0): array {
         global $DB;
 
-        [, , $config, $profile] = api::validate_quiz_access($quizid);
+        [$cm, , $config, $profile] = api::validate_quiz_access($quizid);
 
-        $progress      = \local_stackmathgame\local\service\profile_service::decode_json_field(
+        $progress = \local_stackmathgame\local\service\profile_service::decode_json_field(
             $profile->progressjson ?? '{}'
         );
         $slotsprogress = (array)($progress['slots'] ?? []);
 
-        $next = $DB->get_records_select(
-            'local_stackmathgame_questionmap',
-            'quizid = ? AND slotnumber > ?',
-            [$quizid, $currentslot],
-            'sortorder ASC, slotnumber ASC'
-        );
+        $next = api::get_question_map_after_slot((int)$cm->id, $quizid, $currentslot);
 
         $record = null;
         foreach ($next as $candidate) {
-            $slotkey  = (string)$candidate->slotnumber;
+            $slotkey = (string)$candidate->slotnumber;
             $slotstate = '';
             if (isset($slotsprogress[$slotkey])) {
                 $slotstate = is_array($slotsprogress[$slotkey])
@@ -116,16 +94,13 @@ class prefetch_next_node extends \external_api {
         }
 
         if (!$record) {
-            $questioncolumn = self::get_quiz_slots_question_column();
-            $slot = null;
-            if ($questioncolumn !== null) {
-                $sql   = 'SELECT id, slot AS slotnumber, ' . $questioncolumn . ' AS questionid'
-                       . '  FROM {quiz_slots}'
-                       . ' WHERE quizid = ? AND slot > ?'
-                       . ' ORDER BY slot ASC';
-                $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
-                $slot  = $slots ? reset($slots) : null;
-            }
+            $questionfield = self::get_quiz_slot_question_field();
+            $sql = 'SELECT id, slot AS slotnumber, ' . $questionfield . ' AS questionid'
+                . ' FROM {quiz_slots}'
+                . ' WHERE quizid = ? AND slot > ?'
+                . ' ORDER BY slot ASC';
+            $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
+            $slot = $slots ? reset($slots) : null;
 
             if ($slot) {
                 $slotstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
@@ -135,9 +110,9 @@ class prefetch_next_node extends \external_api {
                 $payload = [
                     'slotnumber' => (int)$slot->slotnumber,
                     'questionid' => (int)$slot->questionid,
-                    'nodekey'    => 'slot_' . (int)$slot->slotnumber,
-                    'nodetype'   => 'question',
-                    'sortorder'  => (int)$slot->slotnumber,
+                    'nodekey' => 'slot_' . (int)$slot->slotnumber,
+                    'nodetype' => 'question',
+                    'sortorder' => (int)$slot->slotnumber,
                     'configjson' => json_encode(
                         ['slotstate' => $slotstate],
                         JSON_UNESCAPED_UNICODE
@@ -147,9 +122,9 @@ class prefetch_next_node extends \external_api {
                 $payload = [
                     'slotnumber' => 0,
                     'questionid' => 0,
-                    'nodekey'    => '',
-                    'nodetype'   => 'end',
-                    'sortorder'  => 0,
+                    'nodekey' => '',
+                    'nodetype' => 'end',
+                    'sortorder' => 0,
                     'configjson' => json_encode(['slotstate' => ''], JSON_UNESCAPED_UNICODE),
                 ];
             }
@@ -157,9 +132,9 @@ class prefetch_next_node extends \external_api {
             $payload = [
                 'slotnumber' => (int)$record->slotnumber,
                 'questionid' => (int)$record->questionid,
-                'nodekey'    => (string)$record->nodekey,
-                'nodetype'   => (string)$record->nodetype,
-                'sortorder'  => (int)$record->sortorder,
+                'nodekey' => (string)$record->nodekey,
+                'nodetype' => (string)$record->nodetype,
+                'sortorder' => (int)$record->sortorder,
                 'configjson' => (string)($record->configjson ?? '{}'),
             ];
         }
@@ -174,10 +149,35 @@ class prefetch_next_node extends \external_api {
         );
 
         return [
-            'quizid'      => $quizid,
+            'quizid' => $quizid,
             'currentslot' => $currentslot,
-            'nextnode'    => $payload,
+            'nextnode' => $payload,
         ];
+    }
+
+    /**
+     * Resolve the quiz slot field that stores the question identifier.
+     *
+     * Moodle versions differ here. Older installations expose quiz_slots.questionid,
+     * newer ones expose quiz_slots.question.
+     *
+     * @return string SQL-safe field name or 0 fallback.
+     */
+    private static function get_quiz_slot_question_field(): string {
+        global $DB;
+
+        $manager = $DB->get_manager();
+        $table = new xmldb_table('quiz_slots');
+
+        if ($manager->field_exists($table, new xmldb_field('question'))) {
+            return 'question';
+        }
+
+        if ($manager->field_exists($table, new xmldb_field('questionid'))) {
+            return 'questionid';
+        }
+
+        return '0';
     }
 
     /**
@@ -187,9 +187,9 @@ class prefetch_next_node extends \external_api {
      */
     public static function execute_returns(): \external_single_structure {
         return new \external_single_structure([
-            'quizid'      => new \external_value(PARAM_INT, 'Quiz id'),
+            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
             'currentslot' => new \external_value(PARAM_INT, 'Current slot number'),
-            'nextnode'    => get_quiz_config::questionmap_structure(),
+            'nextnode' => get_quiz_config::questionmap_structure(),
         ]);
     }
 }

@@ -33,21 +33,13 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026032827) {
-        // Rename local_stackmathgame_quizcfg → local_stackmathgame
-        // And replace quizid (FK to quiz) with cmid (FK to course_modules).
-        // Cmid is the source of truth: it encodes courseid, moduletype, and
-        // The instance id (quizid), so no Umbau is needed when other activity
-        // Types are added later.
-
         $oldtable = new xmldb_table('local_stackmathgame_quizcfg');
         if ($dbman->table_exists($oldtable)) {
-            // Add cmid column to the old table and populate from course_modules.
             $cmidfield = new xmldb_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'id');
             if (!$dbman->field_exists($oldtable, $cmidfield)) {
                 $dbman->add_field($oldtable, $cmidfield);
             }
 
-            // Resolve cmid for each existing row via quiz → course_modules.
             $rows = $DB->get_records('local_stackmathgame_quizcfg', [], '', 'id, quizid');
             foreach ($rows as $row) {
                 $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
@@ -56,10 +48,8 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
                 }
             }
 
-            // Rename the table.
             $dbman->rename_table($oldtable, 'local_stackmathgame');
 
-            // Add unique index on cmid.
             $newtable = new xmldb_table('local_stackmathgame');
             $index = new xmldb_index('lsmg_cfg_cmid_uix', XMLDB_INDEX_UNIQUE, ['cmid']);
             if (!$dbman->index_exists($newtable, $index)) {
@@ -71,36 +61,115 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     }
 
     if ($oldversion < 2026032828) {
-        // Patch 2026032828: fix submit_answer to use cmid for config lookup.
-        // - submit_answer: use $cm->id (from attempt object) for ensure_default().
-        // - api.php: validate_quiz_access uses $cm->id instead of quizid.
-        // - submit_answer: function () space + get_qt_data try/catch + state cast.
-        // - upgrade.php: license URL http → https.
         upgrade_plugin_savepoint(true, 2026032828, 'local', 'stackmathgame');
     }
 
     if ($oldversion < 2026032829) {
-        // Patch 2026032829: fix install.xml quizid references.
-        // - local_stackmathgame: removed orphan quizid_fk key and quizid index.
-        // - local_stackmathgame_questionmap: indexes renamed from quizid,* to cmid,*.
-        // - submit_answer: function () space after keyword.
-        // - upgrade.php: boilerplate restored (regex had capitalised lowercase lines).
         upgrade_plugin_savepoint(true, 2026032829, 'local', 'stackmathgame');
     }
 
     if ($oldversion < 2026032830) {
-        // Patch 2026032830: stabilise attempt-page injection and repair cmid lookups.
-        // - inject_game_assets resolves cmid from the request instead of requiring $PAGE->cm.
-        // - game_engine bootstrap receives quizid + instanceid again.
-        // - ensure_default callers now pass cmid consistently.
         upgrade_plugin_savepoint(true, 2026032830, 'local', 'stackmathgame');
     }
 
     if ($oldversion < 2026032831) {
-        // Patch 2026032831: adapt prefetch_next_node to Moodle quiz_slots schema.
-        // - quiz_slots.question is used on newer Moodle versions.
-        // - fall back to quiz_slots.questionid on older schemas.
         upgrade_plugin_savepoint(true, 2026032831, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032832) {
+        $table = new xmldb_table('local_stackmathgame_questionmap');
+        $cmidfield = new xmldb_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'id');
+        $quizidfield = new xmldb_field('quizid');
+        $cmidslotindex = new xmldb_index('lsmg_qmap_cmid_slot_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'slotnumber']);
+        $cmidnodeindex = new xmldb_index('lsmg_qmap_cmid_node_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'nodekey']);
+        $cmidtypeindex = new xmldb_index('lsmg_qmap_cmid_type_ix', XMLDB_INDEX_NOTUNIQUE, ['cmid', 'nodetype']);
+
+        if ($dbman->table_exists($table)) {
+            if (!$dbman->field_exists($table, $cmidfield)) {
+                $dbman->add_field($table, $cmidfield);
+            }
+
+            if ($dbman->field_exists($table, $cmidfield) && $dbman->field_exists($table, $quizidfield)) {
+                $rows = $DB->get_records_select(
+                    'local_stackmathgame_questionmap',
+                    'cmid IS NULL OR cmid = 0',
+                    [],
+                    '',
+                    'id, quizid, cmid'
+                );
+                foreach ($rows as $row) {
+                    if (empty($row->quizid)) {
+                        continue;
+                    }
+                    $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
+                    if ($cm) {
+                        $DB->set_field('local_stackmathgame_questionmap', 'cmid', (int)$cm->id, ['id' => $row->id]);
+                    }
+                }
+            }
+
+            if ($dbman->field_exists($table, $cmidfield)) {
+                if (!$dbman->index_exists($table, $cmidslotindex)) {
+                    $dbman->add_index($table, $cmidslotindex);
+                }
+                if (!$dbman->index_exists($table, $cmidnodeindex)) {
+                    $dbman->add_index($table, $cmidnodeindex);
+                }
+                if (!$dbman->index_exists($table, $cmidtypeindex)) {
+                    $dbman->add_index($table, $cmidtypeindex);
+                }
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026032832, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032833) {
+        $table = new xmldb_table('local_stackmathgame_questionmap');
+        $cmidfield = new xmldb_field('cmid');
+        $quizidfield = new xmldb_field('quizid');
+
+        if ($dbman->table_exists($table)
+                && $dbman->field_exists($table, $cmidfield)
+                && $dbman->field_exists($table, $quizidfield)) {
+            $rows = $DB->get_records_select(
+                'local_stackmathgame_questionmap',
+                'cmid IS NULL OR cmid = 0',
+                [],
+                '',
+                'id, quizid, cmid'
+            );
+            foreach ($rows as $row) {
+                if (empty($row->quizid)) {
+                    continue;
+                }
+                $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
+                if ($cm) {
+                    $DB->set_field('local_stackmathgame_questionmap', 'cmid', (int)$cm->id, ['id' => $row->id]);
+                }
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026032833, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032834) {
+        // Keep the additive cmid migration schema-safe.
+        // quizid remains in place for backwards compatibility until a later,
+        // dedicated cleanup step removes obsolete indexes and the legacy field.
+        upgrade_plugin_savepoint(true, 2026032834, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032835) {
+        // No schema changes. This savepoint marks the schema-aware quiz_slots
+        // question field fallback used by prefetch_next_node.
+        upgrade_plugin_savepoint(true, 2026032835, 'local', 'stackmathgame');
+    }
+
+    if ($oldversion < 2026032836) {
+        // Consolidated release: keep the additive cmid migration and runtime
+        // fixes together without additional DDL changes.
+        upgrade_plugin_savepoint(true, 2026032836, 'local', 'stackmathgame');
     }
 
     return true;

@@ -180,5 +180,4 @@ class output_hooks {
             'config' => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
     }
-
 }

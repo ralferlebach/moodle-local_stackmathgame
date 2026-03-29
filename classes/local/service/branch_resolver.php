@@ -45,13 +45,15 @@ final class branch_resolver {
     /**
      * Resolve the next slot number after a player outcome.
      *
-     * @param int       $quizid      The quiz instance ID.
-     * @param int       $currentslot The current slot number.
-     * @param string    $outcome     'gradedright', 'gradedwrong', or 'complete'.
-     * @param \stdClass $profile     The player profile (reserved for future use).
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $currentslot The current slot number.
+     * @param string $outcome 'gradedright', 'gradedwrong', or 'complete'.
+     * @param \stdClass $profile The player profile (reserved for future use).
      * @return int The next slot number, or 0 when the quiz should finish.
      */
     public static function resolve_next_slot(
+        int $cmid,
         int $quizid,
         int $currentslot,
         string $outcome,
@@ -68,9 +70,10 @@ final class branch_resolver {
             $outcome = slot_config_schema::OUTCOME_DEFAULT;
         }
 
+        [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         $maprow = $DB->get_record(
             'local_stackmathgame_questionmap',
-            ['quizid' => $quizid, 'slotnumber' => $currentslot]
+            [$keyfield => $keyvalue, 'slotnumber' => $currentslot]
         );
 
         if ($maprow && !empty($maprow->configjson)) {
@@ -91,14 +94,17 @@ final class branch_resolver {
      *
      * Used by inject_game_assets to embed slot rules in the AMD bootstrap call.
      *
+     * @param int $cmid The course-module ID.
      * @param int $quizid The quiz instance ID.
      * @return array<int, array> Map of slotnumber to normalised config.
      */
-    public static function get_quiz_slot_configs(int $quizid): array {
+    public static function get_quiz_slot_configs(int $cmid, int $quizid): array {
         global $DB;
+
+        [$keyfield, $keyvalue] = self::questionmap_lookup($cmid, $quizid);
         $result = [];
-        foreach ($DB->get_records('local_stackmathgame_questionmap', ['quizid' => $quizid]) as $row) {
-            $config = (!empty($row->configjson))
+        foreach ($DB->get_records('local_stackmathgame_questionmap', [$keyfield => $keyvalue]) as $row) {
+            $config = !empty($row->configjson)
                 ? slot_config_schema::parse((string)$row->configjson)
                 : null;
             $result[(int)$row->slotnumber] = $config ?? slot_config_schema::defaults();
@@ -109,9 +115,9 @@ final class branch_resolver {
     /**
      * Apply a branching rule and return the target slot number, or null for linear.
      *
-     * @param array  $config  Normalised slot config.
+     * @param array $config Normalised slot config.
      * @param string $outcome The player outcome key.
-     * @param int    $quizid  Used to validate slot targets.
+     * @param int $quizid Used to validate slot targets.
      * @return int|null Target slot, or null for linear fallback.
      */
     private static function apply_rule(array $config, string $outcome, int $quizid): ?int {
@@ -139,7 +145,7 @@ final class branch_resolver {
     /**
      * Return the next slot number in linear order, or 0 if this is the last.
      *
-     * @param int $quizid      The quiz instance ID.
+     * @param int $quizid The quiz instance ID.
      * @param int $currentslot The current slot number.
      * @return int Next slot, or 0 if no next slot exists.
      */
@@ -159,5 +165,28 @@ final class branch_resolver {
         }
         sort($slots);
         return $slots[0];
+    }
+
+    /**
+     * Return the lookup condition for local_stackmathgame_questionmap.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @return array Two-element array: [fieldname, value].
+     */
+    private static function questionmap_lookup(int $cmid, int $quizid): array {
+        global $DB;
+
+        static $usescmid = null;
+        if ($usescmid === null) {
+            $table = new \xmldb_table('local_stackmathgame_questionmap');
+            $field = new \xmldb_field('cmid');
+            $usescmid = $DB->get_manager()->field_exists($table, $field);
+        }
+
+        if ($usescmid) {
+            return ['cmid', $cmid];
+        }
+        return ['quizid', $quizid];
     }
 }

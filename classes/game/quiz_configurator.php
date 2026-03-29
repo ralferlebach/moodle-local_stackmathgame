@@ -33,12 +33,6 @@ namespace local_stackmathgame\game;
  */
 class quiz_configurator {
     /**
-     * Retrieve the game configuration for a quiz, or null if none exists.
-     *
-     * @param int $quizid The quiz instance ID.
-     * @return \stdClass|null The configuration record, or null.
-     */
-    /**
      * Resolve the course-module id from a quiz instance id.
      *
      * @param int $quizid The quiz instance ID.
@@ -120,7 +114,7 @@ class quiz_configurator {
      *
      * Guards against labelid=0 to prevent FK violations (PostgreSQL).
      *
-     * @param int   $quizid The quiz instance ID.
+     * @param int   $cmid   The course-module ID.
      * @param array $data   Form data to persist.
      * @return \stdClass The updated configuration record.
      */
