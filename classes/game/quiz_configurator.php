@@ -44,16 +44,34 @@ class quiz_configurator {
     }
 
     /**
-     * Resolve a course-module record and validate that it belongs to a quiz.
+     * Resolve a course-module record for a supported activity.
+     *
+     * The course-module ID is the source of truth. When an explicit module name
+     * is provided and differs from the stored course-module type, the stored type
+     * wins so callers can safely pass default values during migration.
      *
      * @param int $cmid The course-module ID.
+     * @param string|null $modname Optional module name hint.
      * @return \stdClass The course-module record.
      */
-    public static function get_supported_cm(int $cmid): \stdClass {
-        $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, IGNORE_MISSING);
+    public static function get_supported_cm(int $cmid, ?string $modname = null): \stdClass {
+        global $DB;
+
+        $sql = "SELECT m.name
+                  FROM {course_modules} cm
+                  JOIN {modules} m ON m.id = cm.module
+                 WHERE cm.id = :cmid";
+        $actualmodname = $DB->get_field_sql($sql, ['cmid' => $cmid]);
+        if (!$actualmodname) {
+            throw new \moodle_exception('invalidcoursemodule');
+        }
+
+        $modname = (string)$actualmodname;
+        $cm = get_coursemodule_from_id($modname, $cmid, 0, false, IGNORE_MISSING);
         if (!$cm) {
             throw new \moodle_exception('invalidcoursemodule');
         }
+        $cm->modname = $modname;
         return $cm;
     }
 
@@ -77,7 +95,7 @@ class quiz_configurator {
      * @param int $cmid The course-module ID.
      * @return \stdClass The configuration record.
      */
-    public static function ensure_default(int $cmid): \stdClass {
+    public static function ensure_default(int $cmid, ?string $modname = null): \stdClass {
         global $DB, $USER;
 
         $record = self::get_plugin_config($cmid);
@@ -85,7 +103,7 @@ class quiz_configurator {
             return $record;
         }
 
-        $cm       = self::get_supported_cm($cmid);
+        $cm       = self::get_supported_cm($cmid, $modname);
         $courseid = (int)$cm->course;
         $labelid  = self::ensure_default_label();
         $designid = theme_manager::ensure_default_design();
