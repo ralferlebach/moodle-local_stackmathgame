@@ -115,7 +115,7 @@ final class quiz_configurator_test extends advanced_testcase {
         $config = quiz_configurator::ensure_default((int)$page->cmid, 'page');
 
         $this->assertSame((int)$page->cmid, (int)$config->cmid);
-        $this->assertSame($courseid, (int)$config->courseid);
+        $this->assertSame((int)$courseid, (int)$config->courseid);
         $this->assertGreaterThan(0, (int)$config->labelid);
         $this->assertGreaterThan(0, (int)$config->designid);
     }
