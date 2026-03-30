@@ -54,13 +54,19 @@ class get_profile_state extends \external_api {
      * @return array The profile state array.
      */
     public static function execute(int $quizid): array {
-        [, , $config, $profile, $design] = api::validate_quiz_access($quizid);
+        $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
+        $result = get_activity_profile_state::execute(
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid']
+        );
+
         return [
-            'quizid'   => $quizid,
-            'labelid'  => (int)$config->labelid,
-            'designid' => (int)$config->designid,
-            'profile'  => api::export_profile($profile),
-            'design'   => api::export_design($design),
+            'quizid' => (int)$result['quizid'],
+            'labelid' => (int)$result['labelid'],
+            'designid' => (int)$result['designid'],
+            'profile' => (array)$result['profile'],
+            'design' => (array)$result['design'],
         ];
     }
 

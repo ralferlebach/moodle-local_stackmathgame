@@ -18,9 +18,11 @@ namespace local_stackmathgame\tests\unit;
 
 use advanced_testcase;
 use local_stackmathgame\external\api;
+use local_stackmathgame\external\get_activity_config;
+use local_stackmathgame\external\prefetch_next_activity_node;
 
 /**
- * Unit tests for pure helper methods in local_stackmathgame\external\api.
+ * Unit tests for helper methods in local_stackmathgame\external\api.
  *
  * @package    local_stackmathgame
  * @covers     \local_stackmathgame\external\api
@@ -56,6 +58,152 @@ final class api_helper_test extends advanced_testcase {
         $result = api::normalise_question_payload(['questionid' => '42', 'slot' => '5']);
         $this->assertSame(42, $result['questionid']);
         $this->assertSame(5, $result['slot']);
+    }
+
+
+    /**
+     * resolve_activity_identity() derives the canonical quiz activity from cmid.
+     */
+    public function test_resolve_activity_identity_from_cmid(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $activity = api::resolve_activity_identity((int)$quiz->cmid);
+
+        $this->assertSame((int)$quiz->cmid, $activity['cmid']);
+        $this->assertSame('quiz', $activity['modname']);
+        $this->assertSame((int)$quiz->id, $activity['instanceid']);
+        $this->assertSame((int)$quiz->id, $activity['quizid']);
+    }
+
+    /**
+     * resolve_activity_identity() backfills the cmid for quiz-based callers.
+     */
+    public function test_resolve_activity_identity_from_legacy_quizid(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $activity = api::resolve_activity_identity(0, 'quiz', 0, (int)$quiz->id);
+
+        $this->assertSame((int)$quiz->cmid, $activity['cmid']);
+        $this->assertSame('quiz', $activity['modname']);
+        $this->assertSame((int)$quiz->id, $activity['instanceid']);
+        $this->assertSame((int)$quiz->id, $activity['quizid']);
+    }
+
+    /**
+     * resolve_activity_identity() uses cmid as the source of truth for modname.
+     */
+    public function test_resolve_activity_identity_uses_cmid_source_of_truth(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $activity = api::resolve_activity_identity((int)$page->cmid, 'quiz');
+
+        $this->assertSame((int)$page->cmid, $activity['cmid']);
+        $this->assertSame('page', $activity['modname']);
+        $this->assertSame((int)$page->id, $activity['instanceid']);
+        $this->assertSame(0, $activity['quizid']);
+    }
+
+    /**
+     * activity_supports_question_flow() is currently limited to quiz activities.
+     */
+    public function test_activity_supports_question_flow_only_for_quiz(): void {
+        $this->assertTrue(api::activity_supports_question_flow(['modname' => 'quiz']));
+        $this->assertFalse(api::activity_supports_question_flow(['modname' => 'page']));
+    }
+
+    /**
+     * export_activity() returns all required canonical identity keys.
+     */
+    public function test_export_activity_has_required_keys(): void {
+        $export = api::export_activity([
+            'cmid' => 7,
+            'modname' => 'quiz',
+            'instanceid' => 11,
+            'quizid' => 11,
+        ]);
+
+        $this->assertSame(7, $export['cmid']);
+        $this->assertSame('quiz', $export['modname']);
+        $this->assertSame(11, $export['instanceid']);
+        $this->assertSame(11, $export['quizid']);
+    }
+
+
+    /**
+     * validate_activity_access() uses cmid as the source of truth.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_validate_activity_access_uses_cmid_as_source_of_truth(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        [, , $config, $profile, $design, $activity] = api::validate_activity_access(
+            (int)$page->cmid,
+            'quiz',
+            0
+        );
+
+        $this->assertSame((int)$page->cmid, (int)$activity['cmid']);
+        $this->assertSame('page', (string)$activity['modname']);
+        $this->assertSame((int)$page->id, (int)$activity['instanceid']);
+        $this->assertSame(0, (int)$activity['quizid']);
+        $this->assertGreaterThan(0, (int)$config->labelid);
+        $this->assertGreaterThan(0, (int)$profile->id);
+        $this->assertIsObject($design);
+    }
+
+    /**
+     * get_activity_config() returns an empty question map for non-quiz activities.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_get_activity_config_for_page_returns_empty_question_map(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $result = get_activity_config::execute((int)$page->cmid, 'page', (int)$page->id);
+
+        $this->assertSame((int)$page->cmid, (int)$result['cmid']);
+        $this->assertSame('page', (string)$result['modname']);
+        $this->assertSame((int)$page->id, (int)$result['instanceid']);
+        $this->assertSame(0, (int)$result['quizid']);
+        $this->assertSame([], $result['questionmap']);
+    }
+
+    /**
+     * prefetch_next_activity_node() returns an end payload for non-quiz activities.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_prefetch_next_activity_node_for_page_returns_end_payload(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $result = prefetch_next_activity_node::execute((int)$page->cmid, 'page', (int)$page->id, 0);
+
+        $this->assertSame((int)$page->cmid, (int)$result['cmid']);
+        $this->assertSame('page', (string)$result['modname']);
+        $this->assertSame('end', (string)$result['nextnode']['nodetype']);
+        $this->assertSame(0, (int)$result['nextnode']['slotnumber']);
     }
 
     /**

@@ -64,94 +64,18 @@ class prefetch_next_node extends \external_api {
      * @return array The next-node payload.
      */
     public static function execute(int $quizid, int $currentslot = 0): array {
-        global $DB;
-
-        [$cm, , $config, $profile] = api::validate_quiz_access($quizid);
-
-        $progress = \local_stackmathgame\local\service\profile_service::decode_json_field(
-            $profile->progressjson ?? '{}'
-        );
-        $slotsprogress = (array)($progress['slots'] ?? []);
-
-        $next = api::get_question_map_after_slot((int)$cm->id, $quizid, $currentslot);
-
-        $record = null;
-        foreach ($next as $candidate) {
-            $slotkey = (string)$candidate->slotnumber;
-            $slotstate = '';
-            if (isset($slotsprogress[$slotkey])) {
-                $slotstate = is_array($slotsprogress[$slotkey])
-                    ? (string)($slotsprogress[$slotkey]['state'] ?? '')
-                    : (string)$slotsprogress[$slotkey];
-            }
-            if (!in_array($slotstate, ['gradedright', 'complete'], true)) {
-                $record = $candidate;
-                break;
-            }
-        }
-        if (!$record && $next) {
-            $record = reset($next);
-        }
-
-        if (!$record) {
-            $questionfield = self::get_quiz_slot_question_field();
-            $sql = 'SELECT id, slot AS slotnumber, ' . $questionfield . ' AS questionid'
-                . ' FROM {quiz_slots}'
-                . ' WHERE quizid = ? AND slot > ?'
-                . ' ORDER BY slot ASC';
-            $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
-            $slot = $slots ? reset($slots) : null;
-
-            if ($slot) {
-                $slotstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
-                    $profile,
-                    (int)$slot->slotnumber
-                );
-                $payload = [
-                    'slotnumber' => (int)$slot->slotnumber,
-                    'questionid' => (int)$slot->questionid,
-                    'nodekey' => 'slot_' . (int)$slot->slotnumber,
-                    'nodetype' => 'question',
-                    'sortorder' => (int)$slot->slotnumber,
-                    'configjson' => json_encode(
-                        ['slotstate' => $slotstate],
-                        JSON_UNESCAPED_UNICODE
-                    ),
-                ];
-            } else {
-                $payload = [
-                    'slotnumber' => 0,
-                    'questionid' => 0,
-                    'nodekey' => '',
-                    'nodetype' => 'end',
-                    'sortorder' => 0,
-                    'configjson' => json_encode(['slotstate' => ''], JSON_UNESCAPED_UNICODE),
-                ];
-            }
-        } else {
-            $payload = [
-                'slotnumber' => (int)$record->slotnumber,
-                'questionid' => (int)$record->questionid,
-                'nodekey' => (string)$record->nodekey,
-                'nodetype' => (string)$record->nodetype,
-                'sortorder' => (int)$record->sortorder,
-                'configjson' => (string)($record->configjson ?? '{}'),
-            ];
-        }
-
-        api::log_event(
-            $profile,
-            $quizid,
-            (int)$config->designid,
-            'prefetch_next_node',
-            'external.prefetch_next_node',
-            ['currentslot' => $currentslot] + $payload
+        $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
+        $result = prefetch_next_activity_node::execute(
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid'],
+            $currentslot
         );
 
         return [
-            'quizid' => $quizid,
-            'currentslot' => $currentslot,
-            'nextnode' => $payload,
+            'quizid' => (int)$result['quizid'],
+            'currentslot' => (int)$result['currentslot'],
+            'nextnode' => (array)$result['nextnode'],
         ];
     }
 

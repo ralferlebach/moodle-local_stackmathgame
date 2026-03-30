@@ -54,18 +54,24 @@ class get_quiz_config extends \external_api {
      * @return array The game configuration array.
      */
     public static function execute(int $quizid): array {
-        [$cm, , $config, $profile, $design] = api::validate_quiz_access($quizid);
+        $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
+        $result = get_activity_config::execute(
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid']
+        );
+
         return [
-            'quizid' => $quizid,
-            'enabled' => (int)$config->enabled,
-            'requiresbehaviour' => (int)$config->requiresbehaviour,
-            'labelid' => (int)$config->labelid,
-            'designid' => (int)$config->designid,
-            'teacherdisplayname' => (string)($config->teacherdisplayname ?? ''),
-            'configjson' => (string)($config->configjson ?? '{}'),
-            'design' => api::export_design($design),
-            'profile' => api::export_profile($profile),
-            'questionmap' => api::get_question_map((int)$cm->id, $quizid),
+            'quizid' => (int)$result['quizid'],
+            'enabled' => (bool)$result['enabled'],
+            'requiresbehaviour' => (bool)$result['requiresbehaviour'],
+            'labelid' => (int)$result['labelid'],
+            'designid' => (int)$result['designid'],
+            'teacherdisplayname' => (string)$result['teacherdisplayname'],
+            'configjson' => (string)$result['configjson'],
+            'design' => (array)$result['design'],
+            'profile' => (array)$result['profile'],
+            'questionmap' => (array)$result['questionmap'],
         ];
     }
 

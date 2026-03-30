@@ -87,39 +87,28 @@ class save_progress extends \external_api {
         string $statsjson = '{}',
         string $eventtype = 'progress_saved'
     ): array {
-        require_sesskey();
-        [, , $config, $profile, $design] = api::validate_quiz_access($quizid);
-        $updated = profile_service::apply_progress((int)$profile->id, [
-            'quizid'            => $quizid,
-            'designid'          => (int)$config->designid,
-            'scoredelta'        => $scoredelta,
-            'xpdelta'           => $xpdelta,
-            'softcurrencydelta' => $softcurrencydelta,
-            'hardcurrencydelta' => $hardcurrencydelta,
-            'progress'          => json_decode($progressjson, true) ?: [],
-            'flags'             => json_decode($flagsjson, true) ?: [],
-            'stats'             => json_decode($statsjson, true) ?: [],
-        ]);
-        api::log_event(
-            $updated,
-            $quizid,
-            (int)$config->designid,
-            $eventtype,
-            'external.save_progress',
-            [
-                'progress' => json_decode($progressjson, true) ?: [],
-                'flags'    => json_decode($flagsjson, true) ?: [],
-                'stats'    => json_decode($statsjson, true) ?: [],
-            ],
-            $scoredelta + $xpdelta
+        $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
+        $result = save_activity_progress::execute(
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid'],
+            $scoredelta,
+            $xpdelta,
+            $softcurrencydelta,
+            $hardcurrencydelta,
+            $progressjson,
+            $flagsjson,
+            $statsjson,
+            $eventtype
         );
+
         return [
-            'quizid'    => $quizid,
-            'labelid'   => (int)$config->labelid,
-            'designid'  => (int)$config->designid,
-            'profile'   => api::export_profile($updated),
-            'design'    => api::export_design($design),
-            'eventtype' => $eventtype,
+            'quizid' => (int)$result['quizid'],
+            'labelid' => (int)$result['labelid'],
+            'designid' => (int)$result['designid'],
+            'profile' => (array)$result['profile'],
+            'design' => (array)$result['design'],
+            'eventtype' => (string)$result['eventtype'],
         ];
     }
 

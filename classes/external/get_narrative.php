@@ -58,24 +58,19 @@ class get_narrative extends \external_api {
      * @return array The narrative lines array.
      */
     public static function execute(int $quizid, string $scene): array {
-        [, , $config, $profile, $design] = api::validate_quiz_access($quizid);
-        $lines = narrative_resolver::resolve($design, $scene);
-        if (!is_array($lines)) {
-            $lines = [$lines];
-        }
-        api::log_event(
-            $profile,
-            $quizid,
-            (int)$config->designid,
-            'narrative_requested',
-            'external.get_narrative',
-            ['scene' => $scene]
+        $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
+        $result = get_activity_narrative::execute(
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid'],
+            $scene
         );
+
         return [
-            'quizid'   => $quizid,
-            'scene'    => $scene,
-            'lines'    => array_values(array_map('strval', $lines)),
-            'designid' => (int)$config->designid,
+            'quizid' => (int)$result['quizid'],
+            'scene' => (string)$result['scene'],
+            'lines' => (array)$result['lines'],
+            'designid' => (int)$result['designid'],
         ];
     }
 

@@ -68,8 +68,7 @@ define([
                                 narrativeLines: [result.message || ''],
                             });
                             bus.emit('submitted', result);
-                            return ApiClient.saveProgress({
-                                quizid: config.quizid,
+                            return ApiClient.saveProgress(Object.assign({
                                 scoredelta: 0,
                                 xpdelta: 0,
                                 softcurrencydelta: 0,
@@ -78,11 +77,17 @@ define([
                                 flagsjson: JSON.stringify({lastquestionid: result.questionid || 0}),
                                 statsjson: JSON.stringify({submissioncount: answers.length}),
                                 eventtype: 'frontend_progress_sync'
-                            });
+                            }, config.cmid ? {
+                                cmid: config.cmid,
+                                modname: config.modname || 'quiz',
+                                instanceid: config.instanceid || config.quizid
+                            } : {
+                                quizid: config.quizid
+                            }));
                         })
                         .then(function(progressResult) {
                             store.patch({profile: progressResult.profile || store.getState().profile});
-                            return ApiClient.prefetchNextNode(config.quizid, QuestionController.getCurrentSlot());
+                            return ApiClient.prefetchNextNode(config, QuestionController.getCurrentSlot());
                         })
                         .then(function(nextNodeResult) {
                             store.patch({
@@ -102,10 +107,10 @@ define([
         wireActions();
 
         Promise.all([
-            ApiClient.getQuizConfig(config.quizid),
-            ApiClient.getProfileState(config.quizid),
-            ApiClient.getNarrative(config.quizid, 'world_enter'),
-            ApiClient.prefetchNextNode(config.quizid, 0)
+            ApiClient.getQuizConfig(config),
+            ApiClient.getProfileState(config),
+            ApiClient.getNarrative(config, 'world_enter'),
+            ApiClient.prefetchNextNode(config, 0)
         ]).then(function(results) {
             const quizConfig = results[0];
             const profileState = results[1];

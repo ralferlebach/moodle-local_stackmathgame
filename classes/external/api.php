@@ -52,6 +52,85 @@ class api {
     }
 
     /**
+     * Resolve a canonical activity identity.
+     *
+     * The course-module ID is the source of truth. When it is provided the
+     * actual activity type and instance ID are derived from Moodle's
+     * course_modules table. Legacy quiz-only callers may continue to pass a
+     * quizid; this is normalised to the equivalent quiz activity identity.
+     *
+     * @param int $cmid The course-module ID.
+     * @param string $modname Optional module name hint.
+     * @param int $instanceid Optional activity instance ID.
+     * @param int $quizid Optional legacy quiz instance ID.
+     * @return array Canonical identity with cmid, modname, instanceid and quizid.
+     */
+    public static function resolve_activity_identity(
+        int $cmid = 0,
+        string $modname = 'quiz',
+        int $instanceid = 0,
+        int $quizid = 0
+    ): array {
+        if ($quizid > 0) {
+            $modname = 'quiz';
+            $instanceid = $quizid;
+        }
+
+        if ($cmid > 0) {
+            $cm = self::load_cm_by_id($cmid);
+        } else {
+            $modname = (string)($modname ?: 'quiz');
+            if ($instanceid <= 0) {
+                throw new \moodle_exception('invalidcoursemodule');
+            }
+            $cm = get_coursemodule_from_instance($modname, $instanceid, 0, false, IGNORE_MISSING);
+            if (!$cm) {
+                throw new \moodle_exception('invalidcoursemodule');
+            }
+            $cm->modname = $modname;
+        }
+
+        $resolvedmodname = (string)($cm->modname ?? $modname);
+        $resolvedinstanceid = (int)$cm->instance;
+
+        return [
+            'cmid' => (int)$cm->id,
+            'modname' => $resolvedmodname,
+            'instanceid' => $resolvedinstanceid,
+            'quizid' => $resolvedmodname === 'quiz' ? $resolvedinstanceid : 0,
+        ];
+    }
+
+    /**
+     * Build a serialisable export array for a canonical activity identity.
+     *
+     * @param array $activity Canonical activity identity.
+     * @return array Serialisable activity export.
+     */
+    public static function export_activity(array $activity): array {
+        return [
+            'cmid' => (int)($activity['cmid'] ?? 0),
+            'modname' => (string)($activity['modname'] ?? ''),
+            'instanceid' => (int)($activity['instanceid'] ?? 0),
+            'quizid' => (int)($activity['quizid'] ?? 0),
+        ];
+    }
+
+    /**
+     * Return whether an activity supports quiz-style question flow.
+     *
+     * This is intentionally stricter than merely checking whether an activity
+     * has a configuration row. The runtime question flow currently depends on
+     * quiz-specific attempt, slot and question-map semantics.
+     *
+     * @param array $activity Canonical activity identity.
+     * @return bool True when the activity uses quiz question flow.
+     */
+    public static function activity_supports_question_flow(array $activity): bool {
+        return (string)($activity['modname'] ?? '') === 'quiz';
+    }
+
+    /**
      * Resolve the course-module and context for a quiz instance.
      *
      * Uses IGNORE_MISSING (4th param only) and throws a moodle_exception when
@@ -63,12 +142,39 @@ class api {
      * @throws \moodle_exception When no course_modules entry exists.
      */
     public static function get_quiz_context(int $quizid): array {
-        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
-        if (!$cm) {
-            throw new \moodle_exception('quiznotfound', 'local_stackmathgame', '', $quizid);
-        }
-        $context = context_module::instance((int)$cm->id);
+        [$cm, $context] = self::get_activity_context(0, 'quiz', $quizid);
         return [$cm, $context];
+    }
+
+    /**
+     * Resolve the course-module and context for an activity.
+     *
+     * @param int $cmid The course-module ID.
+     * @param string $modname Optional module name hint.
+     * @param int $instanceid Optional activity instance ID.
+     * @param int $quizid Optional legacy quiz instance ID.
+     * @return array Three-element array: [$cm, $context, $activity].
+     */
+    public static function get_activity_context(
+        int $cmid = 0,
+        string $modname = 'quiz',
+        int $instanceid = 0,
+        int $quizid = 0
+    ): array {
+        $activity = self::resolve_activity_identity($cmid, $modname, $instanceid, $quizid);
+        $cm = get_coursemodule_from_id(
+            $activity['modname'],
+            $activity['cmid'],
+            0,
+            false,
+            IGNORE_MISSING
+        );
+        if (!$cm) {
+            throw new \moodle_exception('invalidcoursemodule');
+        }
+        $cm->modname = $activity['modname'];
+        $context = context_module::instance((int)$activity['cmid']);
+        return [$cm, $context, $activity];
     }
 
     /**
@@ -78,13 +184,39 @@ class api {
      * @return array Five-element array: [$cm, $context, $config, $profile, $design].
      */
     public static function validate_quiz_access(int $quizid): array {
-        [$cm, $context] = self::get_quiz_context($quizid);
+        [$cm, $context, $config, $profile, $design] = self::validate_activity_access(0, 'quiz', $quizid);
+        return [$cm, $context, $config, $profile, $design];
+    }
+
+    /**
+     * Validate access to an activity and return key runtime objects.
+     *
+     * @param int $cmid The course-module ID.
+     * @param string $modname Optional module name hint.
+     * @param int $instanceid Optional activity instance ID.
+     * @param int $quizid Optional legacy quiz instance ID.
+     * @return array Six-element array: [$cm, $context, $config, $profile, $design, $activity].
+     */
+    public static function validate_activity_access(
+        int $cmid = 0,
+        string $modname = 'quiz',
+        int $instanceid = 0,
+        int $quizid = 0
+    ): array {
+        [$cm, $context, $activity] = self::get_activity_context($cmid, $modname, $instanceid, $quizid);
         \external_api::validate_context($context);
         require_capability('local/stackmathgame:play', $context);
-        $config = quiz_configurator::ensure_default((int)$cm->id);
-        $profile = profile_service::get_or_create_for_quiz(self::current_userid(), $quizid);
+
+        $config = quiz_configurator::ensure_default((int)$activity['cmid'], $activity['modname']);
+        $profile = profile_service::get_or_create_for_activity(
+            self::current_userid(),
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid']
+        );
         $design = theme_manager::get_theme((int)$config->designid);
-        return [$cm, $context, $config, $profile, $design];
+
+        return [$cm, $context, $config, $profile, $design, $activity];
     }
 
     /**
@@ -304,6 +436,32 @@ class api {
         $field = new \xmldb_field('cmid');
         $usescmid = $DB->get_manager()->field_exists($table, $field);
         return $usescmid;
+    }
+
+    /**
+     * Load a course-module record together with its module name.
+     *
+     * @param int $cmid The course-module ID.
+     * @return \stdClass The course-module record.
+     */
+    private static function load_cm_by_id(int $cmid): \stdClass {
+        global $DB;
+
+        $sql = "SELECT cm.*, m.name AS modname
+                  FROM {course_modules} cm
+                  JOIN {modules} m ON m.id = cm.module
+                 WHERE cm.id = :cmid";
+        $record = $DB->get_record_sql($sql, ['cmid' => $cmid]);
+        if (!$record) {
+            throw new \moodle_exception('invalidcoursemodule');
+        }
+
+        $cm = get_coursemodule_from_id((string)$record->modname, $cmid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            throw new \moodle_exception('invalidcoursemodule');
+        }
+        $cm->modname = (string)$record->modname;
+        return $cm;
     }
 
     /**
