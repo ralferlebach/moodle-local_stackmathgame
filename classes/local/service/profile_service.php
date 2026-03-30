@@ -142,11 +142,36 @@ class profile_service {
         if ($cmid <= 0) {
             throw new \moodle_exception('quiznotfound', 'local_stackmathgame', '', $quizid);
         }
-        $config = quiz_configurator::ensure_default($cmid);
+        return self::get_or_create_for_activity($userid, $cmid, 'quiz', $quizid);
+    }
+
+    /**
+     * Get or create the profile for a user in the context of an activity.
+     *
+     * The course-module ID is the source of truth. Quiz activities continue to
+     * populate lastquizid so existing analytics and exports remain compatible.
+     * Other module types create or reuse the profile against the configured
+     * label and design without forcing a quiz identifier.
+     *
+     * @param int $userid The user ID.
+     * @param int $cmid The course-module ID.
+     * @param string $modname The activity module name.
+     * @param int $instanceid The activity instance ID.
+     * @return \stdClass The profile record.
+     */
+    public static function get_or_create_for_activity(
+        int $userid,
+        int $cmid,
+        string $modname = 'quiz',
+        int $instanceid = 0
+    ): \stdClass {
+        $config = quiz_configurator::ensure_default($cmid, $modname);
+        $quizid = $modname === 'quiz' ? $instanceid : 0;
+
         return self::get_or_create(
             (int)$userid,
             (int)$config->labelid,
-            $quizid,
+            $quizid > 0 ? $quizid : null,
             (int)$config->designid
         );
     }

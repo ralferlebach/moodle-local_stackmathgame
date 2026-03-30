@@ -167,9 +167,14 @@ final class question_map_service_test extends advanced_testcase {
         $cm = get_coursemodule_from_instance('quiz', (int)$quiz->id, (int)$course->id, false, MUST_EXIST);
 
         $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $questioncategory = $questiongenerator->create_question_category([
+            'contextid' => \context_course::instance((int)$course->id)->id,
+        ]);
+        $category = $questioncategory->id . ',' . $questioncategory->contextid;
 
         for ($i = 1; $i <= $questioncount; $i++) {
             $question = $questiongenerator->create_question('truefalse', null, [
+                'category' => $category,
                 'name' => 'Question ' . $i,
                 'questiontext' => 'Question text ' . $i,
             ]);
