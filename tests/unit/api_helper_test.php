@@ -170,7 +170,6 @@ final class api_helper_test extends advanced_testcase {
      *
      * @group local_stackmathgame_db
      * @runInSeparateProcess
-     * @preserveGlobalState disabled
      */
     public function test_get_activity_config_for_page_returns_empty_question_map(): void {
         $this->resetAfterTest();
@@ -193,7 +192,6 @@ final class api_helper_test extends advanced_testcase {
      *
      * @group local_stackmathgame_db
      * @runInSeparateProcess
-     * @preserveGlobalState disabled
      */
     public function test_prefetch_next_activity_node_for_page_returns_end_payload(): void {
         $this->resetAfterTest();
