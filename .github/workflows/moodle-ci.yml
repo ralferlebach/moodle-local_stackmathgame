@@ -404,15 +404,6 @@ jobs:
         moodle: ['MOODLE_405_STABLE', 'MOODLE_500_STABLE', 'MOODLE_501_STABLE']
 
     services:
-      selenium:
-        image: selenium/standalone-chrome:latest
-        options: >-
-          --shm-size=2g
-          --health-cmd="curl -sf http://localhost:4444/status"
-          --health-interval=15s
-          --health-retries=5
-        ports: ['4444:4444']
-
       mariadb:
         image: mariadb:10.11
         env:
@@ -491,7 +482,7 @@ jobs:
         run: |
           moodle-plugin-ci behat \
             --profile chrome \
-            --tags "@local_stackmathgame and not @broken"
+            --tags='@local_stackmathgame&&~@broken'
 
       - name: Upload failure screenshots
         if: failure()
