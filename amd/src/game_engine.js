@@ -142,6 +142,89 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
     }
 
     /**
+     * Return whether a canonical activity identity is available.
+     *
+     * @returns {boolean} True when cmid is available.
+     */
+    function hasActivityIdentity() {
+        return !!(state.config && parseInt(state.config.cmid, 10));
+    }
+
+    /**
+     * Build canonical activity arguments for activity-aware web services.
+     *
+     * @param {Object=} extra Additional arguments to merge in.
+     * @returns {Object} Canonical activity argument object.
+     */
+    function getActivityArgs(extra) {
+        var args = {
+            cmid: parseInt(state.config.cmid, 10) || 0,
+            modname: state.config.modname || 'quiz',
+            instanceid: parseInt(state.config.instanceid || state.config.quizid, 10) || 0
+        };
+        return Object.assign(args, extra || {});
+    }
+
+    /**
+     * Call the appropriate configuration endpoint for the current identity.
+     *
+     * @returns {Promise} The Ajax promise.
+     */
+    function callConfigEndpoint() {
+        if (hasActivityIdentity()) {
+            return call('local_stackmathgame_get_activity_config', getActivityArgs());
+        }
+        return call('local_stackmathgame_get_quiz_config', {quizid: state.config.quizid});
+    }
+
+    /**
+     * Call the appropriate profile-state endpoint for the current identity.
+     *
+     * @returns {Promise} The Ajax promise.
+     */
+    function callProfileStateEndpoint() {
+        if (hasActivityIdentity()) {
+            return call('local_stackmathgame_get_activity_profile_state', getActivityArgs());
+        }
+        return call('local_stackmathgame_get_profile_state', {quizid: state.config.quizid});
+    }
+
+    /**
+     * Call the appropriate narrative endpoint for the current identity.
+     *
+     * @param {string} scene The narrative scene key.
+     * @returns {Promise} The Ajax promise.
+     */
+    function callNarrativeEndpoint(scene) {
+        if (hasActivityIdentity()) {
+            return call('local_stackmathgame_get_activity_narrative', getActivityArgs({scene: scene}));
+        }
+        return call('local_stackmathgame_get_narrative', {
+            quizid: state.config.quizid,
+            scene: scene
+        });
+    }
+
+    /**
+     * Call the appropriate prefetch endpoint for the current identity.
+     *
+     * @param {number} currentslot The current slot number.
+     * @returns {Promise} The Ajax promise.
+     */
+    function callPrefetchEndpoint(currentslot) {
+        if (hasActivityIdentity()) {
+            return call(
+                'local_stackmathgame_prefetch_next_activity_node',
+                getActivityArgs({currentslot: currentslot})
+            );
+        }
+        return call('local_stackmathgame_prefetch_next_node', {
+            quizid: state.config.quizid,
+            currentslot: currentslot
+        });
+    }
+
+    /**
      * Safely parse a JSON string, returning fallback on error.
      *
      * @param {string|null} value The JSON string.
@@ -310,17 +393,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                 return null;
             }).then(function() {
                 return Promise.all([
-                    call('local_stackmathgame_get_narrative', {
-                        quizid: state.config.quizid,
-                        scene: response.cannext ? 'victory' : 'defeat'
-                    }),
-                    call('local_stackmathgame_prefetch_next_node', {
-                        quizid: state.config.quizid,
-                        currentslot: slot
-                    }),
-                    call('local_stackmathgame_get_profile_state', {
-                        quizid: state.config.quizid
-                    })
+                    callNarrativeEndpoint(response.cannext ? 'victory' : 'defeat'),
+                    callPrefetchEndpoint(slot),
+                    callProfileStateEndpoint()
                 ]);
             }).then(function(results) {
                 state.store.narrative =
@@ -387,16 +462,10 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
      */
     function bootstrapData() {
         return Promise.all([
-            call('local_stackmathgame_get_quiz_config', {quizid: state.config.quizid}),
-            call('local_stackmathgame_get_profile_state', {quizid: state.config.quizid}),
-            call('local_stackmathgame_get_narrative', {
-                quizid: state.config.quizid,
-                scene: 'world_enter'
-            }),
-            call('local_stackmathgame_prefetch_next_node', {
-                quizid: state.config.quizid,
-                currentslot: getCurrentSlot() || 0
-            })
+            callConfigEndpoint(),
+            callProfileStateEndpoint(),
+            callNarrativeEndpoint('world_enter'),
+            callPrefetchEndpoint(getCurrentSlot() || 0)
         ]).then(function(results) {
             var quizconfig = results[0] || {};
             state.store.design = quizconfig.design || null;
@@ -424,10 +493,16 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
      */
     function init(config) {
         state.config = config || {};
-        if (!state.config.quizid && state.config.instanceid) {
+        if (!state.config.quizid && state.config.instanceid && state.config.modname === 'quiz') {
             state.config.quizid = state.config.instanceid;
         }
-        if (!state.config.quizid) {
+        if (!state.config.instanceid && state.config.quizid) {
+            state.config.instanceid = state.config.quizid;
+        }
+        if (!state.config.modname) {
+            state.config.modname = 'quiz';
+        }
+        if (!state.config.quizid && !state.config.cmid && !state.config.instanceid) {
             return;
         }
         bootstrapData().catch(Notification.exception);

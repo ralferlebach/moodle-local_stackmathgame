@@ -37,6 +37,7 @@ final class quiz_configurator_test extends advanced_testcase {
      */
     public function test_ensure_default_label_creates_record(): void {
         global $DB;
+
         $this->resetAfterTest();
         $DB->delete_records('local_stackmathgame_label', ['name' => 'default']);
 
@@ -56,9 +57,11 @@ final class quiz_configurator_test extends advanced_testcase {
      */
     public function test_ensure_default_label_idempotent(): void {
         $this->resetAfterTest();
-        $id1 = quiz_configurator::ensure_default_label();
-        $id2 = quiz_configurator::ensure_default_label();
-        $this->assertSame($id1, $id2, 'Must return same ID on second call');
+
+        $idone = quiz_configurator::ensure_default_label();
+        $idtwo = quiz_configurator::ensure_default_label();
+
+        $this->assertSame($idone, $idtwo, 'Must return same ID on second call');
     }
 
     /**
@@ -68,6 +71,7 @@ final class quiz_configurator_test extends advanced_testcase {
      */
     public function test_get_plugin_config_null_for_missing(): void {
         $this->resetAfterTest();
+
         $result = quiz_configurator::get_plugin_config(PHP_INT_MAX);
         $this->assertNull($result, 'Should return null for unknown cmid');
     }
@@ -79,13 +83,14 @@ final class quiz_configurator_test extends advanced_testcase {
      */
     public function test_save_for_quiz_guards_labelid_zero(): void {
         $this->resetAfterTest();
-        $courseid = $this->getDataGenerator()->create_course()->id;
-        $quiz     = $this->getDataGenerator()->create_module('quiz', ['course' => $courseid]);
-        $quizid   = (int)$quiz->id;
-        $cm       = get_coursemodule_from_instance('quiz', $quizid, $courseid, false, MUST_EXIST);
-        $cmid     = (int)$cm->id;
 
-        $config      = quiz_configurator::ensure_default($cmid);
+        $courseid = $this->getDataGenerator()->create_course()->id;
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $courseid]);
+        $quizid = (int)$quiz->id;
+        $cm = get_coursemodule_from_instance('quiz', $quizid, $courseid, false, MUST_EXIST);
+        $cmid = (int)$cm->id;
+
+        $config = quiz_configurator::ensure_default($cmid);
         $origlabelid = (int)$config->labelid;
         $this->assertGreaterThan(0, $origlabelid);
 
@@ -94,5 +99,24 @@ final class quiz_configurator_test extends advanced_testcase {
         $updated = quiz_configurator::get_plugin_config($cmid);
         $this->assertSame($origlabelid, (int)$updated->labelid, 'labelid=0 must not overwrite');
         $this->assertSame(1, (int)$updated->enabled, 'enabled flag must be saved');
+    }
+
+    /**
+     * ensure_default() accepts non-quiz activities when cmid is supplied.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_ensure_default_supports_non_quiz_activity(): void {
+        $this->resetAfterTest();
+
+        $courseid = $this->getDataGenerator()->create_course()->id;
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $courseid]);
+
+        $config = quiz_configurator::ensure_default((int)$page->cmid, 'page');
+
+        $this->assertSame((int)$page->cmid, (int)$config->cmid);
+        $this->assertSame($courseid, (int)$config->courseid);
+        $this->assertGreaterThan(0, (int)$config->labelid);
+        $this->assertGreaterThan(0, (int)$config->designid);
     }
 }
