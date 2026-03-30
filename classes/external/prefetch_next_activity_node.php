@@ -25,8 +25,7 @@
 namespace local_stackmathgame\external;
 
 use local_stackmathgame\local\service\profile_service;
-use xmldb_field;
-use xmldb_table;
+use local_stackmathgame\local\service\question_map_service;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -69,8 +68,6 @@ class prefetch_next_activity_node extends \external_api {
         int $instanceid = 0,
         int $currentslot = 0
     ): array {
-        global $DB;
-
         [, , $config, $profile, , $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
         if (!api::activity_supports_question_flow($activity)) {
             $payload = self::end_payload();
@@ -104,13 +101,13 @@ class prefetch_next_activity_node extends \external_api {
         }
 
         if (!$record) {
-            $questionfield = self::get_quiz_slot_question_field();
-            $sql = 'SELECT id, slot AS slotnumber, ' . $questionfield . ' AS questionid'
-                . ' FROM {quiz_slots}'
-                . ' WHERE quizid = ? AND slot > ?'
-                . ' ORDER BY slot ASC';
-            $slots = $DB->get_records_sql($sql, [$quizid, $currentslot], 0, 1);
-            $slot = $slots ? reset($slots) : null;
+            $slot = null;
+            foreach (question_map_service::get_quiz_slot_records($quizid) as $candidate) {
+                if ((int)$candidate->slotnumber > $currentslot) {
+                    $slot = $candidate;
+                    break;
+                }
+            }
 
             if ($slot) {
                 $slotstate = profile_service::get_slot_state($profile, (int)$slot->slotnumber);
@@ -165,28 +162,6 @@ class prefetch_next_activity_node extends \external_api {
             'sortorder' => 0,
             'configjson' => json_encode(['slotstate' => ''], JSON_UNESCAPED_UNICODE),
         ];
-    }
-
-    /**
-     * Resolve the quiz slot field that stores the question identifier.
-     *
-     * @return string SQL-safe field name or 0 fallback.
-     */
-    private static function get_quiz_slot_question_field(): string {
-        global $DB;
-
-        $manager = $DB->get_manager();
-        $table = new xmldb_table('quiz_slots');
-
-        if ($manager->field_exists($table, new xmldb_field('question'))) {
-            return 'question';
-        }
-
-        if ($manager->field_exists($table, new xmldb_field('questionid'))) {
-            return 'questionid';
-        }
-
-        return '0';
     }
 
     /**

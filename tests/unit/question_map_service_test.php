@@ -170,7 +170,7 @@ final class question_map_service_test extends advanced_testcase {
         $questioncategory = $questiongenerator->create_question_category([
             'contextid' => \context_course::instance((int)$course->id)->id,
         ]);
-        $category = $questioncategory->id . ',' . $questioncategory->contextid;
+        $category = (int)$questioncategory->id . ',' . (int)$questioncategory->contextid;
 
         for ($i = 1; $i <= $questioncount; $i++) {
             $question = $questiongenerator->create_question('truefalse', null, [

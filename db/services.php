@@ -25,6 +25,46 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'local_stackmathgame_get_activity_config' => [
+        'classname' => 'local_stackmathgame\external\get_activity_config',
+        'methodname' => 'execute',
+        'description' => 'Return the active STACK Math Game activity configuration and mapped design data.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_get_activity_profile_state' => [
+        'classname' => 'local_stackmathgame\external\get_activity_profile_state',
+        'methodname' => 'execute',
+        'description' => 'Return the current label-bound game profile for the logged in user and activity.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_save_activity_progress' => [
+        'classname' => 'local_stackmathgame\external\save_activity_progress',
+        'methodname' => 'execute',
+        'description' => 'Persist score, XP and JSON progress deltas for the current activity profile.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_get_activity_narrative' => [
+        'classname' => 'local_stackmathgame\external\get_activity_narrative',
+        'methodname' => 'execute',
+        'description' => 'Return design narrative lines for a named scene and activity.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_prefetch_next_activity_node' => [
+        'classname' => 'local_stackmathgame\external\prefetch_next_activity_node',
+        'methodname' => 'execute',
+        'description' => 'Return the next mapped node or slot for pageless prefetch in the current activity.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
     'local_stackmathgame_get_quiz_config' => [
         'classname' => 'local_stackmathgame\\external\\get_quiz_config',
         'methodname' => 'execute',

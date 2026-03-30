@@ -169,6 +169,8 @@ final class api_helper_test extends advanced_testcase {
      * get_activity_config() returns an empty question map for non-quiz activities.
      *
      * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
      */
     public function test_get_activity_config_for_page_returns_empty_question_map(): void {
         $this->resetAfterTest();
@@ -190,6 +192,8 @@ final class api_helper_test extends advanced_testcase {
      * prefetch_next_activity_node() returns an end payload for non-quiz activities.
      *
      * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
      */
     public function test_prefetch_next_activity_node_for_page_returns_end_payload(): void {
         $this->resetAfterTest();

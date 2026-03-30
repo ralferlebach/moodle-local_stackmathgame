@@ -218,12 +218,39 @@ final class question_map_service {
     public static function get_quiz_slot_records(int $quizid): array {
         global $DB;
 
-        $questionfield = self::get_quiz_slot_question_field();
-        $sql = 'SELECT id, slot AS slotnumber, ' . $questionfield . ' AS questionid'
-            . ' FROM {quiz_slots}'
-            . ' WHERE quizid = ?'
-            . ' ORDER BY slot ASC';
-        $records = $DB->get_records_sql($sql, [$quizid]);
+        if (self::uses_question_reference_schema()) {
+            $sql = 'SELECT slot.id, slot.slot AS slotnumber, COALESCE(qv.questionid, 0) AS questionid'
+                . ' FROM {quiz_slots} slot'
+                . ' LEFT JOIN {question_references} qr'
+                . '   ON qr.component = :component'
+                . '  AND qr.questionarea = :questionarea'
+                . '  AND qr.itemid = slot.id'
+                . ' LEFT JOIN {question_versions} qv'
+                . '   ON qv.questionbankentryid = qr.questionbankentryid'
+                . '  AND ('
+                . '       (qr.version IS NOT NULL AND qv.version = qr.version)'
+                . '       OR'
+                . '       (qr.version IS NULL AND qv.version = ('
+                . '            SELECT MAX(qv2.version)'
+                . '              FROM {question_versions} qv2'
+                . '             WHERE qv2.questionbankentryid = qr.questionbankentryid'
+                . '       ))'
+                . '  )'
+                . ' WHERE slot.quizid = :quizid'
+                . ' ORDER BY slot.slot ASC';
+            $records = $DB->get_records_sql($sql, [
+                'component' => 'mod_quiz',
+                'questionarea' => 'slot',
+                'quizid' => $quizid,
+            ]);
+        } else {
+            $questionfield = self::get_quiz_slot_question_field();
+            $sql = 'SELECT id, slot AS slotnumber, ' . $questionfield . ' AS questionid'
+                . ' FROM {quiz_slots}'
+                . ' WHERE quizid = ?'
+                . ' ORDER BY slot ASC';
+            $records = $DB->get_records_sql($sql, [$quizid]);
+        }
 
         $byslot = [];
         foreach ($records as $record) {
@@ -270,6 +297,27 @@ final class question_map_service {
             return 'questionid';
         }
         return '0';
+    }
+
+
+    /**
+     * Determine whether quiz slot question IDs must be resolved via references.
+     *
+     * Moodle 4.x removed quiz_slots.questionid and stores the mapping through
+     * question_references/question_versions instead.
+     *
+     * @return bool True when the reference schema should be used.
+     */
+    private static function uses_question_reference_schema(): bool {
+        global $DB;
+
+        if (self::get_quiz_slot_question_field() !== '0') {
+            return false;
+        }
+
+        $manager = $DB->get_manager();
+        return $manager->table_exists(new xmldb_table('question_references'))
+            && $manager->table_exists(new xmldb_table('question_versions'));
     }
 
     /**
