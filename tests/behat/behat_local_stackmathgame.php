@@ -133,6 +133,44 @@ class behat_local_stackmathgame extends behat_base {
             $this->getSession()
         );
     }
+
+    /**
+     * Choose an option from the quiz tertiary navigation dropdown and follow it.
+     *
+     * @When I choose :label from the quiz tertiary nav
+     * @param string $label The visible option label.
+     */
+    public function i_choose_from_the_quiz_tertiary_nav(string $label): void {
+        $page = $this->getSession()->getPage();
+        $select = $page->find('css', '.tertiary-navigation .urlselect select');
+        if (!$select) {
+            throw new \Behat\Mink\Exception\ExpectationException(
+                'Tertiary navigation select not found',
+                $this->getSession()
+            );
+        }
+
+        foreach ($select->findAll('css', 'option') as $option) {
+            if (strpos(trim($option->getText()), $label) !== false) {
+                $target = (string)$option->getValue();
+                if ($target === '') {
+                    throw new \Behat\Mink\Exception\ExpectationException(
+                        "Option containing '$label' has no target URL",
+                        $this->getSession()
+                    );
+                }
+                $this->getSession()->visit($target);
+                $this->getSession()->wait(2000, "document.readyState === 'complete'");
+                return;
+            }
+        }
+
+        throw new \Behat\Mink\Exception\ExpectationException(
+            "Option containing '$label' not found in quiz tertiary nav",
+            $this->getSession()
+        );
+    }
+
     /**
      * Verify the game settings option exists in the quiz tertiary nav select.
      *

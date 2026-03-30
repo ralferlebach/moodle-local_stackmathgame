@@ -21,15 +21,15 @@ Feature: STACK Math Game quiz settings configuration
 
   Scenario: Game settings page is accessible for editing teacher
     When I am on the "Test Quiz" "mod_quiz > Edit" page
-    And I follow "Game settings"
+    And I choose "Game settings" from the quiz tertiary nav
     Then I should see "Game settings"
 
   Scenario: Saving game settings redirects back to the settings page
     When I am on the "Test Quiz" "mod_quiz > Edit" page
-    And I follow "Game settings"
+    And I choose "Game settings" from the quiz tertiary nav
     And I press "Save changes"
     Then I should see "Changes saved"
 
   Scenario: Game settings entry appears in the quiz tertiary nav dropdown
     When I am on the "Test Quiz" "mod_quiz > Edit" page
-    Then I should see "Spieleinstellungen" in the quiz tertiary nav
+    Then I should see "Game settings" in the quiz tertiary nav
