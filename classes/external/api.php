@@ -116,6 +116,82 @@ class api {
         ];
     }
 
+
+    /**
+     * Return the external structure for a stash mapping export array.
+     *
+     * @return \external_single_structure
+     */
+    public static function stash_mapping_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'slotnumber' => new \external_value(PARAM_INT, 'Question slot number'),
+            'stashitemid' => new \external_value(PARAM_INT, 'Mapped block_stash item id'),
+            'stashcourseid' => new \external_value(PARAM_INT, 'Course id owning the stash item'),
+            'grantquantity' => new \external_value(PARAM_INT, 'Granted quantity'),
+            'enabled' => new \external_value(PARAM_BOOL, 'Whether the mapping is enabled'),
+            'mode' => new \external_value(PARAM_ALPHANUMEXT, 'Granting mode'),
+        ]);
+    }
+
+    /**
+     * Export a stash mapping record as a plain array.
+     *
+     * @param \stdClass|array $mapping The mapping record.
+     * @return array<string, int|string|bool> Export array.
+     */
+    public static function export_stash_mapping($mapping): array {
+        $record = (object)$mapping;
+        return [
+            'slotnumber' => (int)($record->slotnumber ?? 0),
+            'stashitemid' => (int)($record->stashitemid ?? 0),
+            'stashcourseid' => (int)($record->stashcourseid ?? 0),
+            'grantquantity' => (int)($record->grantquantity ?? 1),
+            'enabled' => !empty($record->enabled),
+            'mode' => (string)($record->mode ?? 'firstsolve'),
+        ];
+    }
+
+    /**
+     * Export stash mappings for an activity, keyed internally by slot.
+     *
+     * @param array $activity Canonical activity identity.
+     * @param int $courseid The activity course ID.
+     * @return array<int, array<string, int|string|bool>> Sequential mapping list.
+     */
+    public static function export_activity_stash_mappings(array $activity, int $courseid = 0): array {
+        global $DB;
+
+        if ($courseid <= 0 && !empty($activity['cmid'])) {
+            $cm = get_coursemodule_from_id((string)($activity['modname'] ?? ''), (int)$activity['cmid'], 0, false, IGNORE_MISSING);
+            if ($cm) {
+                $courseid = (int)$cm->course;
+            }
+        }
+
+        $mappings = \local_stackmathgame\local\service\stash_mapping_service::get_for_activity(
+            (int)($activity['cmid'] ?? 0),
+            (int)($activity['instanceid'] ?? 0),
+            (string)($activity['modname'] ?? 'quiz')
+        );
+
+        if (!$mappings) {
+            return [];
+        }
+
+        $exports = [];
+        foreach ($mappings as $mapping) {
+            $export = self::export_stash_mapping($mapping);
+            if ($courseid > 0 && $export['stashcourseid'] <= 0) {
+                $export['stashcourseid'] = $courseid;
+            }
+            $exports[] = $export;
+        }
+        usort($exports, static function(array $a, array $b): int {
+            return $a['slotnumber'] <=> $b['slotnumber'];
+        });
+        return $exports;
+    }
+
     /**
      * Return whether an activity supports quiz-style question flow.
      *

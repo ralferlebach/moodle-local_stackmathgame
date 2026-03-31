@@ -72,6 +72,7 @@ class get_quiz_config extends \external_api {
             'design' => (array)$result['design'],
             'profile' => (array)$result['profile'],
             'questionmap' => (array)$result['questionmap'],
+            'stashmappings' => (array)$result['stashmappings'],
         ];
     }
 
@@ -92,6 +93,7 @@ class get_quiz_config extends \external_api {
             'design' => self::design_structure(),
             'profile' => self::profile_structure(),
             'questionmap' => new \external_multiple_structure(self::questionmap_structure()),
+            'stashmappings' => new \external_multiple_structure(api::stash_mapping_structure()),
         ]);
     }
 

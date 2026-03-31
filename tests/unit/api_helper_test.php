@@ -20,6 +20,7 @@ use advanced_testcase;
 use local_stackmathgame\external\api;
 use local_stackmathgame\external\get_activity_config;
 use local_stackmathgame\external\prefetch_next_activity_node;
+use local_stackmathgame\local\service\stash_mapping_service;
 
 /**
  * Unit tests for helper methods in local_stackmathgame\external\api.
@@ -185,6 +186,7 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame((int)$page->id, (int)$result['instanceid']);
         $this->assertSame(0, (int)$result['quizid']);
         $this->assertSame([], $result['questionmap']);
+        $this->assertSame([], $result['stashmappings']);
     }
 
     /**
@@ -206,6 +208,37 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame('page', (string)$result['modname']);
         $this->assertSame('end', (string)$result['nextnode']['nodetype']);
         $this->assertSame(0, (int)$result['nextnode']['slotnumber']);
+    }
+
+
+    /**
+     * get_activity_config() includes stash mappings for quiz activities.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_activity_config_for_quiz_includes_stash_mappings(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        stash_mapping_service::save_for_activity((int)$quiz->cmid, (int)$course->id, [[
+            'slotnumber' => 2,
+            'stashitemid' => 99,
+            'grantquantity' => 3,
+            'enabled' => 1,
+        ]], 'quiz', (int)$quiz->id);
+
+        $result = get_activity_config::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertSame((int)$quiz->cmid, (int)$result['cmid']);
+        $this->assertCount(1, $result['stashmappings']);
+        $this->assertSame(2, (int)$result['stashmappings'][0]['slotnumber']);
+        $this->assertSame(99, (int)$result['stashmappings'][0]['stashitemid']);
+        $this->assertSame(3, (int)$result['stashmappings'][0]['grantquantity']);
+        $this->assertTrue((bool)$result['stashmappings'][0]['enabled']);
     }
 
     /**

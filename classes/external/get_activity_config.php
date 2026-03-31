@@ -60,6 +60,7 @@ class get_activity_config extends \external_api {
     public static function execute(int $cmid, string $modname = 'quiz', int $instanceid = 0): array {
         [$cm, , $config, $profile, $design, $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
 
+        $stashmappings = api::export_activity_stash_mappings($activity, (int)$cm->course);
         $questionmap = [];
         if (api::activity_supports_question_flow($activity)) {
             $questionmap = api::get_question_map((int)$cm->id, (int)$activity['quizid']);
@@ -75,6 +76,7 @@ class get_activity_config extends \external_api {
             'design' => api::export_design($design),
             'profile' => api::export_profile($profile),
             'questionmap' => $questionmap,
+            'stashmappings' => $stashmappings,
         ]);
     }
 
@@ -98,6 +100,7 @@ class get_activity_config extends \external_api {
             'design' => get_quiz_config::design_structure(),
             'profile' => get_quiz_config::profile_structure(),
             'questionmap' => new \external_multiple_structure(get_quiz_config::questionmap_structure()),
+            'stashmappings' => new \external_multiple_structure(api::stash_mapping_structure()),
         ]);
     }
 }

@@ -332,7 +332,6 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032856, 'local', 'stackmathgame');
     }
 
-
     if ($oldversion < 2026032858) {
         try {
             \local_stackmathgame\local\service\stash_mapping_service::backfill_activity_rows();
@@ -346,6 +345,9 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032858, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032859) {
+        upgrade_plugin_savepoint(true, 2026032859, 'local', 'stackmathgame');
+    }
+
     return true;
 }
-
