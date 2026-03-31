@@ -291,6 +291,32 @@ final class bridge_dispatcher_test extends advanced_testcase {
     }
 
     /**
+     * submit_answer uses the activity-aware profile lookup.
+     */
+    public function test_submit_answer_uses_activity_profile_lookup(): void {
+        $file = __DIR__ . '/../../classes/external/submit_answer.php';
+        $this->assertFileExists($file);
+        $content = file_get_contents($file);
+        $this->assertStringContainsString(
+            'profile_service::get_or_create_for_activity(',
+            $content,
+            'submit_answer.php must resolve profiles through the activity-aware path'
+        );
+    }
+
+    /**
+     * submit_answer returns activity and bridge payloads for the runtime contract.
+     */
+    public function test_submit_answer_returns_activity_and_bridge_payloads(): void {
+        $file = __DIR__ . '/../../classes/external/submit_answer.php';
+        $this->assertFileExists($file);
+        $content = file_get_contents($file);
+        $this->assertStringContainsString("'activity'      => api::export_activity($activity)", $content);
+        $this->assertStringContainsString("'bridges'       => $bridges", $content);
+        $this->assertStringContainsString("'bridges'       => self::bridge_results_structure()", $content);
+    }
+
+    /**
      * Verify that the submit_answer.php source contains a bridge_dispatcher call.
      * This is a static analysis smoke test that catches accidental regression.
      */

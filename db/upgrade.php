@@ -349,5 +349,9 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032859, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032861) {
+        upgrade_plugin_savepoint(true, 2026032861, 'local', 'stackmathgame');
+    }
+
     return true;
 }

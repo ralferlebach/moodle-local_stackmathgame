@@ -77,8 +77,16 @@ class submit_answer extends \external_api {
         $quizid  = (int)$attemptobj->get_quizid();
         // Use cmid as source of truth for config lookup (patch 2026032827).
         $config  = \local_stackmathgame\game\quiz_configurator::ensure_default((int)$cm->id);
-        $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
+        $activity = [
+            'cmid' => (int)$cm->id,
+            'modname' => 'quiz',
+            'instanceid' => $quizid,
+            'quizid' => $quizid,
+        ];
+        $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_activity(
             (int)$USER->id,
+            (int)$cm->id,
+            'quiz',
             $quizid
         );
         $design  = \local_stackmathgame\game\theme_manager::get_theme((int)$config->designid);
@@ -147,6 +155,7 @@ class submit_answer extends \external_api {
         $scoredelta = 0;
         $xpdelta    = 0;
         $cannext    = false;
+        $bridges    = self::default_bridge_results();
 
         if ($processed) {
             $deltas     = \local_stackmathgame\local\service\profile_service::calculate_submit_deltas(
@@ -189,26 +198,24 @@ class submit_answer extends \external_api {
             );
 
             try {
-                \local_stackmathgame\local\integration\bridge_dispatcher::on_answer_result(
-                    $profile,
-                    $quizid,
-                    (int)$config->designid,
-                    $slot,
-                    [
-                        'state' => $state,
-                        'questionid' => (int)$qa->get_question()->id,
-                        'config' => [],
-                    ],
-                    [
-                        'score' => $scoredelta,
-                        'xp' => $xpdelta,
-                        'solved' => $cannext,
-                    ],
-                    [
-                        'cmid' => (int)$cm->id,
-                        'modname' => 'quiz',
-                        'instanceid' => $quizid,
-                    ]
+                $bridges = self::normalise_bridge_results(
+                    \local_stackmathgame\local\integration\bridge_dispatcher::on_answer_result(
+                        $profile,
+                        $quizid,
+                        (int)$config->designid,
+                        $slot,
+                        [
+                            'state' => $state,
+                            'questionid' => (int)$qa->get_question()->id,
+                            'config' => [],
+                        ],
+                        [
+                            'score' => $scoredelta,
+                            'xp' => $xpdelta,
+                            'solved' => $cannext,
+                        ],
+                        $activity
+                    )
                 );
             } catch (\Throwable $bridgeerr) {
                 debugging(
@@ -264,14 +271,84 @@ class submit_answer extends \external_api {
             })(),
             'previousstate' => $previousstate,
             'message'       => $message,
+            'activity'      => api::export_activity($activity),
             'profile'       => api::export_profile($profile),
             'design'        => api::export_design($design),
+            'bridges'       => $bridges,
             'feedbackhtml'  => $feedbackhtml,
             'scoredelta'    => $scoredelta,
             'xpdelta'       => $xpdelta,
             'canretry'      => true,
             'cannext'       => $cannext,
         ];
+    }
+
+    /**
+     * Return the default bridge result payload.
+     *
+     * @return array<string, array<string, int|string|bool>>
+     */
+    private static function default_bridge_results(): array {
+        return [
+            'xp' => [
+                'available' => \local_stackmathgame\local\integration\availability::has_block_xp(),
+                'dispatched' => false,
+            ],
+            'stash' => [
+                'available' => \local_stackmathgame\local\integration\availability::has_block_stash(),
+                'dispatched' => false,
+                'stash' => false,
+                'itemkey' => '',
+                'stashitemid' => 0,
+            ],
+        ];
+    }
+
+    /**
+     * Normalise bridge results to a stable external payload.
+     *
+     * @param array $bridges Raw bridge dispatcher result.
+     * @return array<string, array<string, int|string|bool>>
+     */
+    private static function normalise_bridge_results(array $bridges): array {
+        $defaults = self::default_bridge_results();
+        $xp = array_merge($defaults['xp'], (array)($bridges['xp'] ?? []));
+        $stash = array_merge($defaults['stash'], (array)($bridges['stash'] ?? []));
+
+        return [
+            'xp' => [
+                'available' => !empty($xp['available']),
+                'dispatched' => !empty($xp['dispatched']),
+            ],
+            'stash' => [
+                'available' => !empty($stash['available']),
+                'dispatched' => !empty($stash['dispatched']),
+                'stash' => !empty($stash['stash']),
+                'itemkey' => (string)($stash['itemkey'] ?? ''),
+                'stashitemid' => (int)($stash['stashitemid'] ?? 0),
+            ],
+        ];
+    }
+
+    /**
+     * Describe the bridge result payload.
+     *
+     * @return \external_single_structure
+     */
+    private static function bridge_results_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'xp' => new \external_single_structure([
+                'available' => new \external_value(PARAM_BOOL, 'Whether block_xp is available'),
+                'dispatched' => new \external_value(PARAM_BOOL, 'Whether XP dispatch occurred'),
+            ]),
+            'stash' => new \external_single_structure([
+                'available' => new \external_value(PARAM_BOOL, 'Whether block_stash is available'),
+                'dispatched' => new \external_value(PARAM_BOOL, 'Whether stash dispatch occurred'),
+                'stash' => new \external_value(PARAM_BOOL, 'Whether a real block_stash grant was made'),
+                'itemkey' => new \external_value(PARAM_TEXT, 'Granted item key, if any'),
+                'stashitemid' => new \external_value(PARAM_INT, 'Granted block_stash item id, if any'),
+            ]),
+        ]);
     }
 
     /**
@@ -300,8 +377,15 @@ class submit_answer extends \external_api {
             ),
             'previousstate' => new \external_value(PARAM_TEXT, 'Previous profile-tracked question state'),
             'message'       => new \external_value(PARAM_TEXT, 'Human-readable message'),
+            'activity'      => new \external_single_structure([
+                'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
+                'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name'),
+                'instanceid' => new \external_value(PARAM_INT, 'Activity instance id'),
+                'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
+            ]),
             'profile'       => get_quiz_config::profile_structure(),
             'design'        => get_quiz_config::design_structure(),
+            'bridges'       => self::bridge_results_structure(),
             'feedbackhtml'  => new \external_value(PARAM_RAW, 'Reserved feedback html channel'),
             'scoredelta'    => new \external_value(PARAM_INT, 'Score delta'),
             'xpdelta'       => new \external_value(PARAM_INT, 'XP delta'),
