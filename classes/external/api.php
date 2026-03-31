@@ -134,6 +134,20 @@ class api {
     }
 
     /**
+     * Return the external structure for stash mapping write payloads.
+     *
+     * @return \external_single_structure
+     */
+    public static function stash_mapping_input_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'slotnumber' => new \external_value(PARAM_INT, 'Question slot number'),
+            'stashitemid' => new \external_value(PARAM_INT, 'Mapped block_stash item id'),
+            'grantquantity' => new \external_value(PARAM_INT, 'Granted quantity', VALUE_DEFAULT, 1),
+            'enabled' => new \external_value(PARAM_BOOL, 'Whether the mapping is enabled', VALUE_DEFAULT, true),
+        ]);
+    }
+
+    /**
      * Export a stash mapping record as a plain array.
      *
      * @param \stdClass|array $mapping The mapping record.
@@ -286,6 +300,41 @@ class api {
             \external_api::validate_context($context);
         }
         require_capability('local/stackmathgame:play', $context);
+
+        $config = quiz_configurator::ensure_default((int)$activity['cmid'], $activity['modname']);
+        $profile = profile_service::get_or_create_for_activity(
+            self::current_userid(),
+            (int)$activity['cmid'],
+            (string)$activity['modname'],
+            (int)$activity['instanceid']
+        );
+        $design = theme_manager::get_theme((int)$config->designid);
+
+        return [$cm, $context, $config, $profile, $design, $activity];
+    }
+
+    /**
+     * Validate configuration access to an activity and return key runtime objects.
+     *
+     * @param int $cmid The course-module ID.
+     * @param string $modname Optional module name hint.
+     * @param int $instanceid Optional activity instance ID.
+     * @param int $quizid Optional legacy quiz instance ID.
+     * @return array Six-element array: [$cm, $context, $config, $profile, $design, $activity].
+     */
+    public static function validate_activity_configuration_access(
+        int $cmid = 0,
+        string $modname = 'quiz',
+        int $instanceid = 0,
+        int $quizid = 0
+    ): array {
+        [$cm, $context, $activity] = self::get_activity_context($cmid, $modname, $instanceid, $quizid);
+        if (class_exists('\core_external\external_api')) {
+            \core_external\external_api::validate_context($context);
+        } else if (class_exists('\external_api', false)) {
+            \external_api::validate_context($context);
+        }
+        require_capability('local/stackmathgame:configurequiz', $context);
 
         $config = quiz_configurator::ensure_default((int)$activity['cmid'], $activity['modname']);
         $profile = profile_service::get_or_create_for_activity(

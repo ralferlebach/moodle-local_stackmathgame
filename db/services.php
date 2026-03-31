@@ -25,6 +25,22 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'local_stackmathgame_get_activity_stash_mappings' => [
+        'classname' => 'local_stackmathgame\external\get_activity_stash_mappings',
+        'methodname' => 'execute',
+        'description' => 'Return activity-oriented stash item mappings for settings UIs.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:configurequiz',
+    ],
+    'local_stackmathgame_save_activity_stash_mappings' => [
+        'classname' => 'local_stackmathgame\external\save_activity_stash_mappings',
+        'methodname' => 'execute',
+        'description' => 'Persist activity-oriented stash item mappings for settings UIs.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:configurequiz',
+    ],
     'local_stackmathgame_get_activity_config' => [
         'classname' => 'local_stackmathgame\external\get_activity_config',
         'methodname' => 'execute',
@@ -64,6 +80,22 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_get_quiz_stash_mappings' => [
+        'classname' => 'local_stackmathgame\external\get_quiz_stash_mappings',
+        'methodname' => 'execute',
+        'description' => 'Legacy quiz wrapper returning stash item mappings.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:configurequiz',
+    ],
+    'local_stackmathgame_save_quiz_stash_mappings' => [
+        'classname' => 'local_stackmathgame\external\save_quiz_stash_mappings',
+        'methodname' => 'execute',
+        'description' => 'Legacy quiz wrapper persisting stash item mappings.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:configurequiz',
     ],
     'local_stackmathgame_get_quiz_config' => [
         'classname' => 'local_stackmathgame\\external\\get_quiz_config',

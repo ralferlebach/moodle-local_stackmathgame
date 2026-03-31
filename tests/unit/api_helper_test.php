@@ -19,6 +19,8 @@ namespace local_stackmathgame\tests\unit;
 use advanced_testcase;
 use local_stackmathgame\external\api;
 use local_stackmathgame\external\get_activity_config;
+use local_stackmathgame\external\get_activity_stash_mappings;
+use local_stackmathgame\external\save_activity_stash_mappings;
 use local_stackmathgame\external\prefetch_next_activity_node;
 use local_stackmathgame\local\service\stash_mapping_service;
 
@@ -244,6 +246,61 @@ final class api_helper_test extends advanced_testcase {
     /**
      * export_design(null) returns all required keys.
      */
+
+
+    /**
+     * get_activity_stash_mappings() returns an empty list for non-quiz activities.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_activity_stash_mappings_for_page_returns_empty_list(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $result = get_activity_stash_mappings::execute((int)$page->cmid, 'page', (int)$page->id);
+
+        $this->assertSame((int)$page->cmid, (int)$result['cmid']);
+        $this->assertSame('page', (string)$result['modname']);
+        $this->assertSame([], $result['stashmappings']);
+    }
+
+    /**
+     * save_activity_stash_mappings() persists mappings and get_activity_stash_mappings() returns them.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_save_activity_stash_mappings_round_trips(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $saved = save_activity_stash_mappings::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id, [[
+            'slotnumber' => 3,
+            'stashitemid' => 123,
+            'grantquantity' => 2,
+            'enabled' => true,
+        ]]);
+
+        $this->assertCount(1, $saved['stashmappings']);
+        $this->assertSame(3, (int)$saved['stashmappings'][0]['slotnumber']);
+        $this->assertSame(123, (int)$saved['stashmappings'][0]['stashitemid']);
+
+        $loaded = get_activity_stash_mappings::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertCount(1, $loaded['stashmappings']);
+        $this->assertSame(3, (int)$loaded['stashmappings'][0]['slotnumber']);
+        $this->assertSame(123, (int)$loaded['stashmappings'][0]['stashitemid']);
+        $this->assertSame(2, (int)$loaded['stashmappings'][0]['grantquantity']);
+        $this->assertTrue((bool)$loaded['stashmappings'][0]['enabled']);
+    }
+
     public function test_export_design_null_has_required_keys(): void {
         $export = api::export_design(null);
         $required = [

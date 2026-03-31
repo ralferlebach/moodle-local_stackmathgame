@@ -353,5 +353,10 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032861, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032862) {
+        // Register activity-oriented stash mapping web services.
+        upgrade_plugin_savepoint(true, 2026032862, 'local', 'stackmathgame');
+    }
+
     return true;
 }
