@@ -118,6 +118,27 @@ class api {
 
 
     /**
+     * Return the external structure for bridge availability payloads.
+     *
+     * @return \external_single_structure
+     */
+    public static function bridge_availability_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'xp' => new \external_value(PARAM_BOOL, 'Whether the XP bridge is available'),
+            'stash' => new \external_value(PARAM_BOOL, 'Whether the stash bridge is available'),
+        ]);
+    }
+
+    /**
+     * Export bridge availability for runtime/config contracts.
+     *
+     * @return array<string, bool> Availability keyed by bridge name.
+     */
+    public static function export_bridge_availability(): array {
+        return \local_stackmathgame\local\integration\bridge_dispatcher::bridge_availability();
+    }
+
+    /**
      * Return the external structure for a stash mapping export array.
      *
      * @return \external_single_structure

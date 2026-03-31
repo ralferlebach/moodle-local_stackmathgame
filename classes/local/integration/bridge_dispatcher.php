@@ -33,6 +33,18 @@ namespace local_stackmathgame\local\integration;
  */
 final class bridge_dispatcher {
     /**
+     * Return bridge availability for runtime/config exports.
+     *
+     * @return array<string, bool> Availability keyed by bridge name.
+     */
+    public static function bridge_availability(): array {
+        return [
+            'xp' => availability::has_block_xp(),
+            'stash' => availability::has_block_stash(),
+        ];
+    }
+
+    /**
      * Trigger optional bridges (XP, stash) after a processed answer result.
      *
      * @param \stdClass $profile  The user game profile.

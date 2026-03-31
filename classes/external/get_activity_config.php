@@ -77,6 +77,7 @@ class get_activity_config extends \external_api {
             'profile' => api::export_profile($profile),
             'questionmap' => $questionmap,
             'stashmappings' => $stashmappings,
+            'bridges' => api::export_bridge_availability(),
         ]);
     }
 
@@ -101,6 +102,7 @@ class get_activity_config extends \external_api {
             'profile' => get_quiz_config::profile_structure(),
             'questionmap' => new \external_multiple_structure(get_quiz_config::questionmap_structure()),
             'stashmappings' => new \external_multiple_structure(api::stash_mapping_structure()),
+            'bridges' => api::bridge_availability_structure(),
         ]);
     }
 }

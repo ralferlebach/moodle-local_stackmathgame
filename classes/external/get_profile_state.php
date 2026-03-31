@@ -54,6 +54,8 @@ class get_profile_state extends \external_api {
      * @return array The profile state array.
      */
     public static function execute(int $quizid): array {
+        require_once(__DIR__ . '/get_activity_profile_state.php');
+
         $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
         $result = get_activity_profile_state::execute(
             (int)$activity['cmid'],
@@ -67,6 +69,7 @@ class get_profile_state extends \external_api {
             'designid' => (int)$result['designid'],
             'profile' => (array)$result['profile'],
             'design' => (array)$result['design'],
+            'bridges' => (array)$result['bridges'],
         ];
     }
 
@@ -82,6 +85,7 @@ class get_profile_state extends \external_api {
             'designid' => new \external_value(PARAM_INT, 'Design id'),
             'profile'  => get_quiz_config::profile_structure(),
             'design'   => get_quiz_config::design_structure(),
+            'bridges'  => api::bridge_availability_structure(),
         ]);
     }
 }

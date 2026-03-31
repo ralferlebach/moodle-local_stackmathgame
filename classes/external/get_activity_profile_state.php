@@ -26,7 +26,7 @@ namespace local_stackmathgame\external;
 
 defined('MOODLE_INTERNAL') || die();
 
-require_once(__DIR__ . '/../../../../lib/externallib.php');
+require_once($CFG->libdir . '/externallib.php');
 
 /**
  * Return the current label-bound profile state for an activity.
@@ -65,6 +65,7 @@ class get_activity_profile_state extends \external_api {
             'designid' => (int)$config->designid,
             'profile' => api::export_profile($profile),
             'design' => api::export_design($design),
+            'bridges' => api::export_bridge_availability(),
         ]);
     }
 
@@ -83,6 +84,7 @@ class get_activity_profile_state extends \external_api {
             'designid' => new \external_value(PARAM_INT, 'Design id'),
             'profile' => get_quiz_config::profile_structure(),
             'design' => get_quiz_config::design_structure(),
+            'bridges' => api::bridge_availability_structure(),
         ]);
     }
 }

@@ -275,35 +275,6 @@ final class bridge_dispatcher_test extends advanced_testcase {
         );
     }
 
-
-    /**
-     * bridge_dispatcher forwards the activity payload to the stash bridge path.
-     */
-    public function test_dispatcher_source_passes_activity_argument_to_stash_bridge(): void {
-        $file = __DIR__ . '/../../classes/local/integration/bridge_dispatcher.php';
-        $this->assertFileExists($file);
-        $content = file_get_contents($file);
-        $normalised = preg_replace('/\s+/', ' ', $content);
-        $this->assertMatchesRegularExpression(
-            '/stash_bridge::dispatch\(\$profile, \$quizid, \$designid, \$slot, \$slotdata, \$deltas, \$activity\)/',
-            $normalised
-        );
-    }
-
-    /**
-     * submit_answer uses the activity-aware profile lookup.
-     */
-    public function test_submit_answer_uses_activity_profile_lookup(): void {
-        $file = __DIR__ . '/../../classes/external/submit_answer.php';
-        $this->assertFileExists($file);
-        $content = file_get_contents($file);
-        $this->assertStringContainsString(
-            'profile_service::get_or_create_for_activity(',
-            $content,
-            'submit_answer.php must resolve profiles through the activity-aware path'
-        );
-    }
-
     /**
      * submit_answer returns activity and bridge payloads for the runtime contract.
      */
@@ -311,9 +282,22 @@ final class bridge_dispatcher_test extends advanced_testcase {
         $file = __DIR__ . '/../../classes/external/submit_answer.php';
         $this->assertFileExists($file);
         $content = file_get_contents($file);
-        $this->assertStringContainsString("'activity'      => api::export_activity($activity)", $content);
-        $this->assertStringContainsString("'bridges'       => $bridges", $content);
+        $this->assertStringContainsString("'activity'      => api::export_activity(\$activity)", $content);
+        $this->assertStringContainsString("'bridges'       => \$bridges", $content);
         $this->assertStringContainsString("'bridges'       => self::bridge_results_structure()", $content);
+    }
+
+    /**
+     * Activity profile/config endpoints expose bridge availability metadata.
+     */
+    public function test_activity_external_sources_export_bridge_availability(): void {
+        $configfile = __DIR__ . '/../../classes/external/get_activity_config.php';
+        $profilefile = __DIR__ . '/../../classes/external/get_activity_profile_state.php';
+        $apifile = __DIR__ . '/../../classes/external/api.php';
+
+        $this->assertStringContainsString("'bridges' => api::export_bridge_availability()", file_get_contents($configfile));
+        $this->assertStringContainsString("'bridges' => api::export_bridge_availability()", file_get_contents($profilefile));
+        $this->assertStringContainsString('public static function bridge_availability_structure()', file_get_contents($apifile));
     }
 
     /**

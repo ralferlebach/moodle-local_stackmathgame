@@ -19,6 +19,7 @@ namespace local_stackmathgame\tests\unit;
 use advanced_testcase;
 use local_stackmathgame\external\api;
 use local_stackmathgame\external\get_activity_config;
+use local_stackmathgame\external\get_activity_profile_state;
 use local_stackmathgame\external\get_activity_stash_mappings;
 use local_stackmathgame\external\save_activity_stash_mappings;
 use local_stackmathgame\external\prefetch_next_activity_node;
@@ -299,6 +300,46 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame(123, (int)$loaded['stashmappings'][0]['stashitemid']);
         $this->assertSame(2, (int)$loaded['stashmappings'][0]['grantquantity']);
         $this->assertTrue((bool)$loaded['stashmappings'][0]['enabled']);
+    }
+
+    /**
+     * get_activity_profile_state() includes bridge availability metadata.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_activity_profile_state_includes_bridge_availability(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $result = get_activity_profile_state::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertArrayHasKey('bridges', $result);
+        $this->assertArrayHasKey('xp', $result['bridges']);
+        $this->assertArrayHasKey('stash', $result['bridges']);
+    }
+
+    /**
+     * get_activity_config() includes bridge availability metadata.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_activity_config_includes_bridge_availability(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $result = get_activity_config::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertArrayHasKey('bridges', $result);
+        $this->assertArrayHasKey('xp', $result['bridges']);
+        $this->assertArrayHasKey('stash', $result['bridges']);
     }
 
     public function test_export_design_null_has_required_keys(): void {
