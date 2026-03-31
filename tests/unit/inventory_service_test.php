@@ -42,7 +42,12 @@ final class inventory_service_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
@@ -72,7 +77,12 @@ final class inventory_service_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
@@ -83,7 +93,12 @@ final class inventory_service_test extends advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $result = inventory_service::get_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $result = inventory_service::get_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         $this->assertArrayHasKey('beta', $result);
         $this->assertSame(1, (int)$result['beta']->quantity);
@@ -103,7 +118,12 @@ final class inventory_service_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,

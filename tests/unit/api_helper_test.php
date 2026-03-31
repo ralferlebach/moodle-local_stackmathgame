@@ -344,7 +344,12 @@ final class api_helper_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         stash_mapping_service::save_for_activity((int)$quiz->cmid, (int)$course->id, [[
             'slotnumber' => 4,
@@ -390,7 +395,12 @@ final class api_helper_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity(
+            (int)$USER->id,
+            (int)$quiz->cmid,
+            'quiz',
+            (int)$quiz->id
+        );
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
