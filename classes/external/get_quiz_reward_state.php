@@ -67,6 +67,7 @@ class get_quiz_reward_state extends \external_api {
             'designid' => (int)$result['designid'],
             'bridges' => (array)$result['bridges'],
             'inventory' => (array)$result['inventory'],
+            'inventorysummary' => (array)$result['inventorysummary'],
             'stashmappings' => (array)$result['stashmappings'],
         ];
     }
@@ -83,6 +84,7 @@ class get_quiz_reward_state extends \external_api {
             'designid' => new \external_value(PARAM_INT, 'Design id'),
             'bridges' => api::bridge_availability_structure(),
             'inventory' => new \external_multiple_structure(api::inventory_item_structure()),
+            'inventorysummary' => api::inventory_summary_structure(),
             'stashmappings' => new \external_multiple_structure(api::stash_mapping_structure()),
         ]);
     }

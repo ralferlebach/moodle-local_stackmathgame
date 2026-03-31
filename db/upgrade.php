@@ -394,5 +394,10 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032865, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032866) {
+        // Extend reward-state exports with local inventory summary data.
+        upgrade_plugin_savepoint(true, 2026032866, 'local', 'stackmathgame');
+    }
+
     return true;
 }

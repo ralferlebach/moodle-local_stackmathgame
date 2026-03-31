@@ -35,14 +35,14 @@ final class inventory_service_test extends advanced_testcase {
      * @group local_stackmathgame_db
      */
     public function test_get_for_profile_returns_rows_keyed_by_itemkey(): void {
-        global $DB;
+        global $DB, $USER;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
@@ -65,14 +65,14 @@ final class inventory_service_test extends advanced_testcase {
      * @group local_stackmathgame_db
      */
     public function test_get_for_activity_returns_inventory_rows(): void {
-        global $DB;
+        global $DB, $USER;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
@@ -83,9 +83,49 @@ final class inventory_service_test extends advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $result = inventory_service::get_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $result = inventory_service::get_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
         $this->assertArrayHasKey('beta', $result);
         $this->assertSame(1, (int)$result['beta']->quantity);
     }
+
+
+    /**
+     * get_summary_for_activity() returns aggregate counts.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_get_summary_for_activity_returns_counts(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $DB->insert_record('local_stackmathgame_inventory', (object)[
+            'profileid' => (int)$profile->id,
+            'itemkey' => 'alpha',
+            'quantity' => 2,
+            'statejson' => '{}',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+        $DB->insert_record('local_stackmathgame_inventory', (object)[
+            'profileid' => (int)$profile->id,
+            'itemkey' => 'beta',
+            'quantity' => 5,
+            'statejson' => '{}',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $result = inventory_service::get_summary_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertSame(2, (int)$result['itemcount']);
+        $this->assertSame(7, (int)$result['totalquantity']);
+    }
+
 }

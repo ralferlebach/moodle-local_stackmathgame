@@ -65,6 +65,7 @@ class get_activity_reward_state extends \external_api {
             'designid' => (int)$config->designid,
             'bridges' => api::export_bridge_availability(),
             'inventory' => api::export_activity_inventory((int)$profile->id),
+            'inventorysummary' => api::export_activity_inventory_summary((int)$profile->id),
             'stashmappings' => api::export_activity_stash_mappings($activity, (int)$cm->course),
         ]);
     }
@@ -84,6 +85,7 @@ class get_activity_reward_state extends \external_api {
             'designid' => new \external_value(PARAM_INT, 'Design id'),
             'bridges' => api::bridge_availability_structure(),
             'inventory' => new \external_multiple_structure(api::inventory_item_structure()),
+            'inventorysummary' => api::inventory_summary_structure(),
             'stashmappings' => new \external_multiple_structure(api::stash_mapping_structure()),
         ]);
     }

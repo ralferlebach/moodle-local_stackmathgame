@@ -54,6 +54,25 @@ final class inventory_service {
     }
 
     /**
+     * Summarise inventory rows for a profile.
+     *
+     * @param int $profileid The profile ID.
+     * @return array<string, int> Summary export.
+     */
+    public static function get_summary_for_profile(int $profileid): array {
+        $items = self::get_for_profile($profileid);
+        $summary = [
+            'itemcount' => 0,
+            'totalquantity' => 0,
+        ];
+        foreach ($items as $item) {
+            $summary['itemcount']++;
+            $summary['totalquantity'] += (int)($item->quantity ?? 0);
+        }
+        return $summary;
+    }
+
+    /**
      * Load all inventory items for the current activity identity.
      *
      * @param int $userid The user ID.
@@ -71,4 +90,24 @@ final class inventory_service {
         $profile = profile_service::get_or_create_for_activity($userid, $cmid, $modname, $instanceid);
         return self::get_for_profile((int)$profile->id);
     }
+
+    /**
+     * Summarise inventory rows for the current activity identity.
+     *
+     * @param int $userid The user ID.
+     * @param int $cmid The course-module ID.
+     * @param string $modname The module name.
+     * @param int $instanceid The activity instance ID.
+     * @return array<string, int> Summary export.
+     */
+    public static function get_summary_for_activity(
+        int $userid,
+        int $cmid,
+        string $modname = 'quiz',
+        int $instanceid = 0
+    ): array {
+        $profile = profile_service::get_or_create_for_activity($userid, $cmid, $modname, $instanceid);
+        return self::get_summary_for_profile((int)$profile->id);
+    }
+
 }

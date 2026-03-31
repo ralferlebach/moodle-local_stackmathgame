@@ -324,6 +324,7 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame((int)$page->cmid, (int)$result['cmid']);
         $this->assertSame('page', (string)$result['modname']);
         $this->assertSame([], $result['inventory']);
+        $this->assertSame(['itemcount' => 0, 'totalquantity' => 0], $result['inventorysummary']);
         $this->assertSame([], $result['stashmappings']);
         $this->assertArrayHasKey('stash', $result['bridges']);
         $this->assertArrayHasKey('localinventory', $result['bridges']);
@@ -336,14 +337,14 @@ final class api_helper_test extends advanced_testcase {
      * @runInSeparateProcess
      */
     public function test_get_activity_reward_state_for_quiz_includes_inventory_and_stashmappings(): void {
-        global $DB;
+        global $DB, $USER;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
         stash_mapping_service::save_for_activity((int)$quiz->cmid, (int)$course->id, [[
             'slotnumber' => 4,
@@ -367,6 +368,8 @@ final class api_helper_test extends advanced_testcase {
         $this->assertCount(1, $result['inventory']);
         $this->assertSame('smg_slot_4', (string)$result['inventory'][0]['itemkey']);
         $this->assertSame(2, (int)$result['inventory'][0]['quantity']);
+        $this->assertSame(1, (int)$result['inventorysummary']['itemcount']);
+        $this->assertSame(2, (int)$result['inventorysummary']['totalquantity']);
         $this->assertCount(1, $result['stashmappings']);
         $this->assertSame(4, (int)$result['stashmappings'][0]['slotnumber']);
         $this->assertSame(321, (int)$result['stashmappings'][0]['stashitemid']);
@@ -380,14 +383,14 @@ final class api_helper_test extends advanced_testcase {
      * @runInSeparateProcess
      */
     public function test_get_quiz_reward_state_returns_quiz_wrapper_payload(): void {
-        global $DB;
+        global $DB, $USER;
 
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $profile = profile_service::get_or_create_for_activity((int)$USER->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
         $DB->insert_record('local_stackmathgame_inventory', (object)[
             'profileid' => (int)$profile->id,
@@ -403,6 +406,7 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame((int)$quiz->id, (int)$result['quizid']);
         $this->assertCount(1, $result['inventory']);
         $this->assertSame('reward_key', (string)$result['inventory'][0]['itemkey']);
+        $this->assertSame(1, (int)$result['inventorysummary']['itemcount']);
         $this->assertArrayHasKey('xp', $result['bridges']);
     }
 

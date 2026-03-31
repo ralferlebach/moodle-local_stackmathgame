@@ -145,6 +145,18 @@ class api {
     }
 
     /**
+     * Return the external structure for inventory summary exports.
+     *
+     * @return \external_single_structure
+     */
+    public static function inventory_summary_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'itemcount' => new \external_value(PARAM_INT, 'Number of distinct inventory items'),
+            'totalquantity' => new \external_value(PARAM_INT, 'Total owned quantity across items'),
+        ]);
+    }
+
+    /**
      * Return the external structure for reward-history event exports.
      *
      * @return \external_single_structure
@@ -207,6 +219,16 @@ class api {
             return strcmp((string)$a['itemkey'], (string)$b['itemkey']);
         });
         return $exports;
+    }
+
+    /**
+     * Export an inventory summary for runtime callers.
+     *
+     * @param int $profileid The profile ID.
+     * @return array<string, int> Summary export.
+     */
+    public static function export_activity_inventory_summary(int $profileid): array {
+        return inventory_service::get_summary_for_profile($profileid);
     }
 
     /**
