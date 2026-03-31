@@ -25,6 +25,18 @@ Subplugin support:
 - stackmathgamemode subplugins live in `mode/` and are declared in `db/subplugins.json`.
 
 
+
+## Migration and maintenance docs
+
+The activity-based migration is documented here:
+
+- `docs/ACTIVITY_MIGRATION_STATUS.md`
+- `docs/UPGRADE_NOTES.md`
+- `docs/LEGACY_REMOVAL_PLAN.md`
+- `docs/POST_MIGRATION_CLEANUP.md`
+
+These documents describe the completed migration state, upgrade expectations, the future legacy-removal strategy, and the planned post-migration cleanup work.
+
 ## Shortcodes
 
 The plugin registers the shortcodes `smgscore`, `smgxp`, `smglevel`, `smgprogress`, `smgnarrative`, `smgavatar`, and `smgleaderboard`. Outside a quiz context the attribute `label="..."` is required.
