@@ -33,14 +33,15 @@ namespace local_stackmathgame\local\integration;
  */
 final class bridge_dispatcher {
     /**
-     * Return bridge availability for runtime/config exports.
+     * Return a stable bridge availability summary for runtime/export callers.
      *
-     * @return array<string, bool> Availability keyed by bridge name.
+     * @return array<string, bool> Availability map.
      */
-    public static function bridge_availability(): array {
+    public static function availability_summary(): array {
         return [
             'xp' => availability::has_block_xp(),
             'stash' => availability::has_block_stash(),
+            'localinventory' => true,
         ];
     }
 

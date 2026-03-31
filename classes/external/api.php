@@ -27,6 +27,8 @@ namespace local_stackmathgame\external;
 use context_module;
 use local_stackmathgame\game\quiz_configurator;
 use local_stackmathgame\game\theme_manager;
+use local_stackmathgame\local\integration\bridge_dispatcher;
+use local_stackmathgame\local\service\inventory_service;
 use local_stackmathgame\local\service\profile_service;
 
 /**
@@ -116,27 +118,77 @@ class api {
         ];
     }
 
-
     /**
-     * Return the external structure for bridge availability payloads.
+     * Return the external structure for bridge availability exports.
      *
      * @return \external_single_structure
      */
     public static function bridge_availability_structure(): \external_single_structure {
         return new \external_single_structure([
-            'xp' => new \external_value(PARAM_BOOL, 'Whether the XP bridge is available'),
-            'stash' => new \external_value(PARAM_BOOL, 'Whether the stash bridge is available'),
+            'xp' => new \external_value(PARAM_BOOL, 'Whether block_xp is available'),
+            'stash' => new \external_value(PARAM_BOOL, 'Whether block_stash is available'),
+            'localinventory' => new \external_value(PARAM_BOOL, 'Whether local inventory fallback is available'),
         ]);
     }
 
     /**
-     * Export bridge availability for runtime/config contracts.
+     * Return the external structure for inventory item exports.
      *
-     * @return array<string, bool> Availability keyed by bridge name.
+     * @return \external_single_structure
+     */
+    public static function inventory_item_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'itemkey' => new \external_value(PARAM_ALPHANUMEXT, 'Inventory item key'),
+            'quantity' => new \external_value(PARAM_INT, 'Owned quantity'),
+            'statejson' => new \external_value(PARAM_RAW, 'Raw item state JSON'),
+        ]);
+    }
+
+    /**
+     * Export bridge availability for runtime callers.
+     *
+     * @return array<string, bool> Bridge availability export.
      */
     public static function export_bridge_availability(): array {
-        return \local_stackmathgame\local\integration\bridge_dispatcher::bridge_availability();
+        return bridge_dispatcher::availability_summary();
     }
+
+    /**
+     * Export a local inventory record as a plain array.
+     *
+     * @param \stdClass|array $record Inventory record.
+     * @return array<string, int|string> Export array.
+     */
+    public static function export_inventory_item($record): array {
+        $item = (object)$record;
+        return [
+            'itemkey' => (string)($item->itemkey ?? ''),
+            'quantity' => (int)($item->quantity ?? 0),
+            'statejson' => (string)($item->statejson ?? '{}'),
+        ];
+    }
+
+    /**
+     * Export activity inventory rows as a sequential list.
+     *
+     * @param int $profileid The profile ID.
+     * @return array<int, array<string, int|string>> Inventory export.
+     */
+    public static function export_activity_inventory(int $profileid): array {
+        $items = inventory_service::get_for_profile($profileid);
+        if (!$items) {
+            return [];
+        }
+        $exports = [];
+        foreach ($items as $item) {
+            $exports[] = self::export_inventory_item($item);
+        }
+        usort($exports, static function (array $a, array $b): int {
+            return strcmp((string)$a['itemkey'], (string)$b['itemkey']);
+        });
+        return $exports;
+    }
+
 
     /**
      * Return the external structure for a stash mapping export array.

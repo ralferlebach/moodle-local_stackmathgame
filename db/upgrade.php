@@ -358,5 +358,10 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032862, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032864) {
+        // Register reward-state runtime web services.
+        upgrade_plugin_savepoint(true, 2026032864, 'local', 'stackmathgame');
+    }
+
     return true;
 }

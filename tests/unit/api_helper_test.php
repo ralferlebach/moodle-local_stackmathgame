@@ -19,10 +19,12 @@ namespace local_stackmathgame\tests\unit;
 use advanced_testcase;
 use local_stackmathgame\external\api;
 use local_stackmathgame\external\get_activity_config;
-use local_stackmathgame\external\get_activity_profile_state;
+use local_stackmathgame\external\get_activity_reward_state;
 use local_stackmathgame\external\get_activity_stash_mappings;
+use local_stackmathgame\external\get_quiz_reward_state;
 use local_stackmathgame\external\save_activity_stash_mappings;
 use local_stackmathgame\external\prefetch_next_activity_node;
+use local_stackmathgame\local\service\profile_service;
 use local_stackmathgame\local\service\stash_mapping_service;
 
 /**
@@ -303,43 +305,103 @@ final class api_helper_test extends advanced_testcase {
     }
 
     /**
-     * get_activity_profile_state() includes bridge availability metadata.
+     * get_activity_reward_state() returns empty inventory and stash mappings for non-quiz activities.
      *
      * @group local_stackmathgame_db
      * @runInSeparateProcess
      */
-    public function test_get_activity_profile_state_includes_bridge_availability(): void {
+    public function test_get_activity_reward_state_for_page_returns_empty_lists(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
-        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
 
-        $result = get_activity_profile_state::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        $result = get_activity_reward_state::execute((int)$page->cmid, 'page', (int)$page->id);
 
-        $this->assertArrayHasKey('bridges', $result);
-        $this->assertArrayHasKey('xp', $result['bridges']);
+        $this->assertSame((int)$page->cmid, (int)$result['cmid']);
+        $this->assertSame('page', (string)$result['modname']);
+        $this->assertSame([], $result['inventory']);
+        $this->assertSame([], $result['stashmappings']);
         $this->assertArrayHasKey('stash', $result['bridges']);
+        $this->assertArrayHasKey('localinventory', $result['bridges']);
     }
 
     /**
-     * get_activity_config() includes bridge availability metadata.
+     * Reward state exports stash mappings and local inventory for quiz activities.
      *
      * @group local_stackmathgame_db
      * @runInSeparateProcess
      */
-    public function test_get_activity_config_includes_bridge_availability(): void {
+    public function test_get_activity_reward_state_for_quiz_includes_inventory_and_stashmappings(): void {
+        global $DB;
+
         $this->resetAfterTest();
         $this->setAdminUser();
 
         $course = $this->getDataGenerator()->create_course();
         $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
 
-        $result = get_activity_config::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        stash_mapping_service::save_for_activity((int)$quiz->cmid, (int)$course->id, [[
+            'slotnumber' => 4,
+            'stashitemid' => 321,
+            'grantquantity' => 1,
+            'enabled' => 1,
+        ]], 'quiz', (int)$quiz->id);
 
-        $this->assertArrayHasKey('bridges', $result);
+        $DB->insert_record('local_stackmathgame_inventory', (object)[
+            'profileid' => (int)$profile->id,
+            'itemkey' => 'smg_slot_4',
+            'quantity' => 2,
+            'statejson' => '{}',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $result = get_activity_reward_state::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $this->assertSame((int)$quiz->cmid, (int)$result['cmid']);
+        $this->assertCount(1, $result['inventory']);
+        $this->assertSame('smg_slot_4', (string)$result['inventory'][0]['itemkey']);
+        $this->assertSame(2, (int)$result['inventory'][0]['quantity']);
+        $this->assertCount(1, $result['stashmappings']);
+        $this->assertSame(4, (int)$result['stashmappings'][0]['slotnumber']);
+        $this->assertSame(321, (int)$result['stashmappings'][0]['stashitemid']);
+        $this->assertTrue((bool)$result['bridges']['localinventory']);
+    }
+
+    /**
+     * Legacy quiz reward wrapper delegates to the activity reward state endpoint.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_quiz_reward_state_returns_quiz_wrapper_payload(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $profile = profile_service::get_or_create_for_activity((int)$this->getAdminUser()->id, (int)$quiz->cmid, 'quiz', (int)$quiz->id);
+
+        $DB->insert_record('local_stackmathgame_inventory', (object)[
+            'profileid' => (int)$profile->id,
+            'itemkey' => 'reward_key',
+            'quantity' => 1,
+            'statejson' => '{}',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $result = get_quiz_reward_state::execute((int)$quiz->id);
+
+        $this->assertSame((int)$quiz->id, (int)$result['quizid']);
+        $this->assertCount(1, $result['inventory']);
+        $this->assertSame('reward_key', (string)$result['inventory'][0]['itemkey']);
         $this->assertArrayHasKey('xp', $result['bridges']);
-        $this->assertArrayHasKey('stash', $result['bridges']);
     }
 
     public function test_export_design_null_has_required_keys(): void {
