@@ -208,6 +208,7 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="labelid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="profileid" TYPE="int" LENGTH="10" NOTNULL="false"/>
@@ -229,6 +230,7 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="lsmg_evt_label_type_ix" UNIQUE="false" FIELDS="labelid,eventtype"/>
+        <INDEX NAME="lsmg_evt_cmid_time_ix" UNIQUE="false" FIELDS="cmid,timecreated"/>
         <INDEX NAME="lsmg_evt_user_label_time_ix" UNIQUE="false" FIELDS="userid,labelid,timecreated"/>
       </INDEXES>
     </TABLE>

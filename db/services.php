@@ -25,6 +25,22 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'local_stackmathgame_get_activity_reward_history' => [
+        'classname' => 'local_stackmathgame\external\get_activity_reward_history',
+        'methodname' => 'execute',
+        'description' => 'Return recent reward-history events for the current activity.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
+    'local_stackmathgame_get_quiz_reward_history' => [
+        'classname' => 'local_stackmathgame\external\get_quiz_reward_history',
+        'methodname' => 'execute',
+        'description' => 'Legacy quiz wrapper returning recent reward-history events.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:play',
+    ],
     'local_stackmathgame_get_activity_reward_state' => [
         'classname' => 'local_stackmathgame\external\get_activity_reward_state',
         'methodname' => 'execute',

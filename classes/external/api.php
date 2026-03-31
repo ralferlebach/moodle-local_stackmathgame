@@ -145,6 +145,26 @@ class api {
     }
 
     /**
+     * Return the external structure for reward-history event exports.
+     *
+     * @return \external_single_structure
+     */
+    public static function reward_history_structure(): \external_single_structure {
+        return new \external_single_structure([
+            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
+            'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
+            'questionid' => new \external_value(PARAM_INT, 'Question id when applicable'),
+            'designid' => new \external_value(PARAM_INT, 'Design id when applicable'),
+            'eventtype' => new \external_value(PARAM_ALPHANUMEXT, 'Event type'),
+            'source' => new \external_value(PARAM_TEXT, 'Source identifier'),
+            'valueint' => new \external_value(PARAM_INT, 'Optional numeric value'),
+            'valuechar' => new \external_value(PARAM_TEXT, 'Optional character value'),
+            'payloadjson' => new \external_value(PARAM_RAW, 'Raw event payload JSON'),
+            'timecreated' => new \external_value(PARAM_INT, 'Creation timestamp'),
+        ]);
+    }
+
+    /**
      * Export bridge availability for runtime callers.
      *
      * @return array<string, bool> Bridge availability export.
@@ -186,6 +206,68 @@ class api {
         usort($exports, static function (array $a, array $b): int {
             return strcmp((string)$a['itemkey'], (string)$b['itemkey']);
         });
+        return $exports;
+    }
+
+    /**
+     * Export a reward-history event row.
+     *
+     * @param \stdClass|array $record Event-log record.
+     * @return array<string, int|string> Export array.
+     */
+    public static function export_reward_history_item($record): array {
+        $event = (object)$record;
+        return [
+            'cmid' => (int)($event->cmid ?? 0),
+            'quizid' => (int)($event->quizid ?? 0),
+            'questionid' => (int)($event->questionid ?? 0),
+            'designid' => (int)($event->designid ?? 0),
+            'eventtype' => (string)($event->eventtype ?? ''),
+            'source' => (string)($event->source ?? ''),
+            'valueint' => (int)($event->valueint ?? 0),
+            'valuechar' => (string)($event->valuechar ?? ''),
+            'payloadjson' => (string)($event->payloadjson ?? '{}'),
+            'timecreated' => (int)($event->timecreated ?? 0),
+        ];
+    }
+
+    /**
+     * Export recent reward-history events for an activity/profile combination.
+     *
+     * @param array $activity Canonical activity identity.
+     * @param int $profileid The profile ID.
+     * @param int $limit Maximum number of rows.
+     * @return array<int, array<string, int|string>> Sequential event list.
+     */
+    public static function export_activity_reward_history(array $activity, int $profileid, int $limit = 25): array {
+        global $DB;
+
+        if ($profileid <= 0) {
+            return [];
+        }
+
+        $conditions = ['profileid = :profileid'];
+        $params = ['profileid' => $profileid];
+        if (self::eventlog_uses_cmid() && !empty($activity['cmid'])) {
+            $conditions[] = 'cmid = :cmid';
+            $params['cmid'] = (int)$activity['cmid'];
+        } else if (!empty($activity['quizid'])) {
+            $conditions[] = 'quizid = :quizid';
+            $params['quizid'] = (int)$activity['quizid'];
+        }
+
+        $sql = 'SELECT * FROM {local_stackmathgame_eventlog}'
+            . ' WHERE ' . implode(' AND ', $conditions)
+            . ' ORDER BY timecreated DESC, id DESC';
+        $rows = $DB->get_records_sql($sql, $params, 0, $limit);
+        if (!$rows) {
+            return [];
+        }
+
+        $exports = [];
+        foreach ($rows as $row) {
+            $exports[] = self::export_reward_history_item($row);
+        }
         return $exports;
     }
 
@@ -519,13 +601,15 @@ class api {
         string $source,
         array $payload = [],
         int $valueint = 0,
-        string $valuechar = ''
+        string $valuechar = '',
+        array $activity = []
     ): void {
         global $DB;
-        $DB->insert_record('local_stackmathgame_eventlog', (object)[
+
+        $record = [
             'userid' => (int)$profile->userid,
             'labelid' => (int)$profile->labelid,
-            'quizid' => $quizid,
+            'quizid' => $quizid ?: null,
             'questionid' => empty($payload['questionid']) ? null : (int)$payload['questionid'],
             'profileid' => (int)$profile->id,
             'designid' => $designid ?: null,
@@ -535,7 +619,32 @@ class api {
             'valuechar' => $valuechar ?: null,
             'payloadjson' => json_encode($payload, JSON_UNESCAPED_UNICODE),
             'timecreated' => time(),
-        ]);
+        ];
+
+        if (self::eventlog_uses_cmid()) {
+            $record['cmid'] = empty($activity['cmid']) ? null : (int)$activity['cmid'];
+        }
+
+        $DB->insert_record('local_stackmathgame_eventlog', (object)$record);
+    }
+
+    /**
+     * Return whether the migrated event log schema is available.
+     *
+     * @return bool True when local_stackmathgame_eventlog.cmid exists.
+     */
+    public static function eventlog_uses_cmid(): bool {
+        global $DB;
+
+        static $usescmid = null;
+        if ($usescmid !== null) {
+            return $usescmid;
+        }
+
+        $table = new \xmldb_table('local_stackmathgame_eventlog');
+        $field = new \xmldb_field('cmid');
+        $usescmid = $DB->get_manager()->field_exists($table, $field);
+        return $usescmid;
     }
 
     /**

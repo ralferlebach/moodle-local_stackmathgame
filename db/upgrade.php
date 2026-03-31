@@ -363,5 +363,36 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032864, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026032865) {
+        $table = new xmldb_table('local_stackmathgame_eventlog');
+        $cmidfield = new xmldb_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'labelid');
+        $cmidtimeindex = new xmldb_index('lsmg_evt_cmid_time_ix', XMLDB_INDEX_NOTUNIQUE, ['cmid', 'timecreated']);
+
+        if ($dbman->table_exists($table)) {
+            if (!$dbman->field_exists($table, $cmidfield)) {
+                $dbman->add_field($table, $cmidfield);
+            }
+            if ($dbman->field_exists($table, $cmidfield) && !$dbman->index_exists($table, $cmidtimeindex)) {
+                $dbman->add_index($table, $cmidtimeindex);
+            }
+
+            $rows = $DB->get_records_select(
+                'local_stackmathgame_eventlog',
+                '(cmid IS NULL OR cmid = 0) AND quizid IS NOT NULL AND quizid > 0',
+                [],
+                '',
+                'id, quizid'
+            );
+            foreach ($rows as $row) {
+                $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
+                if ($cm) {
+                    $DB->set_field('local_stackmathgame_eventlog', 'cmid', (int)$cm->id, ['id' => $row->id]);
+                }
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026032865, 'local', 'stackmathgame');
+    }
+
     return true;
 }

@@ -126,7 +126,9 @@ class save_activity_progress extends \external_api {
                 'flags' => json_decode($flagsjson, true) ?: [],
                 'stats' => json_decode($statsjson, true) ?: [],
             ],
-            $scoredelta + $xpdelta
+            $scoredelta + $xpdelta,
+            '',
+            $activity
         );
 
         return array_merge(api::export_activity($activity), [

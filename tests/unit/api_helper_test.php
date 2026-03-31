@@ -20,6 +20,8 @@ use advanced_testcase;
 use local_stackmathgame\external\api;
 use local_stackmathgame\external\get_activity_config;
 use local_stackmathgame\external\get_activity_reward_state;
+use local_stackmathgame\external\get_activity_reward_history;
+use local_stackmathgame\external\get_quiz_reward_history;
 use local_stackmathgame\external\get_activity_stash_mappings;
 use local_stackmathgame\external\get_quiz_reward_state;
 use local_stackmathgame\external\save_activity_stash_mappings;
@@ -458,4 +460,62 @@ final class api_helper_test extends advanced_testcase {
         $this->assertIsArray($summary);
         $this->assertArrayHasKey('solvedcount', $summary);
     }
+
+
+    /**
+     * get_activity_reward_history() returns an empty history list for non-quiz activities.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_get_activity_reward_history_for_page_returns_empty_list(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $page = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $result = get_activity_reward_history::execute((int)$page->cmid, 'page', (int)$page->id, 5);
+
+        $this->assertSame((int)$page->cmid, (int)$result['cmid']);
+        $this->assertSame('page', (string)$result['modname']);
+        $this->assertSame([], $result['history']);
+    }
+
+    /**
+     * Activity and legacy quiz reward-history endpoints export logged activity rows.
+     *
+     * @group local_stackmathgame_db
+     * @runInSeparateProcess
+     */
+    public function test_reward_history_endpoints_export_activity_rows(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        [, , $config, $profile, , $activity] = api::validate_activity_access((int)$quiz->cmid, 'quiz', (int)$quiz->id);
+        api::log_event(
+            $profile,
+            (int)$quiz->id,
+            (int)$config->designid,
+            'reward_state_checked',
+            'unit.api_helper_test',
+            ['questionid' => 0, 'check' => 'activity-history'],
+            7,
+            'ok',
+            $activity
+        );
+
+        $activityresult = get_activity_reward_history::execute((int)$quiz->cmid, 'quiz', (int)$quiz->id, 5);
+        $legacyresult = get_quiz_reward_history::execute((int)$quiz->id, 5);
+
+        $this->assertNotEmpty($activityresult['history']);
+        $this->assertSame((int)$quiz->cmid, (int)$activityresult['history'][0]['cmid']);
+        $this->assertSame('reward_state_checked', (string)$activityresult['history'][0]['eventtype']);
+        $this->assertSame((int)$quiz->id, (int)$legacyresult['history'][0]['quizid']);
+        $this->assertSame('unit.api_helper_test', (string)$legacyresult['history'][0]['source']);
+    }
+
 }

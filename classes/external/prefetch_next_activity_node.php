@@ -139,7 +139,10 @@ class prefetch_next_activity_node extends \external_api {
             (int)$config->designid,
             'prefetch_next_node',
             'external.prefetch_next_activity_node',
-            ['currentslot' => $currentslot] + $payload
+            ['currentslot' => $currentslot] + $payload,
+            0,
+            '',
+            $activity
         );
 
         return array_merge(api::export_activity($activity), [

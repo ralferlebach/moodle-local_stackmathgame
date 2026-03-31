@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * External function: get_activity_narrative.
+ * External function: get_activity_reward_history.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -24,20 +24,18 @@
 
 namespace local_stackmathgame\external;
 
-use local_stackmathgame\local\service\narrative_resolver;
-
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
 
 /**
- * Return narrative lines for a named scene from the active design.
+ * Return recent reward-history events for an activity.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_activity_narrative extends \external_api {
+class get_activity_reward_history extends \external_api {
     /**
      * Describe input parameters.
      *
@@ -48,7 +46,7 @@ class get_activity_narrative extends \external_api {
             'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
             'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
             'instanceid' => new \external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
-            'scene' => new \external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
+            'limit' => new \external_value(PARAM_INT, 'Maximum number of history rows', VALUE_DEFAULT, 25),
         ]);
     }
 
@@ -56,45 +54,23 @@ class get_activity_narrative extends \external_api {
      * Execute the function.
      *
      * @param int $cmid The course-module ID.
-     * @param string $modname The activity module name.
-     * @param int $instanceid The activity instance ID.
-     * @param string $scene The narrative scene key.
-     * @return array The narrative lines array.
+     * @param string $modname The module name.
+     * @param int $instanceid The instance ID.
+     * @param int $limit Maximum number of rows.
+     * @return array The reward-history export.
      */
     public static function execute(
         int $cmid,
         string $modname = 'quiz',
         int $instanceid = 0,
-        string $scene = ''
+        int $limit = 25
     ): array {
-        [, , $config, $profile, $design, $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
-
-        $lines = narrative_resolver::resolve($design, $scene);
-        if (!is_array($lines)) {
-            $lines = [$lines];
-        }
-
-        api::log_event(
-            $profile,
-            (int)$activity['quizid'],
-            (int)$config->designid,
-            'narrative_requested',
-            'external.get_activity_narrative',
-            [
-                'cmid' => (int)$activity['cmid'],
-                'modname' => (string)$activity['modname'],
-                'instanceid' => (int)$activity['instanceid'],
-                'scene' => $scene,
-            ],
-            0,
-            '',
-            $activity
-        );
+        [, , $config, $profile, , $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
 
         return array_merge(api::export_activity($activity), [
-            'scene' => $scene,
-            'lines' => array_values(array_map('strval', $lines)),
+            'labelid' => (int)$config->labelid,
             'designid' => (int)$config->designid,
+            'history' => api::export_activity_reward_history($activity, (int)$profile->id, max(1, $limit)),
         ]);
     }
 
@@ -109,11 +85,9 @@ class get_activity_narrative extends \external_api {
             'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name'),
             'instanceid' => new \external_value(PARAM_INT, 'Activity instance id'),
             'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
-            'scene' => new \external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
-            'lines' => new \external_multiple_structure(
-                new \external_value(PARAM_RAW, 'Narrative line')
-            ),
+            'labelid' => new \external_value(PARAM_INT, 'Label id'),
             'designid' => new \external_value(PARAM_INT, 'Design id'),
+            'history' => new \external_multiple_structure(api::reward_history_structure()),
         ]);
     }
 }

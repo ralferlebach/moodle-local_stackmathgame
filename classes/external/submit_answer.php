@@ -241,7 +241,8 @@ class submit_answer extends \external_api {
                 'state'         => $state,
             ],
             count($answers),
-            $state
+            $state,
+            $activity
         );
 
         return [
