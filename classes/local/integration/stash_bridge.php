@@ -24,6 +24,8 @@
 
 namespace local_stackmathgame\local\integration;
 
+use local_stackmathgame\local\service\stash_mapping_service;
+
 /**
  * Grants stash items when a question slot is solved.
  *
@@ -66,7 +68,7 @@ final class stash_bridge {
         if ($stashavailable) {
             $stashresult = self::dispatch_to_block_stash($profile, $quizid, $slot, $activity);
             if ($stashresult !== null) {
-                self::fire_event($profile, $quizid, $designid, $slot, $stashresult['itemkey']);
+                self::fire_event($profile, $quizid, $designid, $slot, $stashresult['itemkey'], $activity);
                 return [
                     'available' => true,
                     'dispatched' => true,
@@ -78,7 +80,7 @@ final class stash_bridge {
         }
 
         $itemkey = self::dispatch_to_local_inventory($profile, $slot, $slotdata);
-        self::fire_event($profile, $quizid, $designid, $slot, $itemkey);
+        self::fire_event($profile, $quizid, $designid, $slot, $itemkey, $activity);
 
         return [
             'available' => $stashavailable,
@@ -102,16 +104,17 @@ final class stash_bridge {
     private static function dispatch_to_block_stash(
         \stdClass $profile,
         int $quizid,
-        int $slot
+        int $slot,
+        array $activity = []
     ): ?array {
         global $DB;
 
-        $mapping = $DB->get_record('local_stackmathgame_stashmap', [
-            'quizid' => $quizid,
-            'slotnumber' => $slot,
-            'enabled' => 1,
-        ]);
-        if (!$mapping) {
+        $cmid = (int)($activity['cmid'] ?? 0);
+        $instanceid = (int)($activity['instanceid'] ?? $quizid);
+        $modname = (string)($activity['modname'] ?? 'quiz');
+
+        $mapping = stash_mapping_service::get_mapping_for_activity_slot($cmid, $slot, $instanceid, $modname);
+        if (!$mapping || empty($mapping->enabled)) {
             return null;
         }
 
@@ -242,10 +245,15 @@ final class stash_bridge {
         int $quizid,
         int $designid,
         int $slot,
-        string $itemkey
+        string $itemkey,
+        array $activity = []
     ): void {
         $context = null;
-        if ($quizid > 0) {
+        $cmid = (int)($activity['cmid'] ?? 0);
+        if ($cmid > 0) {
+            $context = \context_module::instance($cmid, IGNORE_MISSING);
+        }
+        if (!$context && $quizid > 0) {
             $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false);
             if ($cm) {
                 $context = \context_module::instance((int)$cm->id);

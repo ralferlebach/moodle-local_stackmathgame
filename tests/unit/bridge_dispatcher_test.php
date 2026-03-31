@@ -275,6 +275,21 @@ final class bridge_dispatcher_test extends advanced_testcase {
         );
     }
 
+
+    /**
+     * bridge_dispatcher forwards the activity payload to the stash bridge path.
+     */
+    public function test_dispatcher_source_passes_activity_argument_to_stash_bridge(): void {
+        $file = __DIR__ . '/../../classes/local/integration/bridge_dispatcher.php';
+        $this->assertFileExists($file);
+        $content = file_get_contents($file);
+        $normalised = preg_replace('/\s+/', ' ', $content);
+        $this->assertMatchesRegularExpression(
+            '/stash_bridge::dispatch\(\$profile, \$quizid, \$designid, \$slot, \$slotdata, \$deltas, \$activity\)/',
+            $normalised
+        );
+    }
+
     /**
      * Verify that the submit_answer.php source contains a bridge_dispatcher call.
      * This is a static analysis smoke test that catches accidental regression.

@@ -15,22 +15,24 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information for local_stackmathgame.
+ * Backfill local_stackmathgame stash mappings from legacy quiz IDs to cmid.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+define('CLI_SCRIPT', true);
 
-$plugin->component  = 'local_stackmathgame';
-$plugin->version    = 2026032858;
-$plugin->requires   = 2024100700; // Moodle 4.5.
-$plugin->maturity   = MATURITY_ALPHA;
-$plugin->release    = '0.9.0';
-$plugin->dependencies = [
-    'qtype_stack'              => ANY_VERSION,
-    'qbehaviour_stackmathgame' => ANY_VERSION,
-    'filter_shortcodes'        => ANY_VERSION,
-];
+require_once(__DIR__ . '/../../../config.php');
+require_once($CFG->libdir . '/clilib.php');
+
+[$options, $unrecognized] = cli_get_params([], []);
+if ($unrecognized) {
+    cli_error('Unknown option(s): ' . implode(', ', $unrecognized));
+}
+
+$summary = \local_stackmathgame\local\service\stash_mapping_service::backfill_activity_rows();
+cli_writeln('Stash-map backfill complete.');
+cli_writeln('Rows scanned: ' . (int)$summary['rows']);
+cli_writeln('Rows updated: ' . (int)$summary['updated']);

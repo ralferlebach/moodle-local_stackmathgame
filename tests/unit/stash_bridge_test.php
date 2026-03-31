@@ -280,6 +280,84 @@ final class stash_bridge_test extends advanced_testcase {
         $this->assertGreaterThanOrEqual(1, (int)$useritemrecord->quantity);
     }
 
+
+    /**
+     * Activity identity is preferred over legacy quizid when resolving stash mappings.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_dispatch_prefers_activity_identity_mapping(): void {
+        global $DB;
+        if (!availability::has_block_stash()) {
+            $this->markTestSkipped('block_stash not installed.');
+        }
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('quiz', (int)$quiz->id, (int)$course->id, false, MUST_EXIST);
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+
+        $coursecontext = \context_course::instance((int)$course->id);
+        $DB->insert_record('block_instances', (object)[
+            'blockname' => 'stash',
+            'parentcontextid' => $coursecontext->id,
+            'showinsubcontexts' => 0,
+            'requiredbytheme' => 0,
+            'subpagepattern' => null,
+            'defaultregion' => 'side-pre',
+            'defaultweight' => 0,
+            'configdata' => '',
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $stashid = $DB->insert_record('block_stash', (object)[
+            'courseid' => (int)$course->id,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+        $itemid = $DB->insert_record('block_stash_items', (object)[
+            'stashid' => $stashid,
+            'name' => 'Activity Gem',
+            'detail' => '',
+            'detailformat' => FORMAT_HTML,
+            'amounttopickup' => 0,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $DB->insert_record('local_stackmathgame_stashmap', (object)[
+            'cmid' => (int)$cm->id,
+            'quizid' => 0,
+            'slotnumber' => 2,
+            'stashcourseid' => (int)$course->id,
+            'stashitemid' => $itemid,
+            'grantquantity' => 1,
+            'mode' => 'firstsolve',
+            'enabled' => 1,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $profile = $this->make_profile((int)$user->id);
+        $result = stash_bridge::dispatch(
+            $profile,
+            99999,
+            1,
+            2,
+            [],
+            ['solved' => true, 'score' => 10, 'xp' => 5],
+            ['cmid' => (int)$cm->id, 'modname' => 'quiz', 'instanceid' => (int)$quiz->id, 'quizid' => (int)$quiz->id]
+        );
+
+        $this->assertTrue($result['dispatched']);
+        $this->assertTrue($result['stash']);
+        $this->assertSame($itemid, $result['stashitemid']);
+    }
+
     /**
      * Verify stash_bridge uses cron_setup_user for the admin context switch.
      */

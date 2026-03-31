@@ -275,10 +275,19 @@ final class stash_mapping_service {
      * @return int Number of rows updated.
      */
     public static function backfill_legacy_quiz_rows(): int {
+        return self::backfill_activity_rows()['updated'];
+    }
+
+    /**
+     * Backfill cmid values for all stash mappings that still only carry quizid.
+     *
+     * @return array<string, int> Summary with keys rows and updated.
+     */
+    public static function backfill_activity_rows(): array {
         global $DB;
 
         if (!self::stashmap_has_field('cmid') || !self::stashmap_has_field('quizid')) {
-            return 0;
+            return ['rows' => 0, 'updated' => 0];
         }
 
         $updated = 0;
@@ -299,7 +308,7 @@ final class stash_mapping_service {
                 $updated++;
             }
         }
-        return $updated;
+        return ['rows' => count($rows), 'updated' => $updated];
     }
 
     /**

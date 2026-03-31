@@ -239,6 +239,39 @@ final class stash_mapping_service_test extends advanced_testcase {
         $this->assertSame($cmid, (int)$record->cmid);
     }
 
+
+    /**
+     * backfill_activity_rows returns a summary and updates legacy quiz rows.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_backfill_activity_rows_returns_summary(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
+
+        $DB->insert_record('local_stackmathgame_stashmap', (object)[
+            'quizid' => $quizid,
+            'slotnumber' => 4,
+            'stashcourseid' => $courseid,
+            'stashitemid' => 123,
+            'grantquantity' => 1,
+            'mode' => 'firstsolve',
+            'enabled' => 1,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $summary = stash_mapping_service::backfill_activity_rows();
+        $this->assertArrayHasKey('rows', $summary);
+        $this->assertArrayHasKey('updated', $summary);
+        $this->assertGreaterThanOrEqual(1, (int)$summary['rows']);
+        $this->assertGreaterThanOrEqual(1, (int)$summary['updated']);
+
+        $record = $DB->get_record('local_stackmathgame_stashmap', ['quizid' => $quizid, 'slotnumber' => 4], '*', MUST_EXIST);
+        $this->assertSame($cmid, (int)$record->cmid);
+    }
+
     /**
      * get_stash_items_for_course returns empty array without block_stash.
      */
