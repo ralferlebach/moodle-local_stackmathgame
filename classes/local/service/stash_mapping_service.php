@@ -25,9 +25,14 @@
 namespace local_stackmathgame\local\service;
 
 use local_stackmathgame\local\integration\availability;
+use xmldb_field;
+use xmldb_table;
 
 /**
- * Load and persist mappings between quiz slots and block_stash items.
+ * Load and persist mappings between activity slots and block_stash items.
+ *
+ * The course-module ID is the source of truth. Legacy quiz-based methods are
+ * retained as wrappers while existing data is migrated to cmid.
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -35,18 +40,83 @@ use local_stackmathgame\local\integration\availability;
  */
 final class stash_mapping_service {
     /**
+     * Load all stash mappings for an activity, keyed by slot number.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $instanceid Optional legacy quiz instance ID for fallback.
+     * @param string $modname The module name.
+     * @return array<int, \stdClass> Map of slotnumber to mapping record.
+     */
+    public static function get_for_activity(int $cmid, int $instanceid = 0, string $modname = 'quiz'): array {
+        global $DB;
+
+        $byslot = [];
+        $rows = [];
+
+        if ($cmid > 0 && self::stashmap_has_field('cmid')) {
+            $rows = $DB->get_records('local_stackmathgame_stashmap', ['cmid' => $cmid]);
+        }
+
+        if (!$rows && $modname === 'quiz' && $instanceid > 0 && self::stashmap_has_field('quizid')) {
+            $rows = $DB->get_records('local_stackmathgame_stashmap', ['quizid' => $instanceid]);
+            if ($rows && $cmid > 0 && self::stashmap_has_field('cmid')) {
+                foreach ($rows as $row) {
+                    if (empty($row->cmid)) {
+                        $DB->set_field('local_stackmathgame_stashmap', 'cmid', $cmid, ['id' => $row->id]);
+                        $row->cmid = $cmid;
+                    }
+                }
+            }
+        }
+
+        foreach ($rows as $row) {
+            $byslot[(int)$row->slotnumber] = $row;
+        }
+        return $byslot;
+    }
+
+    /**
      * Load all stash mappings for a quiz, keyed by slot number.
      *
      * @param int $quizid The quiz instance ID.
      * @return array<int, \stdClass> Map of slotnumber to mapping record.
      */
     public static function get_for_quiz(int $quizid): array {
-        global $DB;
-        $byslot = [];
-        foreach ($DB->get_records('local_stackmathgame_stashmap', ['quizid' => $quizid]) as $r) {
-            $byslot[(int)$r->slotnumber] = $r;
+        return self::get_for_activity(self::resolve_quiz_cmid($quizid), $quizid, 'quiz');
+    }
+
+    /**
+     * Return the mapping record for a single activity slot.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $slotnumber The slot number.
+     * @param int $instanceid Optional legacy quiz instance ID.
+     * @param string $modname The module name.
+     * @return \stdClass|null The mapping record or null.
+     */
+    public static function get_mapping_for_activity_slot(
+        int $cmid,
+        int $slotnumber,
+        int $instanceid = 0,
+        string $modname = 'quiz'
+    ): ?\stdClass {
+        $all = self::get_for_activity($cmid, $instanceid, $modname);
+        return $all[$slotnumber] ?? null;
+    }
+
+    /**
+     * Return slot numbers used by an activity, sorted ascending.
+     *
+     * @param int $cmid The course-module ID.
+     * @param string $modname The module name.
+     * @param int $instanceid The activity instance ID.
+     * @return int[] Sorted slot numbers.
+     */
+    public static function get_activity_slots(int $cmid, string $modname = 'quiz', int $instanceid = 0): array {
+        if ($modname !== 'quiz' || $instanceid <= 0) {
+            return [];
         }
-        return $byslot;
+        return array_keys(question_map_service::get_quiz_slot_records($instanceid));
     }
 
     /**
@@ -56,13 +126,7 @@ final class stash_mapping_service {
      * @return int[] Sorted slot numbers.
      */
     public static function get_quiz_slots(int $quizid): array {
-        global $DB;
-        $slots = array_map(
-            'intval',
-            $DB->get_fieldset_select('quiz_slots', 'slot', 'quizid = :q', ['q' => $quizid])
-        );
-        sort($slots);
-        return $slots;
+        return self::get_activity_slots(self::resolve_quiz_cmid($quizid), 'quiz', $quizid);
     }
 
     /**
@@ -79,20 +143,16 @@ final class stash_mapping_service {
         }
         try {
             global $DB;
-            // Check block_stash block exists in this course.
             $ctx = \context_course::instance($courseid, IGNORE_MISSING);
             if (!$ctx) {
                 return [];
             }
-            if (
-                !$DB->record_exists('block_instances', [
-                    'blockname' => 'stash',
-                    'parentcontextid' => $ctx->id,
-                ])
-            ) {
+            if (!$DB->record_exists('block_instances', [
+                'blockname' => 'stash',
+                'parentcontextid' => $ctx->id,
+            ])) {
                 return [];
             }
-            // Read items directly to avoid persistent-class API version differences.
             $stash = $DB->get_record('block_stash', ['courseid' => $courseid]);
             if (!$stash) {
                 return [];
@@ -116,19 +176,28 @@ final class stash_mapping_service {
     }
 
     /**
-     * Upsert stash mappings submitted from the quiz settings form.
+     * Upsert stash mappings submitted from the activity settings form.
      *
      * Each entry in $mappings must have keys:
      *   slotnumber (int), stashitemid (int, 0=delete), grantquantity (int), enabled (int 0|1)
      *
-     * @param int   $quizid   The quiz instance ID.
-     * @param int   $courseid The course ID (stored as stashcourseid).
+     * @param int $cmid The course-module ID.
+     * @param int $courseid The course ID (stored as stashcourseid).
      * @param array $mappings Array of mapping arrays from form submission.
+     * @param string $modname The module name.
+     * @param int $instanceid The activity instance ID.
      * @return void
      */
-    public static function save_for_quiz(int $quizid, int $courseid, array $mappings): void {
+    public static function save_for_activity(
+        int $cmid,
+        int $courseid,
+        array $mappings,
+        string $modname = 'quiz',
+        int $instanceid = 0
+    ): void {
         global $DB;
         $now = time();
+        $quizid = $modname === 'quiz' ? $instanceid : 0;
 
         foreach ($mappings as $entry) {
             $slot = (int)($entry['slotnumber'] ?? 0);
@@ -139,33 +208,33 @@ final class stash_mapping_service {
             $qty = max(1, (int)($entry['grantquantity'] ?? 1));
             $enabled = empty($entry['enabled']) ? 0 : 1;
 
-            $existing = $DB->get_record(
-                'local_stackmathgame_stashmap',
-                ['quizid' => $quizid, 'slotnumber' => $slot]
-            );
+            $existing = self::find_existing_mapping($cmid, $quizid, $slot);
 
             if ($itemid <= 0) {
                 if ($existing) {
-                    $DB->delete_records(
-                        'local_stackmathgame_stashmap',
-                        ['quizid' => $quizid, 'slotnumber' => $slot]
-                    );
+                    $DB->delete_records('local_stackmathgame_stashmap', ['id' => $existing->id]);
                 }
                 continue;
             }
 
             if ($existing) {
-                $DB->update_record('local_stackmathgame_stashmap', (object)[
+                $update = [
                     'id' => $existing->id,
                     'stashcourseid' => $courseid,
                     'stashitemid' => $itemid,
                     'grantquantity' => $qty,
                     'enabled' => $enabled,
                     'timemodified' => $now,
-                ]);
+                ];
+                if (self::stashmap_has_field('cmid')) {
+                    $update['cmid'] = $cmid;
+                }
+                if (self::stashmap_has_field('quizid') && $quizid > 0) {
+                    $update['quizid'] = $quizid;
+                }
+                $DB->update_record('local_stackmathgame_stashmap', (object)$update);
             } else {
-                $DB->insert_record('local_stackmathgame_stashmap', (object)[
-                    'quizid' => $quizid,
+                $insert = [
                     'slotnumber' => $slot,
                     'stashcourseid' => $courseid,
                     'stashitemid' => $itemid,
@@ -174,8 +243,125 @@ final class stash_mapping_service {
                     'enabled' => $enabled,
                     'timecreated' => $now,
                     'timemodified' => $now,
-                ]);
+                ];
+                if (self::stashmap_has_field('cmid')) {
+                    $insert['cmid'] = $cmid;
+                }
+                if (self::stashmap_has_field('quizid')) {
+                    $insert['quizid'] = $quizid;
+                }
+                $DB->insert_record('local_stackmathgame_stashmap', (object)$insert);
             }
         }
+    }
+
+    /**
+     * Legacy wrapper that persists mappings for a quiz.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @param int $courseid The course ID.
+     * @param array $mappings Mapping payload.
+     * @return void
+     */
+    public static function save_for_quiz(int $quizid, int $courseid, array $mappings): void {
+        self::save_for_activity(self::resolve_quiz_cmid($quizid), $courseid, $mappings, 'quiz', $quizid);
+    }
+
+    /**
+     * Backfill cmid values for all stash mappings that still only carry quizid.
+     *
+     * @return int Number of rows updated.
+     */
+    public static function backfill_legacy_quiz_rows(): int {
+        global $DB;
+
+        if (!self::stashmap_has_field('cmid') || !self::stashmap_has_field('quizid')) {
+            return 0;
+        }
+
+        $updated = 0;
+        $rows = $DB->get_records_select(
+            'local_stackmathgame_stashmap',
+            'cmid IS NULL OR cmid = 0',
+            [],
+            '',
+            'id, quizid'
+        );
+        foreach ($rows as $row) {
+            if (empty($row->quizid)) {
+                continue;
+            }
+            $cmid = self::resolve_quiz_cmid((int)$row->quizid);
+            if ($cmid > 0) {
+                $DB->set_field('local_stackmathgame_stashmap', 'cmid', $cmid, ['id' => $row->id]);
+                $updated++;
+            }
+        }
+        return $updated;
+    }
+
+    /**
+     * Resolve the quiz cmid from a quiz instance ID.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @return int The course-module ID or 0 when unavailable.
+     */
+    private static function resolve_quiz_cmid(int $quizid): int {
+        if ($quizid <= 0) {
+            return 0;
+        }
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
+        return $cm ? (int)$cm->id : 0;
+    }
+
+    /**
+     * Return whether local_stackmathgame_stashmap has a given field.
+     *
+     * @param string $fieldname The field name.
+     * @return bool True when the field exists.
+     */
+    private static function stashmap_has_field(string $fieldname): bool {
+        global $DB;
+
+        static $cache = [];
+        if (array_key_exists($fieldname, $cache)) {
+            return $cache[$fieldname];
+        }
+
+        $table = new xmldb_table('local_stackmathgame_stashmap');
+        $field = new xmldb_field($fieldname);
+        $cache[$fieldname] = $DB->get_manager()->field_exists($table, $field);
+        return $cache[$fieldname];
+    }
+
+    /**
+     * Find an existing stash mapping row using cmid first and quizid fallback.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $slotnumber The slot number.
+     * @return \stdClass|false The mapping record or false.
+     */
+    private static function find_existing_mapping(int $cmid, int $quizid, int $slotnumber) {
+        global $DB;
+
+        if ($cmid > 0 && self::stashmap_has_field('cmid')) {
+            $existing = $DB->get_record('local_stackmathgame_stashmap', [
+                'cmid' => $cmid,
+                'slotnumber' => $slotnumber,
+            ]);
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        if ($quizid > 0 && self::stashmap_has_field('quizid')) {
+            return $DB->get_record('local_stackmathgame_stashmap', [
+                'quizid' => $quizid,
+                'slotnumber' => $slotnumber,
+            ]);
+        }
+
+        return false;
     }
 }

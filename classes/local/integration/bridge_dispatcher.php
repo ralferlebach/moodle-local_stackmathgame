@@ -41,6 +41,7 @@ final class bridge_dispatcher {
      * @param int       $slot     The question slot.
      * @param array     $slotdata Slot state data.
      * @param array     $deltas   Score/XP deltas from the answer.
+     * @param array     $activity Optional activity identity payload.
      * @return array Results from each bridge.
      */
     public static function on_answer_result(
@@ -49,11 +50,12 @@ final class bridge_dispatcher {
         int $designid,
         int $slot,
         array $slotdata,
-        array $deltas
+        array $deltas,
+        array $activity = []
     ): array {
         return [
-            'xp'    => xp_bridge::dispatch($profile, $quizid, $designid, $slot, $slotdata, $deltas),
-            'stash' => stash_bridge::dispatch($profile, $quizid, $designid, $slot, $slotdata, $deltas),
+            'xp' => xp_bridge::dispatch($profile, $quizid, $designid, $slot, $slotdata, $deltas),
+            'stash' => stash_bridge::dispatch($profile, $quizid, $designid, $slot, $slotdata, $deltas, $activity),
         ];
     }
 }

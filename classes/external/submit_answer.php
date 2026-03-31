@@ -203,6 +203,11 @@ class submit_answer extends \external_api {
                         'score' => $scoredelta,
                         'xp' => $xpdelta,
                         'solved' => $cannext,
+                    ],
+                    [
+                        'cmid' => (int)$cm->id,
+                        'modname' => 'quiz',
+                        'instanceid' => $quizid,
                     ]
                 );
             } catch (\Throwable $bridgeerr) {

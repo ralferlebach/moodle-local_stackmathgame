@@ -104,6 +104,10 @@ $designs         = \local_stackmathgame\game\theme_manager::get_all_enabled();
 $canselectdesign = has_capability('local/stackmathgame:selectdesign', $context);
 $canmanagelabels = has_capability('local/stackmathgame:managelabels', $context);
 
+$stashitems = \local_stackmathgame\local\service\stash_mapping_service::get_stash_items_for_course((int)$course->id);
+$stashslots = \local_stackmathgame\local\service\stash_mapping_service::get_activity_slots($cmid, 'quiz', $quizid);
+$stashmappings = \local_stackmathgame\local\service\stash_mapping_service::get_for_activity($cmid, $quizid, 'quiz');
+
 $labelrecords = $DB->get_records(
     'local_stackmathgame_label',
     ['status' => 1],
@@ -123,6 +127,9 @@ $customdata = [
     'canmanagelabels' => $canmanagelabels,
     'quizid'          => $quizid,
     'cmid'            => $cmid,
+    'stashitems'      => $stashitems,
+    'stashslots'      => $stashslots,
+    'stashmappings'   => $stashmappings,
 ];
 
 $form      = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
@@ -166,6 +173,26 @@ if ($data = $form->get_data()) {
     }
 
     \local_stackmathgame\game\quiz_configurator::save_for_quiz($cmid, (array)$data);
+
+    $stashpayload = [];
+    foreach ($stashslots as $slotnumber) {
+        $prefix = 'stashmap_' . $slotnumber . '_';
+        $stashpayload[] = [
+            'slotnumber' => (int)($data->{$prefix . 'slot'} ?? $slotnumber),
+            'stashitemid' => (int)($data->{$prefix . 'itemid'} ?? 0),
+            'grantquantity' => (int)($data->{$prefix . 'qty'} ?? 1),
+            'enabled' => empty($data->{$prefix . 'enabled'}) ? 0 : 1,
+        ];
+    }
+    if ($stashpayload) {
+        \local_stackmathgame\local\service\stash_mapping_service::save_for_activity(
+            $cmid,
+            (int)$course->id,
+            $stashpayload,
+            'quiz',
+            $quizid
+        );
+    }
 
     redirect(
         $pageurl,

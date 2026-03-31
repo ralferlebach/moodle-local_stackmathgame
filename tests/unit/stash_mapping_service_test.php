@@ -29,6 +29,19 @@ use local_stackmathgame\local\service\stash_mapping_service;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class stash_mapping_service_test extends advanced_testcase {
+
+    /**
+     * Create a quiz and return [quizid, cmid, courseid].
+     *
+     * @return int[]
+     */
+    private function create_quiz_activity(): array {
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('quiz', (int)$quiz->id, (int)$course->id, false, MUST_EXIST);
+        return [(int)$quiz->id, (int)$cm->id, (int)$course->id];
+    }
+
     /**
      * get_for_quiz returns empty array when no mappings exist.
      *
@@ -49,8 +62,9 @@ final class stash_mapping_service_test extends advanced_testcase {
     public function test_save_for_quiz_insert(): void {
         global $DB;
         $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
 
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 42,
             'grantquantity' => 2,
@@ -59,13 +73,15 @@ final class stash_mapping_service_test extends advanced_testcase {
 
         $record = $DB->get_record(
             'local_stackmathgame_stashmap',
-            ['quizid' => 77, 'slotnumber' => 3]
+            ['cmid' => $cmid, 'slotnumber' => 3]
         );
         $this->assertNotFalse($record);
         $this->assertSame(42, (int)$record->stashitemid);
         $this->assertSame(2, (int)$record->grantquantity);
         $this->assertSame(1, (int)$record->enabled);
-        $this->assertSame(5, (int)$record->stashcourseid);
+        $this->assertSame($courseid, (int)$record->stashcourseid);
+        $this->assertSame($cmid, (int)$record->cmid);
+        $this->assertSame($quizid, (int)$record->quizid);
     }
 
     /**
@@ -76,21 +92,22 @@ final class stash_mapping_service_test extends advanced_testcase {
     public function test_save_for_quiz_update(): void {
         global $DB;
         $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
 
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 42,
             'grantquantity' => 1,
             'enabled' => 1,
         ]]);
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 99,
             'grantquantity' => 3,
             'enabled' => 0,
         ]]);
 
-        $records = $DB->get_records('local_stackmathgame_stashmap', ['quizid' => 77, 'slotnumber' => 3]);
+        $records = $DB->get_records('local_stackmathgame_stashmap', ['cmid' => $cmid, 'slotnumber' => 3]);
         $this->assertCount(1, $records, 'Must not create duplicate rows');
         $record = reset($records);
         $this->assertSame(99, (int)$record->stashitemid);
@@ -106,21 +123,22 @@ final class stash_mapping_service_test extends advanced_testcase {
     public function test_save_for_quiz_delete_when_item_zero(): void {
         global $DB;
         $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
 
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 42,
             'grantquantity' => 1,
             'enabled' => 1,
         ]]);
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 0,
             'grantquantity' => 1,
             'enabled' => 1,
         ]]);
 
-        $count = $DB->count_records('local_stackmathgame_stashmap', ['quizid' => 77, 'slotnumber' => 3]);
+        $count = $DB->count_records('local_stackmathgame_stashmap', ['cmid' => $cmid, 'slotnumber' => 3]);
         $this->assertSame(0, $count, 'Row must be deleted when stashitemid=0');
     }
 
@@ -131,13 +149,14 @@ final class stash_mapping_service_test extends advanced_testcase {
      */
     public function test_get_for_quiz_returns_keyed_by_slot(): void {
         $this->resetAfterTest();
+        [$quizid, , $courseid] = $this->create_quiz_activity();
 
-        stash_mapping_service::save_for_quiz(77, 5, [
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [
             ['slotnumber' => 1, 'stashitemid' => 10, 'grantquantity' => 1, 'enabled' => 1],
             ['slotnumber' => 3, 'stashitemid' => 20, 'grantquantity' => 2, 'enabled' => 1],
         ]);
 
-        $result = stash_mapping_service::get_for_quiz(77);
+        $result = stash_mapping_service::get_for_quiz($quizid);
         $this->assertArrayHasKey(1, $result);
         $this->assertArrayHasKey(3, $result);
         $this->assertSame(10, (int)$result[1]->stashitemid);
@@ -152,16 +171,73 @@ final class stash_mapping_service_test extends advanced_testcase {
     public function test_grant_quantity_clamped_to_minimum_one(): void {
         global $DB;
         $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
 
-        stash_mapping_service::save_for_quiz(77, 5, [[
+        stash_mapping_service::save_for_quiz($quizid, $courseid, [[
             'slotnumber' => 3,
             'stashitemid' => 42,
             'grantquantity' => 0,
             'enabled' => 1,
         ]]);
 
-        $record = $DB->get_record('local_stackmathgame_stashmap', ['quizid' => 77]);
+        $record = $DB->get_record('local_stackmathgame_stashmap', ['cmid' => $cmid]);
         $this->assertSame(1, (int)$record->grantquantity, 'Quantity must be at least 1');
+    }
+
+
+    /**
+     * save_for_activity stores and reads mappings by cmid.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_save_for_activity_and_get_for_activity_use_cmid_as_truth(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
+
+        stash_mapping_service::save_for_activity($cmid, $courseid, [[
+            'slotnumber' => 2,
+            'stashitemid' => 77,
+            'grantquantity' => 4,
+            'enabled' => 1,
+        ]], 'quiz', $quizid);
+
+        $record = $DB->get_record('local_stackmathgame_stashmap', ['cmid' => $cmid, 'slotnumber' => 2]);
+        $this->assertNotFalse($record);
+        $this->assertSame($quizid, (int)$record->quizid);
+
+        $result = stash_mapping_service::get_for_activity($cmid, $quizid, 'quiz');
+        $this->assertArrayHasKey(2, $result);
+        $this->assertSame(77, (int)$result[2]->stashitemid);
+    }
+
+    /**
+     * get_for_activity backfills cmid for legacy quiz rows.
+     *
+     * @group local_stackmathgame_db
+     */
+    public function test_get_for_activity_backfills_legacy_quiz_rows(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$quizid, $cmid, $courseid] = $this->create_quiz_activity();
+
+        $DB->insert_record('local_stackmathgame_stashmap', (object)[
+            'quizid' => $quizid,
+            'slotnumber' => 3,
+            'stashcourseid' => $courseid,
+            'stashitemid' => 99,
+            'grantquantity' => 1,
+            'mode' => 'firstsolve',
+            'enabled' => 1,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $result = stash_mapping_service::get_for_activity($cmid, $quizid, 'quiz');
+        $this->assertArrayHasKey(3, $result);
+
+        $record = $DB->get_record('local_stackmathgame_stashmap', ['quizid' => $quizid, 'slotnumber' => 3], '*', MUST_EXIST);
+        $this->assertSame($cmid, (int)$record->cmid);
     }
 
     /**

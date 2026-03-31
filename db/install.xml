@@ -155,7 +155,8 @@
     <TABLE NAME="local_stackmathgame_stashmap" COMMENT="Maps quiz slots to optional block_stash rewards.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="false"/>
+        <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="false"/>
         <FIELD NAME="slotnumber" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="stashcourseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
         <FIELD NAME="stashitemid" TYPE="int" LENGTH="10" NOTNULL="true"/>
@@ -167,10 +168,10 @@
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="quizid_fk" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
         <KEY NAME="stashcourseid_fk" TYPE="foreign" FIELDS="stashcourseid" REFTABLE="course" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
+        <INDEX NAME="lsmg_smap_cmid_slot_uix" UNIQUE="true" FIELDS="cmid,slotnumber"/>
         <INDEX NAME="lsmg_smap_quiz_slot_uix" UNIQUE="true" FIELDS="quizid,slotnumber"/>
         <INDEX NAME="lsmg_smap_item_ix" UNIQUE="false" FIELDS="stashitemid,enabled"/>
       </INDEXES>

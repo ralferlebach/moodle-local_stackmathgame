@@ -45,6 +45,7 @@ final class stash_bridge {
      * @param int       $slot     The question slot number.
      * @param array     $slotdata Slot state data.
      * @param array     $deltas   Score/XP deltas from the answer.
+     * @param array     $activity Optional activity identity payload.
      * @return array Result with keys 'available', 'dispatched', 'stash'.
      */
     public static function dispatch(
@@ -53,7 +54,8 @@ final class stash_bridge {
         int $designid,
         int $slot,
         array $slotdata,
-        array $deltas
+        array $deltas,
+        array $activity = []
     ): array {
         $stashavailable = availability::has_block_stash();
 
@@ -62,7 +64,7 @@ final class stash_bridge {
         }
 
         if ($stashavailable) {
-            $stashresult = self::dispatch_to_block_stash($profile, $quizid, $slot);
+            $stashresult = self::dispatch_to_block_stash($profile, $quizid, $slot, $activity);
             if ($stashresult !== null) {
                 self::fire_event($profile, $quizid, $designid, $slot, $stashresult['itemkey']);
                 return [
