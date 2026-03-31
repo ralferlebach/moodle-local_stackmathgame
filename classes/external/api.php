@@ -186,7 +186,7 @@ class api {
             }
             $exports[] = $export;
         }
-        usort($exports, static function(array $a, array $b): int {
+        usort($exports, static function (array $a, array $b): int {
             return $a['slotnumber'] <=> $b['slotnumber'];
         });
         return $exports;
