@@ -29,7 +29,6 @@ use local_stackmathgame\local\service\stash_mapping_service;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class stash_mapping_service_test extends advanced_testcase {
-
     /**
      * Create a quiz and return [quizid, cmid, courseid].
      *

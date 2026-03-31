@@ -147,10 +147,12 @@ final class stash_mapping_service {
             if (!$ctx) {
                 return [];
             }
-            if (!$DB->record_exists('block_instances', [
-                'blockname' => 'stash',
-                'parentcontextid' => $ctx->id,
-            ])) {
+            if (
+                !$DB->record_exists('block_instances', [
+                    'blockname' => 'stash',
+                    'parentcontextid' => $ctx->id,
+                ])
+            ) {
                 return [];
             }
             $stash = $DB->get_record('block_stash', ['courseid' => $courseid]);
