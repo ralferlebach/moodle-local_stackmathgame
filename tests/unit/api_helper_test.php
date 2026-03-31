@@ -531,5 +531,4 @@ final class api_helper_test extends advanced_testcase {
         $this->assertSame((int)$quiz->id, (int)$legacyresult['history'][0]['quizid']);
         $this->assertSame('unit.api_helper_test', (string)$legacyresult['history'][0]['source']);
     }
-
 }

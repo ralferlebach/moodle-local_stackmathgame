@@ -147,5 +147,4 @@ final class inventory_service_test extends advanced_testcase {
         $this->assertSame(2, (int)$result['itemcount']);
         $this->assertSame(7, (int)$result['totalquantity']);
     }
-
 }

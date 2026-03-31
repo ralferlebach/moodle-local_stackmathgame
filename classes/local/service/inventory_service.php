@@ -109,5 +109,4 @@ final class inventory_service {
         $profile = profile_service::get_or_create_for_activity($userid, $cmid, $modname, $instanceid);
         return self::get_summary_for_profile((int)$profile->id);
     }
-
 }
