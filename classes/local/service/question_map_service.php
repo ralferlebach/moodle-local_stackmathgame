@@ -371,4 +371,51 @@ final class question_map_service {
         }
         return (int)$candidate->id < (int)$current->id;
     }
+    /**
+     * Persist per-slot configjson payloads into the questionmap table.
+     *
+     * Existing configjson values are overwritten only for slots present in
+     * $configs. Slots not included in $configs are left untouched.
+     *
+     * @param int   $cmid    The quiz course-module ID.
+     * @param int   $quizid  The quiz instance ID.
+     * @param array $configs Map of slotnumber => config array (not yet JSON-encoded).
+     * @return void
+     */
+    public static function save_slot_configs(int $cmid, int $quizid, array $configs): void {
+        global $DB;
+        $now = time();
+        [$keyfield, $keyvalue] = self::lookup_key($cmid, $quizid);
+        foreach ($configs as $slotnumber => $cfg) {
+            $row = $DB->get_record(
+                'local_stackmathgame_questionmap',
+                [$keyfield => $keyvalue, 'slotnumber' => (int)$slotnumber]
+            );
+            if (!$row) {
+                continue;
+            }
+            $DB->update_record('local_stackmathgame_questionmap', (object)[
+                'id'           => $row->id,
+                'configjson'   => json_encode($cfg, JSON_UNESCAPED_UNICODE),
+                'timemodified' => $now,
+            ]);
+        }
+    }
+
+    /**
+     * Return the canonical lookup key for questionmap queries.
+     *
+     * Prefers cmid when the column exists, falls back to quizid.
+     *
+     * @param int $cmid   The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @return array Two-element array: [field_name, field_value].
+     */
+    private static function lookup_key(int $cmid, int $quizid): array {
+        if (self::questionmap_has_field('cmid')) {
+            return ['cmid', $cmid];
+        }
+        return ['quizid', $quizid];
+    }
+
 }

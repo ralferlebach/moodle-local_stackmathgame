@@ -24,6 +24,8 @@
 
 namespace local_stackmathgame\external;
 
+use local_stackmathgame\local\service\branch_resolver;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
@@ -281,6 +283,15 @@ class submit_answer extends \external_api {
             'xpdelta'       => $xpdelta,
             'canretry'      => true,
             'cannext'       => $cannext,
+            'nextslot'      => $cannext
+                ? branch_resolver::resolve_next_slot(
+                    (int)$cm->id,
+                    $quizid,
+                    $slot,
+                    $state,
+                    $profile
+                )
+                : 0,
         ];
     }
 
@@ -392,6 +403,7 @@ class submit_answer extends \external_api {
             'xpdelta'       => new \external_value(PARAM_INT, 'XP delta'),
             'canretry'      => new \external_value(PARAM_BOOL, 'Whether retry remains possible'),
             'cannext'       => new \external_value(PARAM_BOOL, 'Whether frontend may advance immediately'),
+            'nextslot'      => new \external_value(PARAM_INT, 'Next slot number from branch_resolver (0 = linear/finish)'),
         ]);
     }
 }

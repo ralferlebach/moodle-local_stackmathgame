@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * Quiz settings form for local_stackmathgame.
@@ -24,12 +24,21 @@
 
 namespace local_stackmathgame\form;
 
+use local_stackmathgame\local\service\slot_config_schema;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($GLOBALS['CFG']->libdir . '/formslib.php');
 
 /**
  * Quiz-level settings form for STACK Math Game.
+ *
+ * Sections:
+ *  1. Game layer enable + display name
+ *  2. Label assignment
+ *  3. Design selection
+ *  4. Per-slot Regiekarte (scene type, branching, narrative, rewards)
+ *  5. Stash integration (when block_stash is installed)
  *
  * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
@@ -42,14 +51,17 @@ class quiz_settings_form extends \moodleform {
      * @return void
      */
     public function definition(): void {
-        $mform          = $this->_form;
-        $customdata     = $this->_customdata;
-        $config         = $customdata['config'];
-        $designs        = $customdata['designs'];
-        $labeloptions   = $customdata['labeloptions'];
+        $mform           = $this->_form;
+        $customdata      = $this->_customdata;
+        $config          = $customdata['config'];
+        $designs         = $customdata['designs'];
+        $labeloptions    = $customdata['labeloptions'];
         $canselectdesign = !empty($customdata['canselectdesign']);
         $canmanagelabels = !empty($customdata['canmanagelabels']);
+        $slotconfigs     = $customdata['slotconfigs'] ?? [];
+        $quizslots       = $customdata['quizslots'] ?? [];
 
+        // ── 1. Game enable ────────────────────────────────────────────────
         $mform->addElement('advcheckbox', 'enabled', get_string('enabled', 'local_stackmathgame'));
         $mform->addHelpButton('enabled', 'enabled', 'local_stackmathgame');
         $mform->setDefault('enabled', (int)($config->enabled ?? 0));
@@ -64,18 +76,15 @@ class quiz_settings_form extends \moodleform {
         $mform->setDefault('teacherdisplayname', (string)($config->teacherdisplayname ?? ''));
         $mform->addHelpButton('teacherdisplayname', 'teacherdisplayname', 'local_stackmathgame');
 
+        // ── 2. Label ──────────────────────────────────────────────────────
         $mform->addElement('header', 'labelheader', get_string('labelsettings', 'local_stackmathgame'));
 
-        $autocompleteoptions = [
-            'multiple' => false,
-            'noselectionstring' => get_string('choosedots'),
-        ];
         $mform->addElement(
             'autocomplete',
             'labelid',
             get_string('label', 'local_stackmathgame'),
             $labeloptions,
-            $autocompleteoptions
+            ['multiple' => false, 'noselectionstring' => get_string('choosedots')]
         );
         $mform->addHelpButton('labelid', 'label', 'local_stackmathgame');
         if (!empty($config->labelid)) {
@@ -89,10 +98,7 @@ class quiz_settings_form extends \moodleform {
             'text',
             'newlabel',
             get_string('newlabel', 'local_stackmathgame'),
-            [
-                'size' => 40,
-                'placeholder' => get_string('newlabelplaceholder', 'local_stackmathgame'),
-            ]
+            ['size' => 40, 'placeholder' => get_string('newlabelplaceholder', 'local_stackmathgame')]
         );
         $mform->setType('newlabel', PARAM_TEXT);
         $mform->addHelpButton('newlabel', 'newlabel', 'local_stackmathgame');
@@ -100,35 +106,25 @@ class quiz_settings_form extends \moodleform {
             $mform->freeze('newlabel');
         }
 
-        $mform->addElement(
-            'static',
-            'labelnote',
-            '',
-            get_string('labelselectionnotice', 'local_stackmathgame')
-        );
+        $mform->addElement('static', 'labelnote', '', get_string('labelselectionnotice', 'local_stackmathgame'));
 
+        // ── 3. Design ─────────────────────────────────────────────────────
         $mform->addElement('header', 'designheader', get_string('designsettings', 'local_stackmathgame'));
 
         if (empty($designs)) {
-            $mform->addElement(
-                'static',
-                'nodesigns',
-                '',
-                get_string('nodesignsavailable', 'local_stackmathgame')
-            );
+            $mform->addElement('static', 'nodesigns', '', get_string('nodesignsavailable', 'local_stackmathgame'));
         } else {
             $radios = [];
             foreach ($designs as $design) {
-                $labelhtml = $this->render_design_tile($design);
-                $radios[]  = $mform->createElement('radio', 'designid', '', $labelhtml, (int)$design->id);
+                $radios[] = $mform->createElement(
+                    'radio',
+                    'designid',
+                    '',
+                    $this->render_design_tile($design),
+                    (int)$design->id
+                );
             }
-            $mform->addGroup(
-                $radios,
-                'designid_group',
-                get_string('design', 'local_stackmathgame'),
-                ['<br>'],
-                false
-            );
+            $mform->addGroup($radios, 'designid_group', get_string('design', 'local_stackmathgame'), ['<br>'], false);
             $mform->addHelpButton('designid_group', 'design', 'local_stackmathgame');
             $mform->setDefault('designid', (int)($config->designid ?? 0));
             if (!$canselectdesign) {
@@ -136,68 +132,143 @@ class quiz_settings_form extends \moodleform {
             }
         }
 
-        // Stash integration section (only shown when block_stash is installed).
+        // ── 4. Per-slot Regiekarte ────────────────────────────────────────
+        if (!empty($quizslots)) {
+            $mform->addElement('header', 'slotcfgheader', get_string('slotconfig_header', 'local_stackmathgame'));
+            $mform->addElement(
+                'html',
+                \html_writer::tag('p', get_string('slotconfig_desc', 'local_stackmathgame'), ['class' => 'text-muted small'])
+            );
+
+            $scenetypeoptions = [];
+            foreach (slot_config_schema::SCENE_TYPES as $type) {
+                $scenetypeoptions[$type] = get_string('slotconfig_scenetype_' . $type, 'local_stackmathgame');
+            }
+
+            $branchmodeoptions = [
+                slot_config_schema::BRANCH_MODE_LINEAR => get_string('slotconfig_branch_linear', 'local_stackmathgame'),
+                slot_config_schema::BRANCH_MODE_SLOT   => get_string('slotconfig_branch_slot', 'local_stackmathgame'),
+                slot_config_schema::BRANCH_MODE_END    => get_string('slotconfig_branch_end', 'local_stackmathgame'),
+            ];
+
+            foreach ($quizslots as $slotnumber => $slotrow) {
+                $slotnumber = (int)$slotnumber;
+                $prefix     = 'slotcfg_' . $slotnumber . '_';
+                $cfg        = $slotconfigs[$slotnumber] ?? slot_config_schema::defaults();
+
+                $mform->addElement(
+                    'header',
+                    $prefix . 'hdr',
+                    get_string('slotconfig_slot', 'local_stackmathgame', $slotnumber)
+                );
+
+                // Scene type.
+                $mform->addElement(
+                    'select',
+                    $prefix . 'scenetype',
+                    get_string('slotconfig_scenetype', 'local_stackmathgame'),
+                    $scenetypeoptions
+                );
+                $mform->setDefault($prefix . 'scenetype', $cfg['scene']['type'] ?? 'challenge');
+
+                // Branching per outcome.
+                foreach (['gradedright', 'gradedwrong', 'default'] as $outcome) {
+                    $rule = $cfg['branching'][$outcome] ?? ['mode' => 'linear', 'target' => 0];
+
+                    $branchelements = [
+                        $mform->createElement(
+                            'select',
+                            $prefix . 'branch_' . $outcome . '_mode',
+                            '',
+                            $branchmodeoptions
+                        ),
+                        $mform->createElement(
+                            'text',
+                            $prefix . 'branch_' . $outcome . '_target',
+                            '',
+                            ['size' => 4, 'placeholder' => get_string('slotconfig_branch_target_placeholder', 'local_stackmathgame')]
+                        ),
+                    ];
+                    $mform->setDefault($prefix . 'branch_' . $outcome . '_mode', $rule['mode'] ?? 'linear');
+                    $mform->setType($prefix . 'branch_' . $outcome . '_target', PARAM_INT);
+                    $mform->setDefault($prefix . 'branch_' . $outcome . '_target', (int)($rule['target'] ?? 0));
+
+                    $mform->addGroup(
+                        $branchelements,
+                        $prefix . 'branch_' . $outcome . '_grp',
+                        get_string('slotconfig_branch_' . $outcome, 'local_stackmathgame'),
+                        [' '],
+                        false
+                    );
+                }
+
+                // Narrative texts.
+                foreach (['intro', 'success', 'fail'] as $scene) {
+                    $mform->addElement(
+                        'text',
+                        $prefix . 'narrative_' . $scene,
+                        get_string('slotconfig_narrative_' . $scene, 'local_stackmathgame'),
+                        ['size' => 60]
+                    );
+                    $mform->setType($prefix . 'narrative_' . $scene, PARAM_TEXT);
+                    $mform->setDefault(
+                        $prefix . 'narrative_' . $scene,
+                        (string)($cfg['narrative'][$scene] ?? '')
+                    );
+                }
+
+                // Rewards (score + XP in one row).
+                $rewardelements = [
+                    $mform->createElement('text', $prefix . 'reward_score', '', ['size' => 4]),
+                    $mform->createElement('text', $prefix . 'reward_xp', '', ['size' => 4]),
+                ];
+                $mform->setType($prefix . 'reward_score', PARAM_INT);
+                $mform->setDefault($prefix . 'reward_score', (int)($cfg['rewards']['score'] ?? 0));
+                $mform->setType($prefix . 'reward_xp', PARAM_INT);
+                $mform->setDefault($prefix . 'reward_xp', (int)($cfg['rewards']['xp'] ?? 0));
+
+                $mform->addGroup(
+                    $rewardelements,
+                    $prefix . 'reward_grp',
+                    get_string('slotconfig_rewards', 'local_stackmathgame'),
+                    [' ' . get_string('slotconfig_rewards_sep', 'local_stackmathgame') . ' '],
+                    false
+                );
+            }
+        }
+
+        // ── 5. Stash integration ─────────────────────────────────────────
         if (!empty($customdata['stashitems'])) {
             $stashitems = $customdata['stashitems'];
             $stashslots = $customdata['stashslots'] ?? [];
 
-            $mform->addElement(
-                'header',
-                'stashheader',
-                get_string('stashmapping_header', 'local_stackmathgame')
-            );
+            $mform->addElement('header', 'stashheader', get_string('stashmapping_header', 'local_stackmathgame'));
             $mform->addElement(
                 'html',
-                html_writer::tag(
-                    'p',
-                    get_string('stashmapping_desc', 'local_stackmathgame'),
-                    ['class' => 'text-muted small']
-                )
+                \html_writer::tag('p', get_string('stashmapping_desc', 'local_stackmathgame'), ['class' => 'text-muted small'])
             );
 
             if (empty($stashslots)) {
                 $mform->addElement(
                     'html',
-                    html_writer::tag(
-                        'p',
-                        get_string('stashmapping_noslots', 'local_stackmathgame'),
-                        ['class' => 'alert alert-info']
-                    )
+                    \html_writer::tag('p', get_string('stashmapping_noslots', 'local_stackmathgame'), ['class' => 'alert alert-info'])
                 );
             } else {
                 $existingmaps = $customdata['stashmappings'] ?? [];
                 foreach ($stashslots as $slot) {
                     $existing = $existingmaps[$slot] ?? null;
-                    $prefix = 'stashmap_' . $slot . '_';
+                    $prefix   = 'stashmap_' . $slot . '_';
 
-                    $mform->addElement(
-                        'header',
-                        $prefix . 'slothdr',
-                        get_string('stashmapping_slot', 'local_stackmathgame', $slot)
-                    );
+                    $mform->addElement('header', $prefix . 'slothdr', get_string('stashmapping_slot', 'local_stackmathgame', $slot));
 
-                    $mform->addElement(
-                        'select',
-                        $prefix . 'itemid',
-                        get_string('stashmapping_item', 'local_stackmathgame'),
-                        $stashitems
-                    );
+                    $mform->addElement('select', $prefix . 'itemid', get_string('stashmapping_item', 'local_stackmathgame'), $stashitems);
                     $mform->setDefault($prefix . 'itemid', (int)($existing->stashitemid ?? 0));
 
-                    $mform->addElement(
-                        'text',
-                        $prefix . 'qty',
-                        get_string('stashmapping_qty', 'local_stackmathgame'),
-                        ['size' => 4]
-                    );
+                    $mform->addElement('text', $prefix . 'qty', get_string('stashmapping_qty', 'local_stackmathgame'), ['size' => 4]);
                     $mform->setType($prefix . 'qty', PARAM_INT);
                     $mform->setDefault($prefix . 'qty', (int)($existing->grantquantity ?? 1));
 
-                    $mform->addElement(
-                        'advcheckbox',
-                        $prefix . 'enabled',
-                        get_string('stashmapping_enabled', 'local_stackmathgame')
-                    );
+                    $mform->addElement('advcheckbox', $prefix . 'enabled', get_string('stashmapping_enabled', 'local_stackmathgame'));
                     $mform->setDefault($prefix . 'enabled', (int)($existing->enabled ?? 1));
 
                     $mform->addElement('hidden', $prefix . 'slot', $slot);
@@ -206,6 +277,7 @@ class quiz_settings_form extends \moodleform {
             }
         }
 
+        // ── Hidden fields + submit ────────────────────────────────────────
         $mform->addElement('hidden', 'quizid');
         $mform->setType('quizid', PARAM_INT);
         $mform->setDefault('quizid', (int)$customdata['quizid']);
@@ -255,42 +327,24 @@ class quiz_settings_form extends \moodleform {
             $thumb = \html_writer::empty_tag('img', [
                 'src'   => $imgurl,
                 'alt'   => format_string((string)$design->name),
-                'style' => 'display:block;width:160px;height:90px;object-fit:cover;' .
-                           'border-radius:8px;margin-bottom:8px;',
+                'style' => 'display:block;width:160px;height:90px;object-fit:cover;border-radius:8px;margin-bottom:8px;',
             ]);
         } else {
             $thumb = \html_writer::div('', '', [
-                'style' => 'display:flex;align-items:center;justify-content:center;' .
-                           'width:160px;height:90px;border-radius:8px;margin-bottom:8px;' .
-                           'background:#f5f5f5;font-size:32px;',
+                'style' => 'display:flex;align-items:center;justify-content:center;width:160px;height:90px;' .
+                           'border-radius:8px;margin-bottom:8px;background:#f5f5f5;font-size:32px;',
             ]);
         }
-        $mode = '';
-        if (!empty($design->modecomponent)) {
-            $mode = \html_writer::div(
-                s((string)$design->modecomponent),
-                'text-muted',
-                ['style' => 'font-size:0.85em;']
-            );
-        }
-        $desc = '';
-        if (!empty($design->description)) {
-            $desc = \html_writer::div(
-                s((string)$design->description),
-                '',
-                ['style' => 'font-size:0.9em;']
-            );
-        }
+        $mode = !empty($design->modecomponent)
+            ? \html_writer::div(s((string)$design->modecomponent), 'text-muted', ['style' => 'font-size:0.85em;'])
+            : '';
+        $desc = !empty($design->description)
+            ? \html_writer::div(s((string)$design->description), '', ['style' => 'font-size:0.9em;'])
+            : '';
         return \html_writer::div(
-            $thumb .
-            \html_writer::tag('strong', format_string((string)$design->name)) .
-            $mode .
-            $desc,
+            $thumb . \html_writer::tag('strong', format_string((string)$design->name)) . $mode . $desc,
             'local-stackmathgame-design-tile',
-            [
-                'style' => 'display:inline-block;max-width:220px;padding:12px;' .
-                           'border:1px solid #d0d7de;border-radius:12px;background:#fff;',
-            ]
+            ['style' => 'display:inline-block;max-width:220px;padding:12px;border:1px solid #d0d7de;border-radius:12px;background:#fff;']
         );
     }
 }

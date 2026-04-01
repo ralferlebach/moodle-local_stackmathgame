@@ -366,6 +366,28 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
     // ── Answer submission ──────────────────────────────────────────────────
 
     /**
+     * Navigate the browser to a specific quiz slot using the Moodle nav button.
+     *
+     * The quiz nav buttons carry an href that encodes attempt, page, and slot.
+     * Clicking the button triggers Moodle's own navigation logic (including
+     * saving in-progress answers) rather than a raw location change.
+     *
+     * @param {number} targetSlot The destination slot number.
+     * @returns {void}
+     */
+    function navigateToSlot(targetSlot) {
+        var btn = document.querySelector('#quiznavbutton' + targetSlot);
+        if (btn) {
+            btn.click();
+            return;
+        }
+        // Fallback: build a URL from the current attempt URL and target page.
+        var params = new URLSearchParams(window.location.search);
+        params.set('page', String(targetSlot - 1));
+        window.location.href = window.location.pathname + '?' + params.toString();
+    }
+
+    /**
      * Handle the game-check button click: submit answers and dispatch to game module.
      *
      * @returns {void}
@@ -409,6 +431,11 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                 // Dispatch to the active game module.
                 if (state.activeGame && typeof state.activeGame.onAnswer === 'function') {
                     state.activeGame.onAnswer(response, state.store);
+                }
+                // P3: Auto-navigate when branch_resolver returns a target slot.
+                // Only fires when cannext=true and the slot differs from current.
+                if (response.cannext && response.nextslot > 0 && response.nextslot !== slot) {
+                    navigateToSlot(response.nextslot);
                 }
             });
         }).catch(Notification.exception);

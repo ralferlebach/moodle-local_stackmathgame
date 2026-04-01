@@ -100,6 +100,10 @@ $PAGE->set_title(get_string('gamesettings', 'local_stackmathgame'));
 $PAGE->set_heading(format_string($course->fullname));
 
 $config          = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
+
+// P1: Ensure questionmap rows exist so the slot-config section can be built.
+// This is idempotent: existing rows are preserved, only missing ones are added.
+\local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
 $designs         = \local_stackmathgame\game\theme_manager::get_all_enabled();
 $canselectdesign = has_capability('local/stackmathgame:selectdesign', $context);
 $canmanagelabels = has_capability('local/stackmathgame:managelabels', $context);
@@ -130,6 +134,8 @@ $customdata = [
     'stashitems'      => $stashitems,
     'stashslots'      => $stashslots,
     'stashmappings'   => $stashmappings,
+    'slotconfigs'     => \local_stackmathgame\local\service\branch_resolver::get_quiz_slot_configs($cmid, $quizid),
+    'quizslots'       => \local_stackmathgame\local\service\question_map_service::get_quiz_slot_records($quizid),
 ];
 
 $form      = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
@@ -192,6 +198,40 @@ if ($data = $form->get_data()) {
             'quiz',
             $quizid
         );
+    }
+
+    // P2: Save per-slot Regiekarte (scene type, branching, narrative, rewards).
+    $slotconfigpayload = [];
+    foreach (array_keys($customdata['quizslots'] ?? []) as $slotnumber) {
+        $prefix = 'slotcfg_' . $slotnumber . '_';
+        if (!isset($data->{$prefix . 'scenetype'})) {
+            continue;
+        }
+        $branchingrules = [];
+        foreach (['gradedright', 'gradedwrong', 'default'] as $outcome) {
+            $mode   = (string)($data->{$prefix . 'branch_' . $outcome . '_mode'} ?? 'linear');
+            $target = (int)($data->{$prefix . 'branch_' . $outcome . '_target'} ?? 0);
+            $branchingrules[$outcome] = ['mode' => $mode, 'target' => $target];
+        }
+        $cfg = [
+            'version'   => 1,
+            'enabled'   => true,
+            'scene'     => ['type' => (string)($data->{$prefix . 'scenetype'} ?? 'challenge')],
+            'branching' => $branchingrules,
+            'rewards'   => [
+                'score' => (int)($data->{$prefix . 'reward_score'} ?? 0),
+                'xp'    => (int)($data->{$prefix . 'reward_xp'} ?? 0),
+            ],
+            'narrative' => [
+                'intro'   => (string)($data->{$prefix . 'narrative_intro'} ?? ''),
+                'success' => (string)($data->{$prefix . 'narrative_success'} ?? ''),
+                'fail'    => (string)($data->{$prefix . 'narrative_fail'} ?? ''),
+            ],
+        ];
+        $slotconfigpayload[(int)$slotnumber] = $cfg;
+    }
+    if (!empty($slotconfigpayload)) {
+        \local_stackmathgame\local\service\question_map_service::save_slot_configs($cmid, $quizid, $slotconfigpayload);
     }
 
     redirect(
