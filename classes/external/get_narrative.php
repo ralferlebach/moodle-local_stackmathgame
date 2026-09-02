@@ -26,10 +26,6 @@ namespace local_stackmathgame\external;
 
 use local_stackmathgame\local\service\narrative_resolver;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * Return narrative lines for a named scene from the active design.
  *
@@ -37,16 +33,16 @@ require_once($CFG->libdir . '/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_narrative extends \external_api {
+class get_narrative extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
-            'scene'  => new \external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Quiz id'),
+            'scene'  => new \core_external\external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
         ]);
     }
 
@@ -77,16 +73,16 @@ class get_narrative extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'quizid'   => new \external_value(PARAM_INT, 'Quiz id'),
-            'scene'    => new \external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
-            'lines'    => new \external_multiple_structure(
-                new \external_value(PARAM_RAW, 'Narrative line')
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'quizid'   => new \core_external\external_value(PARAM_INT, 'Quiz id'),
+            'scene'    => new \core_external\external_value(PARAM_ALPHANUMEXT, 'Narrative scene key'),
+            'lines'    => new \core_external\external_multiple_structure(
+                new \core_external\external_value(PARAM_RAW, 'Narrative line')
             ),
-            'designid' => new \external_value(PARAM_INT, 'Design id'),
+            'designid' => new \core_external\external_value(PARAM_INT, 'Design id'),
         ]);
     }
 }

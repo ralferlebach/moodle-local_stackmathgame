@@ -204,10 +204,10 @@ class api {
         int $quizid = 0
     ): array {
         [$cm, $context, $activity] = self::get_activity_context($cmid, $modname, $instanceid, $quizid);
-        if (class_exists('\core_external\external_api')) {
+        if (class_exists('\core_external\core_external\external_api')) {
+            \core_external\core_external\external_api::validate_context($context);
+        } else if (class_exists('\core_external\external_api', false)) {
             \core_external\external_api::validate_context($context);
-        } else if (class_exists('\external_api', false)) {
-            \external_api::validate_context($context);
         }
         require_capability('local/stackmathgame:play', $context);
 

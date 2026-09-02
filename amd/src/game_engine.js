@@ -310,6 +310,13 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             slot: slot,
             answers: answers
         }).then(function(submitresponse) {
+            if (submitresponse && submitresponse.requiresnativefallback) {
+                // The server could not process the answer through the pageless path. Reloading
+                // the ordinary quiz page is the honest outcome: continuing would show feedback
+                // for an answer that was never recorded.
+                window.location.reload();
+                return null;
+            }
             // Held in the enclosing scope so the rest of the chain can stay flat. Nesting the
             // follow-up calls inside this callback was the only reason they were nested at all.
             response = submitresponse;

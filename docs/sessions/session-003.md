@@ -815,14 +815,103 @@ drei Mode-Subplugins einzeln: PASS. **147 Tests, 459 Assertions, 0 Fehler.** Jes
 
 ---
 
+## Patch 10 — Issue #5: der pageless STACK-Submit
+
+### Zuerst: der Subplugin-Gate hat beim ersten Einsatz zugeschlagen
+
+Der in Patch 09 ergänzte Schritt fand sofort einen echten Fehler — und zwar nur unter Moodle 5.2:
+
+```
+Failed to load config "../../../../.eslintrc" to extend from.
+Referenced from: .../moodle/public/local/stackmathgame/mode/exitgames/.eslintrc
+```
+
+Jedes `mode/*/.eslintrc` erweiterte die Kernkonfiguration über einen relativen Pfad mit fester
+Tiefe. Die stimmt, solange das Plugin unter `moodle/local/` liegt; ab Moodle 5.1 liegt es unter
+`moodle/public/local/`, und `../../../../` zeigt auf `moodle/public/`, wo keine Konfiguration
+steht. Dieselbe Klasse von Fehler wie schon zweimal zuvor — ein selbst gebauter Pfad. Die drei
+Dateien sind entfernt: Moodles Gruntfile liefert die ESLint-Konfiguration für jede Komponente
+ohnehin, sie waren von Anfang an überflüssig.
+
+### Zwei Bugs, die die gesamte Laufzeit blockierten
+
+**Alle elf externen API-Klassen ließen sich nicht laden.** Jede hatte auf Dateiebene
+`require_once($CFG->libdir . '/externallib.php');`. `$CFG` ist eine Globale, und Moodles
+Klassenlader ist eine gewöhnliche Funktion — auf Dateiebene einer autogeladenen Klasse ist `$CFG`
+nicht im Scope, das dereferenziert `null`, und die Klasse existiert nicht. Zusätzlich ist
+`lib/externallib.php` in 4.5 ein veralteter Shim, der unter PHPUnit eine Exception wirft und in
+5.x verschwindet. Alle elf Klassen nutzen jetzt die autogeladenen `core_external\*`-Klassen:
+kein `require`, kein Scope-Problem, 5.2-fest.
+
+**Zweiter Defekt im Geschwister-Plugin.** `behaviour.php` band `lib/outputcomponents.php` ein —
+eine Kerndatei, die sich weigert, von einer Komponente eingebunden zu werden, und die
+`setup.php` ohnehin bei jedem Request lädt. Mit dieser Zeile lässt sich keine STACK-Frage
+rendern. Alle vier verbliebenen Behat-Fehler des letzten Laufs gehen darauf zurück. Beide
+Geschwister-Defekte liegen jetzt als **eine** Patch-Datei bei.
+
+### Ein Denkfehler von mir, den erst echte STACK-Fragen aufdeckten
+
+Ich hatte `complete` aus den „richtig"-Zuständen entfernt, weil es „beantwortet, noch nicht
+bewertet" bedeutet. Falsch: unter `adaptivemultipart` — was das Frageverhalten erweitert — ist
+`complete` genau der Zustand einer *richtig* beantworteten Frage während des Versuchs;
+`gradedright` erscheint erst nach Abschluss.
+
+Die Belohnung hängt deshalb nicht mehr am Zustandsnamen, sondern am erreichten **Bruchteil**
+(`get_fraction()`): 1.0 gelöst, dazwischen Teilpunkte, 0 nichts. Genau das verlangt das Issue mit
+„fachlich belastbarem Zustand/Outcome". Für Aufrufer ohne Bruchteil bleibt der Zustandspfad
+erhalten — inklusive Teilpunkten, deren Wegfall ein bestehender Test sofort bemerkt hat.
+
+### Weitere Befunde
+
+* **Die Belohnungen waren fest verdrahtet** (10 / 5). Die Score- und XP-Felder, die Patch 06
+  editierbar gemacht hat, hatten **keinerlei Wirkung**. Sie kommen jetzt aus `configjson`, mit
+  `floor` für Teilpunkte: die Hälfte von 5 ist 2, nicht 3.
+* **Kein Eigentümer-Check am Versuch.** Die Capability sagt „darf hier spielen", nicht „dieser
+  Versuch gehört ihm". Jede spielende Person konnte in den Versuch einer anderen posten, und die
+  Belohnung wäre dort gelandet. Ergänzt, samt „Versuch noch offen" und „Slot gehört zum Versuch".
+* **Reward-Farming unter Parallelität.** At-most-once ist jetzt durch einen Cross-Process-Lock
+  (`\core\lock\lock_config`) abgesichert, mit erneutem Lesen des Vorzustands *innerhalb* des
+  Locks und Freigabe im `finally`.
+* **`status: 'accepted'` bei Fehlschlag** las sich wie Erfolg. Jetzt `notprocessed` plus ein
+  explizites `requiresnativefallback`, das der Client auswertet und die Quizseite neu lädt. Die
+  Exception-Meldung geht nicht mehr an die spielende Person, sondern ins Eventlog.
+* **`get_question_fragment` rief `get_state()->get_name()`** auf — der Zustand `todo` hat die
+  Methode nicht. Behoben, wie im Issue benannt.
+
+### Ehrlich zu den STACK-E2E-Tests
+
+Neun End-to-End-Tests sind geschrieben. Vier laufen (Eigentümerschaft, unbekannter Slot,
+Navigation, falsche Antwort). Die fünf Benotungsfälle **überspringen sich**, weil in dieser
+Umgebung keine funktionierende CAS-Verbindung besteht: jede STACK-Eingabe bleibt auf `invalid`.
+
+Zurechenbar gemacht statt vermutet: **STACKs eigene Testsuite scheitert hier in 71 von 72
+Fällen.** Die Ursache liegt in der Sandbox, nicht im Plugin. Der Skip prüft die CAS-Verbindung
+über STACKs eigenen Connection-Helper und meldet den Grund im Klartext — ein übersprungener
+STACK-Test ist kein bestandener STACK-Test.
+
+Damit die Belohnungslogik trotzdem geprüft ist, gibt es `reward_logic_test`: **11 Fälle, ohne
+CAS, alle grün.** Darunter, dass `complete` mit voller Wertung gelöst ist und ohne Wertung nicht,
+dass wiederholtes Lösen nichts zahlt, dass eine Null-Belohnung respektiert wird und dass eine
+negative Konfiguration kein Profil leeren kann.
+
+### Verifiziert
+
+Alle zwölf Gates PASS, inklusive der drei Mode-Subplugins einzeln.
+**167 Tests, 486 Assertions, 0 Fehler, 18 Skips.** Jest 16 grün.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
   und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
   jede Skip-Meldung ehrlich protokolliert werden.
 * **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
-* **`qbehaviour_stackmathgame` muss gepatcht werden** (`docs/patches/`), sonst ist das Spiel
-  grundsätzlich nicht startbar und in der Quiz-Auswahl nicht sichtbar.
+* **`qbehaviour_stackmathgame` muss gepatcht werden** (`docs/patches/`, zwei Defekte in einer
+  Datei), sonst ist das Spiel weder auswählbar noch startbar und keine STACK-Frage renderbar.
+* **Kein CAS in dieser Entwicklungsumgebung**: die fünf STACK-Benotungstests überspringen sich.
+  Sie müssen auf einer Instanz mit grünem STACK-Healthcheck laufen, bevor Issue #5 als erledigt
+  gelten kann.
 * **Behat-Korrekturen sind nicht durch einen grünen Lauf bestätigt**, nur aus den Logs abgeleitet.
 * **Vier veraltete Dateien** müssen im Repository von Hand gelöscht werden.
 * **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein

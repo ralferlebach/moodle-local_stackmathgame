@@ -29,10 +29,6 @@ use local_stackmathgame\local\service\profile_service;
 use local_stackmathgame\local\service\question_map_service;
 use local_stackmathgame\local\service\slot_config_schema;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * Return the next mapped node or next quiz slot as prefetch data.
  *
@@ -40,25 +36,25 @@ require_once($CFG->libdir . '/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class prefetch_next_activity_node extends \external_api {
+class prefetch_next_activity_node extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
-            'currentslot' => new \external_value(PARAM_INT, 'Current slot number', VALUE_DEFAULT, 0),
-            'outcome' => new \external_value(
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
+            'currentslot' => new \core_external\external_value(PARAM_INT, 'Current slot number', VALUE_DEFAULT, 0),
+            'outcome' => new \core_external\external_value(
                 PARAM_ALPHA,
                 'Outcome to resolve branching for: gradedright, gradedwrong, complete or default',
                 VALUE_DEFAULT,
                 slot_config_schema::OUTCOME_DEFAULT
             ),
-            'attemptid' => new \external_value(
+            'attemptid' => new \core_external\external_value(
                 PARAM_INT,
                 'Quiz attempt id, so the resolved navigation can carry a usable URL',
                 VALUE_DEFAULT,
@@ -207,15 +203,15 @@ class prefetch_next_activity_node extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id'),
-            'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
-            'currentslot' => new \external_value(PARAM_INT, 'Current slot number'),
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id'),
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Legacy quiz id when applicable'),
+            'currentslot' => new \core_external\external_value(PARAM_INT, 'Current slot number'),
             'nextnode' => get_quiz_config::questionmap_structure(),
             'navigation' => navigation_resolver::external_structure(),
         ]);

@@ -24,10 +24,6 @@
 
 namespace local_stackmathgame\external;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * Return game configuration for a quiz.
  *
@@ -35,15 +31,15 @@ require_once($CFG->libdir . '/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_quiz_config extends \external_api {
+class get_quiz_config extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Quiz id'),
         ]);
     }
 
@@ -78,88 +74,88 @@ class get_quiz_config extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
-            'enabled' => new \external_value(PARAM_BOOL, 'Enabled'),
-            'requiresbehaviour' => new \external_value(PARAM_BOOL, 'Requires custom behaviour'),
-            'labelid' => new \external_value(PARAM_INT, 'Label id'),
-            'designid' => new \external_value(PARAM_INT, 'Design id'),
-            'teacherdisplayname' => new \external_value(PARAM_TEXT, 'Teacher-facing display name'),
-            'configjson' => new \external_value(PARAM_RAW, 'Raw config JSON'),
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Quiz id'),
+            'enabled' => new \core_external\external_value(PARAM_BOOL, 'Enabled'),
+            'requiresbehaviour' => new \core_external\external_value(PARAM_BOOL, 'Requires custom behaviour'),
+            'labelid' => new \core_external\external_value(PARAM_INT, 'Label id'),
+            'designid' => new \core_external\external_value(PARAM_INT, 'Design id'),
+            'teacherdisplayname' => new \core_external\external_value(PARAM_TEXT, 'Teacher-facing display name'),
+            'configjson' => new \core_external\external_value(PARAM_RAW, 'Raw config JSON'),
             'design' => self::design_structure(),
             'profile' => self::profile_structure(),
-            'questionmap' => new \external_multiple_structure(self::questionmap_structure()),
+            'questionmap' => new \core_external\external_multiple_structure(self::questionmap_structure()),
         ]);
     }
 
     /**
      * Return the external structure for a profile export array.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function profile_structure(): \external_single_structure {
-        return new \external_single_structure([
-            'id' => new \external_value(PARAM_INT, 'Profile id'),
-            'userid' => new \external_value(PARAM_INT, 'User id'),
-            'labelid' => new \external_value(PARAM_INT, 'Label id'),
-            'score' => new \external_value(PARAM_INT, 'Score'),
-            'xp' => new \external_value(PARAM_INT, 'XP'),
-            'levelno' => new \external_value(PARAM_INT, 'Level'),
-            'softcurrency' => new \external_value(PARAM_INT, 'Soft currency'),
-            'hardcurrency' => new \external_value(PARAM_INT, 'Hard currency'),
-            'avatarconfigjson' => new \external_value(PARAM_RAW, 'Avatar config json'),
-            'progressjson' => new \external_value(PARAM_RAW, 'Progress json'),
-            'statsjson' => new \external_value(PARAM_RAW, 'Stats json'),
-            'flagsjson' => new \external_value(PARAM_RAW, 'Flags json'),
-            'lastquizid' => new \external_value(PARAM_INT, 'Last quiz id'),
-            'lastdesignid' => new \external_value(PARAM_INT, 'Last design id'),
-            'lastaccess' => new \external_value(PARAM_INT, 'Last access timestamp'),
-            'summaryjson' => new \external_value(PARAM_RAW, 'Profile summary json'),
+    public static function profile_structure(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'id' => new \core_external\external_value(PARAM_INT, 'Profile id'),
+            'userid' => new \core_external\external_value(PARAM_INT, 'User id'),
+            'labelid' => new \core_external\external_value(PARAM_INT, 'Label id'),
+            'score' => new \core_external\external_value(PARAM_INT, 'Score'),
+            'xp' => new \core_external\external_value(PARAM_INT, 'XP'),
+            'levelno' => new \core_external\external_value(PARAM_INT, 'Level'),
+            'softcurrency' => new \core_external\external_value(PARAM_INT, 'Soft currency'),
+            'hardcurrency' => new \core_external\external_value(PARAM_INT, 'Hard currency'),
+            'avatarconfigjson' => new \core_external\external_value(PARAM_RAW, 'Avatar config json'),
+            'progressjson' => new \core_external\external_value(PARAM_RAW, 'Progress json'),
+            'statsjson' => new \core_external\external_value(PARAM_RAW, 'Stats json'),
+            'flagsjson' => new \core_external\external_value(PARAM_RAW, 'Flags json'),
+            'lastquizid' => new \core_external\external_value(PARAM_INT, 'Last quiz id'),
+            'lastdesignid' => new \core_external\external_value(PARAM_INT, 'Last design id'),
+            'lastaccess' => new \core_external\external_value(PARAM_INT, 'Last access timestamp'),
+            'summaryjson' => new \core_external\external_value(PARAM_RAW, 'Profile summary json'),
         ]);
     }
 
     /**
      * Return the external structure for a design export array.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function design_structure(): \external_single_structure {
-        return new \external_single_structure([
-            'id' => new \external_value(PARAM_INT, 'Design id'),
-            'name' => new \external_value(PARAM_TEXT, 'Design name'),
-            'slug' => new \external_value(PARAM_ALPHANUMEXT, 'Design slug'),
-            'modecomponent' => new \external_value(PARAM_PLUGIN, 'Mode component'),
-            'description' => new \external_value(PARAM_TEXT, 'Description'),
-            'isbundled' => new \external_value(PARAM_BOOL, 'Bundled flag'),
-            'isactive' => new \external_value(PARAM_BOOL, 'Active flag'),
-            'narrativejson' => new \external_value(PARAM_RAW, 'Narrative json'),
-            'uijson' => new \external_value(PARAM_RAW, 'UI json'),
-            'mechanicsjson' => new \external_value(PARAM_RAW, 'Mechanics json'),
-            'assetmanifestjson' => new \external_value(PARAM_RAW, 'Asset manifest json'),
-            'runtimejson' => new \external_value(PARAM_RAW, 'Runtime config json'),
+    public static function design_structure(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'id' => new \core_external\external_value(PARAM_INT, 'Design id'),
+            'name' => new \core_external\external_value(PARAM_TEXT, 'Design name'),
+            'slug' => new \core_external\external_value(PARAM_ALPHANUMEXT, 'Design slug'),
+            'modecomponent' => new \core_external\external_value(PARAM_PLUGIN, 'Mode component'),
+            'description' => new \core_external\external_value(PARAM_TEXT, 'Description'),
+            'isbundled' => new \core_external\external_value(PARAM_BOOL, 'Bundled flag'),
+            'isactive' => new \core_external\external_value(PARAM_BOOL, 'Active flag'),
+            'narrativejson' => new \core_external\external_value(PARAM_RAW, 'Narrative json'),
+            'uijson' => new \core_external\external_value(PARAM_RAW, 'UI json'),
+            'mechanicsjson' => new \core_external\external_value(PARAM_RAW, 'Mechanics json'),
+            'assetmanifestjson' => new \core_external\external_value(PARAM_RAW, 'Asset manifest json'),
+            'runtimejson' => new \core_external\external_value(PARAM_RAW, 'Runtime config json'),
             // The resolved asset map as a first-class field rather than a JSON string nested
             // inside runtimejson. The client used to have to parse runtimejson to reach it, and
             // read it at the wrong level - so every mode received an empty map and silently
             // rendered nothing where a sprite should have been.
-            'runtimeassets' => new \external_multiple_structure(
-                new \external_single_structure([
-                    'key' => new \external_value(PARAM_ALPHANUMEXT, 'Asset key from the package manifest'),
-                    'url' => new \external_value(PARAM_URL, 'Resolved URL of the asset'),
+            'runtimeassets' => new \core_external\external_multiple_structure(
+                new \core_external\external_single_structure([
+                    'key' => new \core_external\external_value(PARAM_ALPHANUMEXT, 'Asset key from the package manifest'),
+                    'url' => new \core_external\external_value(PARAM_URL, 'Resolved URL of the asset'),
                 ]),
                 'Resolved asset URLs, addressed by key',
                 VALUE_DEFAULT,
                 []
             ),
-            'thumbnailurl' => new \external_value(
+            'thumbnailurl' => new \core_external\external_value(
                 PARAM_URL,
                 'Resolved design thumbnail URL',
                 VALUE_DEFAULT,
                 ''
             ),
-            'themeclass' => new \external_value(
+            'themeclass' => new \core_external\external_value(
                 PARAM_TEXT,
                 'CSS classes identifying mode and design',
                 VALUE_DEFAULT,
@@ -171,16 +167,16 @@ class get_quiz_config extends \external_api {
     /**
      * Return the external structure for a question map node.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function questionmap_structure(): \external_single_structure {
-        return new \external_single_structure([
-            'slotnumber' => new \external_value(PARAM_INT, 'Quiz slot'),
-            'questionid' => new \external_value(PARAM_INT, 'Question id'),
-            'nodekey' => new \external_value(PARAM_TEXT, 'Node key'),
-            'nodetype' => new \external_value(PARAM_TEXT, 'Node type'),
-            'sortorder' => new \external_value(PARAM_INT, 'Sort order'),
-            'configjson' => new \external_value(PARAM_RAW, 'Node config json'),
+    public static function questionmap_structure(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'slotnumber' => new \core_external\external_value(PARAM_INT, 'Quiz slot'),
+            'questionid' => new \core_external\external_value(PARAM_INT, 'Question id'),
+            'nodekey' => new \core_external\external_value(PARAM_TEXT, 'Node key'),
+            'nodetype' => new \core_external\external_value(PARAM_TEXT, 'Node type'),
+            'sortorder' => new \core_external\external_value(PARAM_INT, 'Sort order'),
+            'configjson' => new \core_external\external_value(PARAM_RAW, 'Node config json'),
         ]);
     }
 }

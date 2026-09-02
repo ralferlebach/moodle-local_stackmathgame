@@ -24,10 +24,6 @@
 
 namespace local_stackmathgame\external;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-
 /**
  * Return the current label-bound profile state for a quiz.
  *
@@ -35,15 +31,15 @@ require_once($CFG->libdir . '/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_profile_state extends \external_api {
+class get_profile_state extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Quiz id'),
         ]);
     }
 
@@ -73,13 +69,13 @@ class get_profile_state extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'quizid'   => new \external_value(PARAM_INT, 'Quiz id'),
-            'labelid'  => new \external_value(PARAM_INT, 'Label id'),
-            'designid' => new \external_value(PARAM_INT, 'Design id'),
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'quizid'   => new \core_external\external_value(PARAM_INT, 'Quiz id'),
+            'labelid'  => new \core_external\external_value(PARAM_INT, 'Label id'),
+            'designid' => new \core_external\external_value(PARAM_INT, 'Design id'),
             'profile'  => get_quiz_config::profile_structure(),
             'design'   => get_quiz_config::design_structure(),
         ]);
