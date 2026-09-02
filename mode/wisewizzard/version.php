@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component  = 'stackmathgamemode_wisewizzard';
-$plugin->version    = 2026090208;
+$plugin->version    = 2026090209;
 $plugin->requires   = 2024100700; // Moodle 4.5.
 $plugin->maturity   = MATURITY_ALPHA;
 $plugin->release    = '0.9.0';

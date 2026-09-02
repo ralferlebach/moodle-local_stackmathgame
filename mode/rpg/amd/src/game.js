@@ -315,11 +315,11 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
     function init(gameState) {
         injectStyles();
 
-        var slotMap  = buildSlotMap(gameState.questionmap);
+        var slotMap = buildSlotMap(gameState.questionmap);
         var hudParts = buildHUD();
         buildStage(gameState, hudParts.hud);
-        var bubble   = buildNarrativeBubble(hudParts.hud);
-        var nextBtn  = buildNextButton(bubble);
+        var bubble = buildNarrativeBubble(hudParts.hud);
+        var nextBtn = buildNextButton(bubble);
 
         var score = {mana: MANA_START, fairies: 0};
 
@@ -329,11 +329,13 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             if (stored) {
                 var parsed = JSON.parse(stored);
                 if (parsed && typeof parsed.mana === 'number') {
-                    score.mana    = parsed.mana;
+                    score.mana = parsed.mana;
                     score.fairies = parsed.fairies || 0;
                 }
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            // Ignore: a malformed stored score simply starts the run fresh.
+        }
 
         updateHUD(hudParts, score.mana, score.fairies);
 
@@ -366,9 +368,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
              * @returns {void}
              */
             onAnswer: function(response) {
-                var slot   = response.slot || currentSlot;
+                var slot = response.slot || currentSlot;
                 var solved = !!response.cannext;
-                var cfg    = slotMap[String(slot)] || GameCore.defaultConfig();
+                var cfg = slotMap[String(slot)] || GameCore.defaultConfig();
                 var sceneType = cfg.scene && cfg.scene.type ? cfg.scene.type : 'challenge';
 
                 // Update score on first solve only (prevent farming).
@@ -378,7 +380,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                     score.fairies++;
                     try {
                         sessionStorage.setItem('smg_rpg_score', JSON.stringify(score));
-                    } catch (e) { /* ignore */ }
+                    } catch (e) {
+            // Ignore: a malformed stored score simply starts the run fresh.
+        }
                 }
 
                 updateHUD(hudParts, score.mana, score.fairies);

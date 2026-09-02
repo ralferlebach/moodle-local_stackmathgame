@@ -342,11 +342,31 @@ moodle-plugin-ci grunt        local/stackmathgame --max-lint-warnings 0
 vendor/bin/phpunit --testsuite local_stackmathgame_testsuite
 ```
 
-**Das `<plugin>`-Argument gehört an jeden dieser Befehle.** Ohne es meldet der Befehl seinen
-eigenen Aufruffehler, was leicht für einen Befund gehalten wird.
+**Zum `<plugin>`-Argument.** `moodle-plugin-ci` legt beim `install` eine eigene `.env`-Datei
+neben seiner Binärdatei an und lädt sie bei jedem Aufruf. Darin stehen `MOODLE_DIR` und
+`PLUGIN_DIR`, und `PLUGIN_DIR` ist die Vorgabe des `<plugin>`-Arguments. Daraus folgt:
 
-`grunt` baut dabei die AMD-Module und schlägt fehl, wenn `amd/build/` nicht zum Quelltext passt
-— das ist der eigentliche Schutz gegen ein veraltetes `mode/*/amd/build/game.min.js`.
+* **Nach einem `install`: gar kein Argument.** Die Vorgabe zeigt auf die *installierte* Kopie im
+  Moodle-Baum und ist auch unter Moodle 5.1+ richtig, wo der Webroot in `public/` liegt.
+* **Ohne `install`** (etwa ein reiner `phplint`-Lauf) ist das Argument Pflicht; dann den Pfad
+  angeben.
+
+Diese `.env` ist **nicht** `$GITHUB_ENV`. `"$PLUGIN_DIR"` in einer Workflow-Zeile ist leer, und
+ein leeres Argument löst auf das Arbeitsverzeichnis auf. Wer den Pfad in einem Shell-Schritt
+braucht, liest ihn zurück: `sed -n 's/^PLUGIN_DIR=//p' ci/.env`.
+
+`grunt` baut dabei die AMD-Module und schlägt fehl, wenn `amd/build/` nicht zum Quelltext passt.
+
+**Aber nur für die Komponente, in deren Verzeichnis es läuft.** Ein Aufruf für
+`local/stackmathgame` prüft `mode/*/amd/src` **nicht** — nachgewiesen: mit absichtlich
+fehlerhaftem `mode/rpg/amd/src/game.js` meldet der Eltern-Lauf „Done.". Deshalb iterieren sowohl
+das makefile als auch die CI ausdrücklich über die Subplugins:
+
+```bash
+for mode in local/stackmathgame/mode/*/; do
+    moodle-plugin-ci grunt "$mode" --max-lint-warnings 0
+done
+```
 
 ### Zeilenenden
 

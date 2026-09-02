@@ -115,36 +115,63 @@ jobs:
           MOODLE_BRANCH: ${{ matrix.moodle }}
       - name: PHP Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phplint "$PLUGIN_DIR" 2>&1 | tee ci-logs/phplint.log
+        run: set -o pipefail; moodle-plugin-ci phplint 2>&1 | tee ci-logs/phplint.log
       - name: PHP Copy/Paste Detector
         continue-on-error: true
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpcpd "$PLUGIN_DIR" 2>&1 | tee ci-logs/phpcpd.log
+        run: set -o pipefail; moodle-plugin-ci phpcpd 2>&1 | tee ci-logs/phpcpd.log
       - name: PHP Mess Detector
         continue-on-error: true
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpmd "$PLUGIN_DIR" 2>&1 | tee ci-logs/phpmd.log
+        run: set -o pipefail; moodle-plugin-ci phpmd 2>&1 | tee ci-logs/phpmd.log
       - name: Moodle Code Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci codechecker "$PLUGIN_DIR" --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
+        run: set -o pipefail; moodle-plugin-ci codechecker --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
       - name: Moodle PHPDoc Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpdoc "$PLUGIN_DIR" --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
+        run: set -o pipefail; moodle-plugin-ci phpdoc --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
       - name: Validating
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci validate "$PLUGIN_DIR" 2>&1 | tee ci-logs/validate.log
+        run: set -o pipefail; moodle-plugin-ci validate 2>&1 | tee ci-logs/validate.log
       - name: Check upgrade savepoints
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci savepoints "$PLUGIN_DIR" 2>&1 | tee ci-logs/savepoints.log
+        run: set -o pipefail; moodle-plugin-ci savepoints 2>&1 | tee ci-logs/savepoints.log
       - name: Mustache Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci mustache "$PLUGIN_DIR" 2>&1 | tee ci-logs/mustache.log
+        run: set -o pipefail; moodle-plugin-ci mustache 2>&1 | tee ci-logs/mustache.log
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}
         # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
         # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
         # what caught the undocumented @returns in the mode modules.
-        run: set -o pipefail; moodle-plugin-ci grunt "$PLUGIN_DIR" --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+        run: set -o pipefail; moodle-plugin-ci grunt --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+      - name: Grunt for the bundled mode subplugins (AMD build + ESLint)
+        if: ${{ always() }}
+        run: |
+          # Grunt resolves the component from the directory it runs in, so the step above only
+          # ever touches local_stackmathgame's own amd/src. The three game modes under mode/ are
+          # separate Moodle components with their own amd/src and amd/build, and until this step
+          # existed nothing in CI linted or rebuilt them: a run stayed green with a deliberately
+          # broken mode/rpg/amd/src/game.js, and a stale mode/*/amd/build/game.min.js shipped an
+          # old game module while the source next to it looked current.
+          set -o pipefail
+          # PLUGIN_DIR is written into moodle-plugin-ci's own ci/.env, not into $GITHUB_ENV, so
+          # it is NOT a shell variable here - referencing it directly yields an empty string.
+          # Read it back from that file instead.
+          plugindir=$(sed -n 's/^PLUGIN_DIR=//p' ci/.env)
+          if [ -z "$plugindir" ]; then
+            echo "PLUGIN_DIR not found in ci/.env - did the install step run?" >&2
+            exit 1
+          fi
+          status=0
+          for mode in "$plugindir"/mode/*/; do
+            [ -d "${mode}amd/src" ] || continue
+            echo "==> $(basename "$mode")"
+            moodle-plugin-ci grunt "$mode" --max-lint-warnings 0 2>&1 \
+              | tee -a ci-logs/grunt-modes.log || status=1
+          done
+          exit $status
+
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
         run: |
@@ -154,11 +181,11 @@ jobs:
           npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpunit "$PLUGIN_DIR" --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
+        run: set -o pipefail; moodle-plugin-ci phpunit --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
       - name: Behat features
         id: behat
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci behat "$PLUGIN_DIR" --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
+        run: set -o pipefail; moodle-plugin-ci behat --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -369,7 +396,7 @@ jobs:
           # Clover XML instead of --coverage-text: the text report covers the whole Moodle tree
           # (its summary showed ~2% because it counts all of core), which says nothing about this
           # plugin. Clover gives per-file counters, so the gate can measure exactly this plugin.
-          moodle-plugin-ci phpunit --coverage-clover --coverage-pcov "$PLUGIN_DIR"
+          moodle-plugin-ci phpunit --coverage-clover --coverage-pcov
         env:
           DB: pgsql
           MOODLE_BRANCH: MOODLE_405_STABLE

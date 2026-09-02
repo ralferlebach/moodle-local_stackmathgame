@@ -755,6 +755,66 @@ sind aus den Logs und dem Quelltext abgeleitet, nicht durch einen grünen Lauf b
 
 ---
 
+## Patch 09 — Mein Fehler, dreimal in Folge, und die tatsächlich fehlende JS-Prüfung
+
+### Alle sechs Fehlschläge dieses Laufs hatten dieselbe Ursache
+
+```
+In CodeParser.php line 37:
+  Failed to find '<workspace>/version.php' file.
+```
+
+`"$PLUGIN_DIR"` war leer. **`moodle-plugin-ci` schreibt `PLUGIN_DIR` und `MOODLE_DIR` in seine
+eigene `.env`-Datei neben der Binärdatei, nicht nach `$GITHUB_ENV`.** In einer `run:`-Zeile
+expandiert die Variable deshalb zu nichts, und ein leeres Positionsargument löst auf das
+Arbeitsverzeichnis auf.
+
+`AbstractPluginCommand::configure()` macht das Argument genau dann optional, wenn `PLUGIN_DIR`
+gesetzt ist, und nimmt es als Vorgabe. **Nach einem `install` ist der richtige Aufruf also gar
+kein Argument** — und diese Vorgabe ist auch unter Moodle 5.1+ mit `public/`-Layout korrekt.
+
+Damit war die ursprüngliche Template-Fassung die ganze Zeit richtig, und ich habe sie dreimal
+hintereinander verschlimmbessert:
+
+| Patch | Was ich tat | Warum es falsch war |
+|---|---|---|
+| 05 | `plugin` an *jeden* Befehl gehängt | Die echte Ursache war der abgebrochene Install (falscher Branch), nicht ein fehlendes Argument |
+| 07 | auf `moodle/local/stackmathgame` festgenagelt | Bricht unter Moodle 5.1+, wo das Plugin in `public/local/` liegt |
+| 08 | `"$PLUGIN_DIR"` eingesetzt | Die Variable existiert in der Shell nicht |
+
+Dreimal dasselbe Muster: einen Pfad selbst konstruieren, wo das Werkzeug ihn längst kennt. Jetzt
+steht in `ENTWICKLUNGSUMGEBUNG.md` ausdrücklich, wann das Argument gehört und wann nicht — und
+dass man es, wenn man es in einem Shell-Schritt wirklich braucht, aus `ci/.env` zurückliest.
+
+### Die JS-Prüfung der Subplugins fehlte tatsächlich
+
+Ralf hat mehrfach danach gefragt, und der Einwand war berechtigt. Ich hatte es für erledigt
+gehalten, weil ein Grunt-Schritt in der Pipeline steht. Er deckt die Mode-Subplugins aber nicht
+ab.
+
+**Nachgewiesen statt vermutet:** ein absichtlich fehlerhaftes `mode/rpg/amd/src/game.js`
+eingebaut und den Eltern-Grunt laufen lassen — Ergebnis „Done.". Direkt auf dem Subplugin
+gestartet, meldete derselbe Befehl acht ESLint-Warnungen, die die CI nie gesehen hatte.
+
+Grunt bestimmt die Komponente aus dem Verzeichnis, in dem es läuft. Das steht seit Patch 01 in
+der Doku und im makefile — nur in der CI stand es nicht. Behoben:
+
+* Neuer Schritt in beiden Pipelines, der über `mode/*/` iteriert. Er löst den Plugin-Pfad aus
+  `ci/.env` auf, weil `$PLUGIN_DIR` in der Shell eben nicht existiert.
+* **Verifiziert, dass der Schritt anschlägt:** mit einem absichtlich fehlerhaften
+  `mode/wisewizzard/amd/src/game.js` schlägt er fehl und nennt das Subplugin.
+* Die acht bestehenden Warnungen in `mode/rpg` behoben (Ausrichtungs-Leerzeichen, kleingeschriebene
+  Kommentaranfänge, ein leerer `catch`-Block ohne Begründung).
+* Dabei fiel ein veraltetes `mode/rpg/amd/build/game.min.js.map` auf — genau der Fehler, den die
+  Doku als teuersten in diesem Projekt beschreibt. Neu gebaut.
+
+### Verifiziert
+
+Alle neun Gates PASS, mit den **blanken** Aufrufen, die die CI jetzt verwendet. Zusätzlich alle
+drei Mode-Subplugins einzeln: PASS. **147 Tests, 459 Assertions, 0 Fehler.** Jest 16 grün.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
