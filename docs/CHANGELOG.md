@@ -11,6 +11,23 @@
 
 ### Changed
 
+* CI: every `moodle-plugin-ci` check command now passes the `plugin` argument. Version 4 requires
+  it and `install` does not export it, so `codechecker`, `phpdoc`, `savepoints`, `validate`,
+  `mustache`, `grunt`, `phpunit` and `behat` aborted before checking anything.
+* CI: the development pipeline pins `qbehaviour_stackmathgame` to `main`; that repository has no
+  `development` branch and `add-plugin` fails hard on a missing ref.
+* All line endings normalised to LF, with an `eol=lf` policy in `.gitattributes`. CRLF made
+  PHPCS report 291 errors across 68 files.
+* PHPUnit test classes moved from the `local_stackmathgame\tests\unit` namespace to
+  `local_stackmathgame\unit`, which is what `moodle.PHPUnit.TestCaseNames` expects for files in
+  `tests/unit/`.
+* The duplicated question-map upgrade block was extracted into
+  `db/upgradelib.php::local_stackmathgame_upgrade_questionmap_cmid()`.
+* `ui_renderer.render()` split into `statusText()`, `renderProfile()` and `renderNarrative()`;
+  the promise chain in `game_engine.handleGameCheck()` flattened. Both were ESLint failures under
+  `--max-lint-warnings 0`.
+* Language packs gained the nine missing capability strings.
+
 * CI now installs the real dependency set (`qtype_stack`, `qbehaviour_adaptivemultipart`,
   `qbehaviour_stackmathgame`, `filter_shortcodes`) plus the optional `block_xp` / `block_stash`
   integrations, so the bridges are exercised rather than skipped.
@@ -57,6 +74,9 @@
 
 ### Removed
 
+* `tests/behat/behat_local_stackmatheditor.php`, a Behat context belonging to a different
+  plugin: it declared `@package local_stackmatheditor`, drove a MathQuill editor this plugin does
+  not ship, and no feature file here referenced any of its fifteen steps.
 * `amd/src/fantasy_quiz.js`, the standalone prototype module superseded by `game_engine`. Its
   HTML escaping was salvaged into `game_core`; its activity-aware endpoint dispatch already
   existed in `api_client`.

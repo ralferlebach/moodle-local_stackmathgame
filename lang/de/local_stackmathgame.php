@@ -163,6 +163,15 @@ $string['shortcode_smgscore_help'] = 'Außerhalb eines Quiz-Kontexts ist label="
 $string['shortcode_smgxp'] = 'Zeigt die aktuellen XP für ein Spiellabel an.';
 $string['shortcode_smgxp_help'] = 'Außerhalb eines Quiz-Kontexts ist label="..." Pflicht. Optional: field="xp|levelno|solvedcount|partialcount|trackedslots|levelprogress".';
 $string['shortcodeslabelrequired'] = 'Außerhalb eines Quiz-Kontexts benötigen STACK-Math-Game-Shortcodes ein label-Argument.';
+$string['stackmathgame:configurequiz'] = 'Spiel für eine Aktivität konfigurieren';
+$string['stackmathgame:manageassets'] = 'Design-Assets verwalten';
+$string['stackmathgame:managelabels'] = 'Spiel-Labels verwalten';
+$string['stackmathgame:managemechanics'] = 'Spielmechaniken verwalten';
+$string['stackmathgame:managenarratives'] = 'Narrative verwalten';
+$string['stackmathgame:managethemes'] = 'Designs anlegen und bearbeiten';
+$string['stackmathgame:play'] = 'Spiel in einer Aktivität spielen';
+$string['stackmathgame:selectdesign'] = 'Design für eine Aktivität auswählen';
+$string['stackmathgame:viewstudio'] = 'GameDesign Studio ansehen';
 $string['stashmapping_desc'] = 'Weisen Sie jedem Frageplatz einen block_stash-Gegenstand zu. Löst eine Person diesen Platz zum ersten Mal, wird der Gegenstand ihrem Inventar hinzugefügt. Setzt voraus, dass block_stash installiert und im Kurs aktiviert ist.';
 $string['stashmapping_enabled'] = 'Zuordnung aktiv';
 $string['stashmapping_header'] = 'Stash-Belohnungen (Integration mit block_stash)';

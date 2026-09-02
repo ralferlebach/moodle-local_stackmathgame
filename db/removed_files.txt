@@ -11,3 +11,9 @@
 amd/src/fantasy_quiz.js
 amd/build/fantasy_quiz.min.js
 amd/build/fantasy_quiz.min.js.map
+
+# A Behat context copied in from local_stackmatheditor, a different plugin. Its class was
+# behat_local_stackmatheditor, it declared @package local_stackmatheditor, and its steps drove a
+# MathQuill editor this plugin does not ship - set_config() calls even targeted the other
+# component. No feature file in this plugin referenced any of its fifteen steps.
+tests/behat/behat_local_stackmatheditor.php

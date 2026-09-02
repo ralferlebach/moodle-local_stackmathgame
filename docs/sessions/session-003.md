@@ -383,14 +383,136 @@ tests/playwright/game.spec.js                   (Assertion verschärft)
 
 ---
 
+## Patch 05 — CI-Pipeline reparieren (abgeschlossen, verifiziert)
+
+Ralf hat die Logs des ersten Laufs geliefert: fünf von sechs Jobs rot. Für diesen Patch habe ich
+eine echte Moodle-4.5-Umgebung aufgebaut — geklont, `npm install`, PostgreSQL, PHPUnit-Init,
+`moodle-plugin-ci` v4.5.11 — und **jedes Gate tatsächlich ausgeführt** statt es zu vermuten.
+
+### Ursache 1 — `Not enough arguments (missing: "plugin")`, 19 Aufrufe
+
+`moodle-plugin-ci` v4 verlangt das `<plugin>`-Argument bei *jedem* Prüfbefehl; `install`
+exportiert es nicht in die Umgebung. Die Template-Vorlage ging vom Gegenteil aus: `phplint`,
+`phpmd` und `phpcpd` hatten es, alle übrigen nicht. `codechecker`, `phpdoc`, `savepoints`,
+`validate`, `mustache`, `grunt`, `phpunit` und `behat` brachen ab, bevor sie irgendetwas
+geprüft hatten. Das ist der Grund, warum der erste Lauf so breit rot war und gleichzeitig so
+wenig aussagte.
+
+### Ursache 2 — `--branch development` existiert nicht
+
+`moodle-qbehaviour_stackmathgame` hat nur `main`. `add-plugin` scheitert hart auf einer
+fehlenden Referenz statt auf den Default zurückzufallen; das riss die gesamte PHPUnit- und
+Behat-Matrix mit. Auf `main` gesetzt, mit Begründung im Workflow-Kommentar.
+
+### Ursache 3 — die gesamte Codebasis hatte CRLF
+
+67 PHP-Dateien, dazu JS, SVG, Markdown und XML. PHPCS meldete daraufhin **291 Fehler**:
+67-mal `LineEndings` plus 201-mal „Boilerplate comment wrong line", weil der Sniff Kopfzeilen
+zählt und CRLF sie verschiebt. Das war schon vor dieser Sitzung rot — es kam nur nie zur
+Anzeige, weil `codechecker` an Ursache 1 abbrach.
+
+Alles auf LF normalisiert (130 Dateien) und eine `eol=lf`-Regel in `.gitattributes` ergänzt.
+Ohne die holt ein Windows-Checkout die CRLF zurück und die CI wird rot aus einem Grund, den
+niemand im Diff sieht.
+
+### Ursache 4 — neun Capabilities ohne Sprachstring
+
+`validate` wäre daran gescheitert, sobald es überhaupt gelaufen wäre. EN und DE nachgetragen.
+
+### Ursache 5 — der `stale-files`-Gate hatte recht
+
+`.github/workflows/moodle-ci.yml`, `amd/src/fantasy_quiz.js` und zwei Build-Artefakte liegen
+noch im Repository. **Muss Ralf von Hand löschen** — ein ZIP-Overlay fügt hinzu und
+überschreibt, löscht aber nie. Genau dafür existiert `db/removed_files.txt`.
+
+### Was erst *im Baum* sichtbar wurde
+
+Die Doku behauptet, `moodle.PHPUnit.*` schweige außerhalb eines Moodle-Baums. Das hat sich
+bestätigt — beide Sniffs traten erst auf, nachdem ich das Plugin nach `moodle/local/` kopiert
+hatte:
+
+* **Alle 20 Testklassen hatten den falschen Namespace.** `local_stackmathgame\tests\unit`
+  bildet auf `tests/tests/unit` ab; erwartet ist `local_stackmathgame\unit`.
+* **`tests/behat/behat_local_stackmatheditor.php` gehört zu einem anderen Plugin.** Klasse
+  `behat_local_stackmatheditor`, `@package local_stackmatheditor`, fünfzehn Schritte für einen
+  MathQuill-Editor, den dieses Plugin nicht ausliefert — inklusive `set_config()`-Aufrufen gegen
+  die fremde Komponente. Keine einzige Feature-Datei hier referenzierte einen dieser Schritte.
+  Entfernt und in `db/removed_files.txt` eingetragen.
+* `capability_test` hatte keine Coverage-Angabe. Gegenstand ist `db/access.php`, das keine
+  Klasse deklariert — jetzt explizit `@coversNothing`, denn eine annotationsfreie Testklasse ist
+  von einer vergessenen Annotation nicht zu unterscheiden.
+
+### Weitere echte Befunde
+
+* **PHPCPD:** 40 Zeilen doppelt in `db/upgrade.php` (Schritte 2026032832 und 2026032840). In
+  `db/upgradelib.php` als `local_stackmathgame_upgrade_questionmap_cmid()` extrahiert. Sicher,
+  weil die Routine durchgängig idempotent ist. Gefährlich war die Kopie, nicht die Länge: eine
+  Korrektur an einer Stelle lässt die andere falsch, und nur Instanzen, die über die jeweils
+  andere Version aktualisieren, merken es.
+* **PHPDoc:** `ensure_default()` dokumentierte einen von zwei Parametern; zweimal wurde `@group`
+  bzw. `@covers` mitten im Fließtext als Inline-Tag gelesen.
+* **ESLint (Moodle-Konfiguration, `--max-lint-warnings 0`):** 15 Warnungen. Statt den
+  Schwellwert zu senken behoben: reservierte Wörter als Objektschlüssel quotiert, Ausrichtungs-
+  Leerzeichen entfernt, fehlende `return` in `then()`-Callbacks ergänzt, die verschachtelte
+  Promise-Kette in `handleGameCheck()` flachgezogen (die Verschachtelung existierte nur, um
+  `response` im Scope zu halten — eine Variable in der äußeren Funktion tut dasselbe), und
+  `ui_renderer.render()` mit zyklomatischer Komplexität 23 in drei Helfer zerlegt.
+* **`MOODLE_INTERNAL` in `db/upgradelib.php`** war überflüssig: die Datei deklariert nur eine
+  Funktion, hat also keine Seiteneffekte.
+
+### AMD-Build erledigt
+
+Moodle 4.5 geklont, `npm install`, `grunt amd` für das Elternplugin **und** alle drei
+Mode-Subplugins. Die Artefakte liegen aktualisiert im Patch. Damit ist der Blocker weg, den ich
+seit Patch 03 mitschleppe — Patch 03 und 04 sind im Browser ab sofort wirksam.
+
+### Verifiziert, nicht behauptet
+
+| Gate | Ergebnis |
+|---|---|
+| phplint | PASS |
+| phpcpd | PASS |
+| phpmd | PASS |
+| codechecker | PASS (vorher 291 Fehler) |
+| phpdoc | PASS |
+| validate | PASS |
+| savepoints | PASS |
+| mustache | PASS |
+| grunt (Build + ESLint) | PASS |
+| **PHPUnit** | **134 Tests, 413 Assertions, 0 Fehler, 9 übersprungen** |
+| Jest | 16 Tests, grün (auch in Ralfs CI-Lauf) |
+| Release-Artefakt | 262 Einträge, keine Entwicklerwerkzeuge |
+
+Alle 25 Tests aus den Patches 02–04 laufen: `prerequisite_checker` (7), `requires_behaviour` (4),
+`navigation_resolver` (8), `design_assets` (6).
+
+### Ehrlich zu den Lücken
+
+Die neun Skips sind Platzhalter und Bridge-Tests, die `block_xp` bzw. `block_stash` verlangen.
+
+**Der Testbaum hat die harten Abhängigkeiten nicht.** `qtype_stack`,
+`qbehaviour_stackmathgame` und `filter_shortcodes` fehlen, und die PHPUnit-Initialisierung hat
+das Plugin trotzdem installiert. Für `prerequisite_checker` heißt das: die drei
+Plugin-Präsenz-Prüfungen melden hier `error`, `is_playable()` ist immer `false`. Die Tests
+bestehen trotzdem, weil sie gezielt einzelne Prüfschlüssel abfragen — aber **der Positivfall von
+`is_playable()` ist damit ungetestet**. Das gehört zu Issue #5 nachgeholt, wenn Maxima und die
+Abhängigkeiten in der CI stehen.
+
+**Behat ist nicht gelaufen** — braucht Selenium und Chrome. Die Feature-Dateien bestehen
+`gherkinlint` als Teil von `grunt`, mehr nicht.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
   und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
   jede Skip-Meldung ehrlich protokolliert werden.
 * **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
-* **AMD-Build steht aus.** Bis `make amd` gelaufen ist, sind die Patch-03-Änderungen im Browser
-  nicht wirksam.
+* **Positivfall von `is_playable()` ungetestet**, solange die harten Abhängigkeiten nicht im
+  Testbaum stehen (siehe Patch 05).
+* **Behat ist noch nie gelaufen.** Die Szenarien aus den Patches 02 und 03 sind ungeprüft.
+* **Vier veraltete Dateien** müssen im Repository von Hand gelöscht werden.
 * **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein
   gemessenes Ziel. Sie müssen nach dem ersten echten Lauf auf repräsentativer Hardware
   nachgezogen werden.

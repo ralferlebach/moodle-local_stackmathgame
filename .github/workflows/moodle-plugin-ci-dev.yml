@@ -102,7 +102,7 @@ jobs:
           sudo locale-gen en_AU.UTF-8
       - name: Moodle Code Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci codechecker --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
+        run: set -o pipefail; moodle-plugin-ci codechecker plugin --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
       - name: PHP Mess Detector
         continue-on-error: true
         if: ${{ always() }}
@@ -167,9 +167,12 @@ jobs:
           # qtype_stack -- without it the Moodle install aborts before our plugin is
           # ever reached. block_xp / block_stash are soft integrations; they are
           # installed so the optional bridges are exercised rather than skipped.
+          # qbehaviour_stackmathgame is pinned to main even on the development pipeline:
+          # that repository has no development branch, and add-plugin fails hard on a
+          # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
-          moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-qbehaviour_stackmathgame
+          moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_stash
@@ -179,13 +182,13 @@ jobs:
           MOODLE_BRANCH: MOODLE_405_STABLE
       - name: Moodle PHPDoc Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpdoc --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
+        run: set -o pipefail; moodle-plugin-ci phpdoc plugin --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
       - name: Check upgrade savepoints
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci savepoints 2>&1 | tee ci-logs/savepoints.log
+        run: set -o pipefail; moodle-plugin-ci savepoints plugin 2>&1 | tee ci-logs/savepoints.log
       - name: Validating
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci validate 2>&1 | tee ci-logs/validate.log
+        run: set -o pipefail; moodle-plugin-ci validate plugin 2>&1 | tee ci-logs/validate.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -261,9 +264,12 @@ jobs:
           # qtype_stack -- without it the Moodle install aborts before our plugin is
           # ever reached. block_xp / block_stash are soft integrations; they are
           # installed so the optional bridges are exercised rather than skipped.
+          # qbehaviour_stackmathgame is pinned to main even on the development pipeline:
+          # that repository has no development branch, and add-plugin fails hard on a
+          # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
-          moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-qbehaviour_stackmathgame
+          moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_stash
@@ -273,13 +279,13 @@ jobs:
           MOODLE_BRANCH: ${{ matrix.moodle }}
       - name: Mustache Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci mustache 2>&1 | tee ci-logs/mustache.log
+        run: set -o pipefail; moodle-plugin-ci mustache plugin 2>&1 | tee ci-logs/mustache.log
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}
         # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
         # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
         # what caught the undocumented @returns in the mode modules.
-        run: set -o pipefail; moodle-plugin-ci grunt --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+        run: set -o pipefail; moodle-plugin-ci grunt plugin --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
         run: |
@@ -289,7 +295,7 @@ jobs:
           npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpunit --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
+        run: set -o pipefail; moodle-plugin-ci phpunit plugin --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -347,9 +353,12 @@ jobs:
           # qtype_stack -- without it the Moodle install aborts before our plugin is
           # ever reached. block_xp / block_stash are soft integrations; they are
           # installed so the optional bridges are exercised rather than skipped.
+          # qbehaviour_stackmathgame is pinned to main even on the development pipeline:
+          # that repository has no development branch, and add-plugin fails hard on a
+          # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
-          moodle-plugin-ci add-plugin --branch development ralferlebach/moodle-qbehaviour_stackmathgame
+          moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_stash
@@ -360,7 +369,7 @@ jobs:
       - name: Behat features
         id: behat
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci behat --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
+        run: set -o pipefail; moodle-plugin-ci behat plugin --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
       - name: Collect error summary and Behat dumps
         if: ${{ always() }}
         run: |

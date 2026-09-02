@@ -93,6 +93,7 @@ class quiz_configurator {
      * Ensure a default configuration row exists for the given course-module.
      *
      * @param int $cmid The course-module ID.
+     * @param string|null $modname Optional module name hint; the stored type wins when they differ.
      * @return \stdClass The configuration record.
      */
     public static function ensure_default(int $cmid, ?string $modname = null): \stdClass {

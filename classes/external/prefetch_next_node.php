@@ -25,7 +25,6 @@
 namespace local_stackmathgame\external;
 
 use local_stackmathgame\local\service\navigation_resolver;
-
 use xmldb_field;
 use xmldb_table;
 

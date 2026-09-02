@@ -65,6 +65,70 @@ define([], function() {
     };
 
     /**
+     * Return the status line for the current state.
+     *
+     * Split out of render(): the four-way status decision plus the profile and narrative
+     * rendering took render() to a cyclomatic complexity of 23, over Moodle's limit of 20.
+     *
+     * @param {Object} state The render state.
+     * @param {Object} strings Localised string map.
+     * @returns {string} The status text.
+     */
+    const statusText = function(state, strings) {
+        if (state.loading) {
+            return strings.loading || 'Loading game layer...';
+        }
+        if (state.error) {
+            return (strings.error || 'Runtime error') + ': ' + state.error;
+        }
+        if (state.lastSubmit && state.lastSubmit.message) {
+            return state.lastSubmit.message;
+        }
+        return strings.ready || 'Game runtime ready';
+    };
+
+    /**
+     * Render the profile summary.
+     *
+     * @param {Element} element The target element.
+     * @param {Object} state The render state.
+     * @param {Object} strings Localised string map.
+     * @returns {void}
+     */
+    const renderProfile = function(element, state, strings) {
+        const profiledata = state.profile || {};
+        const designName = (state.design && state.design.name) ? state.design.name : '\u2014';
+        element.innerHTML = '' +
+            '<div><strong>' + (strings.profile || 'Profile') + '</strong></div>' +
+            '<div>Score: ' + (profiledata.score || 0) +
+            ' \u00b7 XP: ' + (profiledata.xp || 0) +
+            ' \u00b7 Level: ' + (profiledata.levelno || 1) + '</div>' +
+            '<div>' + (strings.design || 'Design') + ': ' + designName + '</div>';
+    };
+
+    /**
+     * Render the narrative lines, escaping their content.
+     *
+     * @param {Element} element The target element.
+     * @param {Array} lines The narrative lines.
+     * @returns {void}
+     */
+    const renderNarrative = function(element, lines) {
+        if (!lines.length) {
+            element.classList.add('d-none');
+            element.innerHTML = '';
+            return;
+        }
+        element.classList.remove('d-none');
+        element.innerHTML = lines.map(function(line) {
+            return '<div>' + String(line)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;') + '</div>';
+        }).join('');
+    };
+
+    /**
      * Update the shell UI to reflect the provided game state.
      *
      * @param {Object} state The current game state object.
@@ -86,43 +150,14 @@ define([], function() {
         shell.querySelector('[data-smg-action="native"]').textContent =
             strings.native || 'Use native controls';
 
-        const statusEl    = shell.querySelector('.smg-runtime-status');
-        const profileEl   = shell.querySelector('.smg-runtime-profile');
+        const statusEl = shell.querySelector('.smg-runtime-status');
+        const profileEl = shell.querySelector('.smg-runtime-profile');
         const narrativeEl = shell.querySelector('.smg-runtime-narrative');
-        const nextEl      = shell.querySelector('.smg-runtime-next');
+        const nextEl = shell.querySelector('.smg-runtime-next');
 
-        if (state.loading) {
-            statusEl.textContent = strings.loading || 'Loading game layer...';
-        } else if (state.error) {
-            statusEl.textContent = (strings.error || 'Runtime error') + ': ' + state.error;
-        } else if (state.lastSubmit && state.lastSubmit.message) {
-            statusEl.textContent = state.lastSubmit.message;
-        } else {
-            statusEl.textContent = strings.ready || 'Game runtime ready';
-        }
-
-        const profiledata = state.profile || {};
-        const designName = (state.design && state.design.name) ? state.design.name : '—';
-        profileEl.innerHTML = '' +
-            '<div><strong>' + (strings.profile || 'Profile') + '</strong></div>' +
-            '<div>Score: ' + (profiledata.score || 0) +
-            ' · XP: ' + (profiledata.xp || 0) +
-            ' · Level: ' + (profiledata.levelno || 1) + '</div>' +
-            '<div>' + (strings.design || 'Design') + ': ' + designName + '</div>';
-
-        const lines = state.narrativeLines || [];
-        if (lines.length) {
-            narrativeEl.classList.remove('d-none');
-            narrativeEl.innerHTML = lines.map(function(line) {
-                return '<div>' + String(line)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;') + '</div>';
-            }).join('');
-        } else {
-            narrativeEl.classList.add('d-none');
-            narrativeEl.innerHTML = '';
-        }
+        statusEl.textContent = statusText(state, strings);
+        renderProfile(profileEl, state, strings);
+        renderNarrative(narrativeEl, state.narrativeLines || []);
 
         if (state.nextNodeDescription) {
             nextEl.textContent =

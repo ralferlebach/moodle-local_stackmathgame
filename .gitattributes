@@ -1,3 +1,14 @@
+# Line endings. The plugin was originally authored with CRLF, which fails
+# Generic.Files.LineEndings on every file and cascades into "boilerplate comment on the wrong
+# line" for each of them. Normalising once is not enough - without this, a checkout on Windows
+# reintroduces CRLF and CI goes red again for reasons nobody can see in a diff.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.svg text eol=lf
+*.zip binary
+
 # Distribution rules for `git archive` (the GitHub release tarball/zip).
 #
 # Principle: the released package is a reproducible *source* release of the

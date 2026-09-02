@@ -47,7 +47,7 @@ define([], function() {
                 gradedright: {mode: 'linear'},
                 gradedwrong: {mode: 'linear'},
                 complete:    {mode: 'linear'},
-                default:     {mode: 'linear'}
+                'default':   {mode: 'linear'}
             },
             rewards: {
                 score: 0,

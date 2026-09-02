@@ -295,3 +295,64 @@ Beide Prompts liegen auch unter `docs/prompt-templates/` als Textdateien.
 | Behat meldet HTTP 0 | `behat_wwwroot` auf `localhost` statt `127.0.0.1` |
 | STACK-Test „passed", ohne etwas zu prüfen | Maxima fehlt, der Testfall hat sich übersprungen |
 | Nach Speichern der Spieleinstellungen ist etwas aus | `requiresbehaviour` fällt auf `0` — Issue #3 |
+
+---
+
+## 11. Warum die Prüfungen im Moodle-Baum laufen müssen
+
+Abschnitt 6 sagt es kurz; hier steht, was konkret passiert ist, damit die Regel nicht wieder
+verwässert wird.
+
+Der erste vollständige CI-Lauf war in fünf von sechs Jobs rot. Alle statischen Gates
+(`codechecker`, `phpdoc`, `savepoints`, `validate`, `mustache`, `grunt`) hatten in Wahrheit gar
+nichts geprüft: `moodle-plugin-ci` v4 verlangt das `<plugin>`-Argument, und ohne dieses bricht
+der Befehl vor der ersten Datei ab. Ein Job kann rot sein und trotzdem nichts über den Code
+aussagen — die Fehlermeldung war jedes Mal `Not enough arguments`, nicht ein Befund.
+
+Danach traten zwei Sniffs auf, die außerhalb des Baums schweigen und deshalb monatelang
+unentdeckt blieben:
+
+* `moodle.PHPUnit.TestCaseNames` — der Namespace einer Testklasse muss dem Verzeichnis unter
+  `tests/` entsprechen. Alle zwanzig Klassen lagen falsch.
+* `moodle.PHPUnit.TestCaseCovers` — jede Testklasse braucht eine Coverage-Angabe. Wo es nichts
+  zu benennen gibt, ist `@coversNothing` die Antwort: eine fehlende Angabe ist von einer
+  vergessenen nicht zu unterscheiden.
+
+Beide melden sich nur, wenn das Plugin unter `moodle/local/stackmathgame` liegt. Ein Lauf im
+alleinstehenden Verzeichnis meldet „keine Fehler" und ist wertlos.
+
+### Der Ablauf, der tatsächlich etwas beweist
+
+```bash
+cd /var/www/html/moodle45_aliseadele
+composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ~/ci ^4
+export PATH="$HOME/ci/bin:$HOME/ci/vendor/bin:$PATH"
+
+moodle-plugin-ci phplint      local/stackmathgame
+moodle-plugin-ci phpcpd       local/stackmathgame
+moodle-plugin-ci phpmd        local/stackmathgame
+moodle-plugin-ci codechecker  local/stackmathgame --max-warnings 0 \
+    --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment
+moodle-plugin-ci phpdoc       local/stackmathgame --max-warnings 0
+moodle-plugin-ci validate     local/stackmathgame
+moodle-plugin-ci savepoints   local/stackmathgame
+moodle-plugin-ci mustache     local/stackmathgame
+moodle-plugin-ci grunt        local/stackmathgame --max-lint-warnings 0
+
+vendor/bin/phpunit --testsuite local_stackmathgame_testsuite
+```
+
+**Das `<plugin>`-Argument gehört an jeden dieser Befehle.** Ohne es meldet der Befehl seinen
+eigenen Aufruffehler, was leicht für einen Befund gehalten wird.
+
+`grunt` baut dabei die AMD-Module und schlägt fehl, wenn `amd/build/` nicht zum Quelltext passt
+— das ist der eigentliche Schutz gegen ein veraltetes `mode/*/amd/build/game.min.js`.
+
+### Zeilenenden
+
+`* text=auto eol=lf` in `.gitattributes` ist kein Kosmetikeintrag. Die Codebasis lag komplett in
+CRLF vor; PHPCS meldete daraufhin 291 Fehler in 68 Dateien — 67-mal `Generic.Files.LineEndings`
+und 201-mal „Boilerplate comment wrong line", weil der Sniff Kopfzeilen zählt und CRLF sie
+verschiebt. Einmal normalisieren genügt nicht: ohne die Regel bringt der nächste
+Windows-Checkout die CRLF zurück, und die CI wird rot aus einem Grund, den man im Diff nicht
+sieht.

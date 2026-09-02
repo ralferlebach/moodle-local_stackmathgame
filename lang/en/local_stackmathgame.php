@@ -163,6 +163,15 @@ $string['shortcode_smgscore_help'] = 'Outside a quiz context you must pass label
 $string['shortcode_smgxp'] = 'Displays the current XP for a game label.';
 $string['shortcode_smgxp_help'] = 'Outside a quiz context you must pass label="...". Optional: field="xp|levelno|solvedcount|partialcount|trackedslots|levelprogress".';
 $string['shortcodeslabelrequired'] = 'Outside a quiz context, STACK Math Game shortcodes require a label argument.';
+$string['stackmathgame:configurequiz'] = 'Configure the game for an activity';
+$string['stackmathgame:manageassets'] = 'Manage design assets';
+$string['stackmathgame:managelabels'] = 'Manage game labels';
+$string['stackmathgame:managemechanics'] = 'Manage game mechanics';
+$string['stackmathgame:managenarratives'] = 'Manage narratives';
+$string['stackmathgame:managethemes'] = 'Create and edit designs';
+$string['stackmathgame:play'] = 'Play a game in an activity';
+$string['stackmathgame:selectdesign'] = 'Select a design for an activity';
+$string['stackmathgame:viewstudio'] = 'View the Game Design Studio';
 $string['stashmapping_desc'] = 'Assign a block_stash item to each question slot. When a student solves that slot for the first time, the item is added to their stash inventory. Requires block_stash to be installed and enabled in this course.';
 $string['stashmapping_enabled'] = 'Mapping active';
 $string['stashmapping_header'] = 'Stash item rewards (block_stash integration)';
