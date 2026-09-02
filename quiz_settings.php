@@ -115,8 +115,17 @@ foreach ($labelrecords as $lrec) {
     $labeloptions[(int)$lrec->id] = format_string($lrec->name);
 }
 
+// Rendered here rather than inside the form: the form must not run database checks of its own,
+// and the panel is also the thing to look at when the page is opened purely to find out why a
+// game is not starting.
+$renderer = $PAGE->get_renderer('local_stackmathgame');
+$prerequisitehtml = $renderer->render(
+    \local_stackmathgame\output\prerequisite_panel::for_cmid($cmid)
+);
+
 $customdata = [
     'config'          => $config,
+    'prerequisitehtml' => $prerequisitehtml,
     'designs'         => $designs,
     'labeloptions'    => $labeloptions,
     'canselectdesign' => $canselectdesign,

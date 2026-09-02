@@ -24,6 +24,8 @@
 
 namespace local_stackmathgame\form;
 
+use local_stackmathgame\local\service\prerequisite_checker;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($GLOBALS['CFG']->libdir . '/formslib.php');
@@ -49,6 +51,12 @@ class quiz_settings_form extends \moodleform {
         $labeloptions   = $customdata['labeloptions'];
         $canselectdesign = !empty($customdata['canselectdesign']);
         $canmanagelabels = !empty($customdata['canmanagelabels']);
+
+        // The panel goes first, before any control. A teacher who is about to enable a game
+        // needs to know it cannot start before making choices about how it should look.
+        if (!empty($customdata['prerequisitehtml'])) {
+            $mform->addElement('html', $customdata['prerequisitehtml']);
+        }
 
         $mform->addElement('advcheckbox', 'enabled', get_string('enabled', 'local_stackmathgame'));
         $mform->addHelpButton('enabled', 'enabled', 'local_stackmathgame');
@@ -236,6 +244,23 @@ class quiz_settings_form extends \moodleform {
         if ($labelid <= 0 && $newlabel === '') {
             $errors['labelid'] = get_string('err_labelrequired', 'local_stackmathgame');
         }
+
+        // Enabling a game that cannot start produces a quiz that silently behaves like an
+        // ordinary quiz, and a teacher with no reason to suspect the activity rather than the
+        // plugin. Saving the rest of the settings stays possible - only the switch is refused,
+        // so the configuration can be prepared before the blocker is cleared.
+        $cmid = (int)($data['cmid'] ?? 0);
+        if (!empty($data['enabled']) && $cmid > 0) {
+            $blockers = prerequisite_checker::get_blockers($cmid);
+            if ($blockers) {
+                $errors['enabled'] = get_string(
+                    'err_prerequisitesunmet',
+                    'local_stackmathgame',
+                    implode(' ', array_column($blockers, 'message'))
+                );
+            }
+        }
+
         return $errors;
     }
 

@@ -1,0 +1,36 @@
+# Session start — local_stackmathgame
+
+You are continuing development of **local_stackmathgame**, a Moodle plugin that turns a quiz
+built from STACK questions into a playable game.
+
+Before changing code:
+
+1. Read `docs/ENTWICKLUNGSUMGEBUNG.md` and the latest `docs/sessions/session-*.md`.
+   One conversation is one session: open `docs/sessions/session-NNN.md` for this one at the
+   start and append to it as you go, rather than writing it up at the end.
+2. Read the open issues you are working on in full. Their acceptance criteria are the
+   specification; do not work from a summary of them.
+3. Inspect the actual public APIs before using them. In particular
+   `slot_config_schema`, `branch_resolver`, `question_map_service`, `package_registry` and
+   `theme_manager` already exist and are more complete than they look — several open bugs are
+   consumers ignoring them, not gaps in them.
+4. Never introduce a parallel data model. Per-slot game configuration lives in
+   `local_stackmathgame_questionmap.configjson` and nowhere else.
+5. `cmid` is the source of truth, not `quizid`. New code takes a cmid.
+6. Client and server must not hold two different interpretations of the branching schema. The
+   server resolver is canonical; the client consumes it.
+7. A mode subplugin renders. It does not call web services and does not resolve branches. The
+   contract is `init(gameState) → {onAnswer(response, store)}`.
+8. Mode subplugins address assets by **key**, from the design's resolved runtime asset map.
+   Never construct an asset path in JavaScript.
+9. Use POST + sesskey + a context-appropriate capability for every mutation. Ask capabilities in
+   the context the action belongs to, not in the system context.
+10. `make check` is a fast local pre-check; GitHub CI is the authoritative release gate. Run the
+    checks inside a Moodle tree — several sniffs stay silent on a standalone directory, so
+    "green locally" outside a tree means nothing.
+
+Current session objective:
+> [One concrete slice. Name the issue number.]
+
+Reward logic is security-relevant: a reward must be granted at most once per solved scene, and
+that must hold for genuinely parallel requests, not merely for sequential ones.

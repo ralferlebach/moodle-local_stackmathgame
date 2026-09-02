@@ -1,0 +1,10 @@
+# Files removed in earlier releases of local_stackmathgame.
+#
+# Unpacking a plugin ZIP adds and overwrites files but never deletes any, so a file removed
+# upstream survives in an installed copy or in a repository updated that way. It then still
+# autoloads, duplicates a class, or reads columns that no longer exist. The `stale-files` CI
+# job turns that into a loud failure instead of confusing downstream errors.
+#
+# One path per line, relative to the plugin root.
+
+.github/workflows/moodle-ci.yml

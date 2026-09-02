@@ -81,28 +81,74 @@ class behat_local_stackmathgame extends behat_base {
     }
 
     /**
-     * Navigate to the STACK Math Game quiz settings page for a quiz by name.
+     * Resolve a page instance URL for the "I am on the ... page" step.
      *
-     * @Given I navigate to the STACK Math Game settings for quiz :quizname
-     * @param string $quizname
+     * @param string $type The page type, e.g. "Game settings".
+     * @param string $identifier The activity name.
+     * @return moodle_url The resolved URL.
      */
-    public function i_navigate_to_smg_settings_for_quiz(string $quizname): void {
+    protected function resolve_page_instance_url(string $type, string $identifier): moodle_url {
+        switch (strtolower($type)) {
+            case 'game settings':
+                return new moodle_url('/local/stackmathgame/quiz_settings.php', [
+                    'cmid' => self::cmid_for_quiz_name($identifier),
+                ]);
+            default:
+                throw new Exception('Unrecognised local_stackmathgame page type "' . $type . '".');
+        }
+    }
+
+    /**
+     * Resolve a page URL for the "I am on the ... page" step.
+     *
+     * @param string $page The page name.
+     * @return moodle_url The resolved URL.
+     */
+    protected function resolve_page_url(string $page): moodle_url {
+        switch (strtolower($page)) {
+            case 'game design studio':
+                return new moodle_url('/local/stackmathgame/studio.php');
+            default:
+                throw new Exception('Unrecognised local_stackmathgame page "' . $page . '".');
+        }
+    }
+
+    /**
+     * Look up the course-module ID of a quiz by its name.
+     *
+     * @param string $quizname The quiz name.
+     * @return int The cmid.
+     */
+    protected static function cmid_for_quiz_name(string $quizname): int {
+        global $DB;
+
         $sql = "SELECT cm.id
                   FROM {course_modules} cm
                   JOIN {modules} m ON m.id = cm.module
                   JOIN {quiz} q ON q.id = cm.instance
                  WHERE q.name = :name AND m.name = 'quiz'";
-        $cmid = $this->get_session()->evaluateScript(
-            "return (function(){ return document.querySelector('[name=cmid]') "
-            . "? document.querySelector('[name=cmid]').value : null; })()"
-        );
+        $cmid = $DB->get_field_sql($sql, ['name' => $quizname]);
         if (!$cmid) {
-            throw new \Behat\Mink\Exception\ExpectationException(
-                'Could not find cmid on current page',
-                $this->getSession()
-            );
+            throw new Exception('There is no quiz named "' . $quizname . '".');
         }
-        $url = new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => $cmid]);
+        return (int)$cmid;
+    }
+
+    /**
+     * Navigate to the STACK Math Game quiz settings page for a quiz by name.
+     *
+     * Resolves the quiz by name against the database. The previous implementation read the cmid
+     * out of the current page's DOM and ignored its own argument, so it silently opened the
+     * settings of whatever quiz happened to be on screen - or failed on any page without a cmid
+     * field, which included the page the step was usually called from.
+     *
+     * @Given I navigate to the STACK Math Game settings for quiz :quizname
+     * @param string $quizname The quiz name.
+     */
+    public function i_navigate_to_smg_settings_for_quiz(string $quizname): void {
+        $url = new moodle_url('/local/stackmathgame/quiz_settings.php', [
+            'cmid' => self::cmid_for_quiz_name($quizname),
+        ]);
         $this->getSession()->visit($this->locate_path($url->out(false)));
     }
 

@@ -26,6 +26,7 @@ namespace local_stackmathgame\hook;
 
 use local_stackmathgame\game\quiz_configurator;
 use local_stackmathgame\game\theme_manager;
+use local_stackmathgame\local\service\prerequisite_checker;
 
 /**
  * Output hook callbacks.
@@ -156,6 +157,14 @@ class output_hooks {
         // to the frontend because the current web-service contract is quiz-based.
         $config = quiz_configurator::ensure_default($cmid);
         if (!$config || empty($config->enabled)) {
+            return;
+        }
+
+        // A game that cannot work must not start. Without this the engine boots, the four web
+        // services answer, and the attempt then behaves like an ordinary quiz - which reads as a
+        // broken plugin rather than a misconfigured activity. Bailing out here leaves the student
+        // with the plain quiz, and the teacher is told why on the game settings page.
+        if (!prerequisite_checker::is_playable($cmid)) {
             return;
         }
 

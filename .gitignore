@@ -1,4 +1,57 @@
+# OS artefacts
+.DS_Store
+Thumbs.db
+desktop.ini
 *Zone.Identifier
-*.orig
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+
+# Node (only if browser/load harnesses are added later)
+node_modules/
+npm-debug.log*
+
+# PHP / Composer
+vendor/
+composer.lock
+
+# moodle-plugin-ci working directories
+ci/
+moodle/
+
+# PHPUnit / coverage
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+*.clover
+
+# Behat screenshots
+behatfaildumps/
+
+# Temporary / backup files
 *.bak
-*.rej
+*.tmp
+*.swp
+*~
+
+# Local developer overrides
+.env
+.env.local
+
+# Load-test downloads and run artefacts (harness itself is versioned)
+tests/load/apache-jmeter-*/
+tests/load/k6
+tests/load/*.tgz
+tests/load/*.jtl
+tests/load/.load-env
+
+# local_stackmathgame specific
+tests/load/.load-env
+tests/load/.load-seed.out
+tests/load/apache-jmeter-*/
+tests/load/*.jtl
+tests/playwright/test-results/
+tests/playwright/playwright-report/

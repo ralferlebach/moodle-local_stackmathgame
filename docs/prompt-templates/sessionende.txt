@@ -1,0 +1,26 @@
+# Session end — local_stackmathgame
+
+Before finishing:
+
+1. One conversation is one session. `docs/sessions/session-NNN.md` is written *during* the
+   session, not composed at the end — append to it as each patch lands, while the reasoning is
+   still available. Never overwrite an earlier session's file.
+2. Make sure it records changed files, capabilities and entry points touched, API contracts
+   used, decisions taken and their reasons, tests written or run, and unresolved risks.
+3. Verify no parallel per-slot data model was introduced and that `configjson` is still written
+   through `slot_config_schema`.
+4. Verify no new code keys off `quizid` where a `cmid` is available.
+5. Verify the client did not gain its own branching interpretation, and that no mode subplugin
+   gained a web-service call or a hand-built asset path.
+6. Verify every mutation is POST + sesskey + a capability checked in the right context.
+7. Run `make check` plus the relevant PHPUnit and Behat tests. Record skips honestly — a skipped
+   STACK test is not a passing STACK test.
+8. Rebuild AMD for the parent plugin **and** for every `mode/*` subplugin, and commit the build
+   artefacts. A stale `mode/*/amd/build/game.min.js` ships an old game module while `amd/src`
+   looks perfectly current.
+9. Update `docs/CHANGELOG.md`. Add anything deleted to `db/removed_files.txt`.
+10. Build and inspect the work ZIP.
+
+Reward logic is security-relevant: if this session touched submit, profile or reward code, say
+explicitly in the session record whether the at-most-once guarantee was re-tested under
+concurrency.

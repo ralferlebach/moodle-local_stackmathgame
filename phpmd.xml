@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="local_stackmathgame"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd">
+    <description>
+        PHP Mess Detector rules for local_stackmathgame. Informational only - `make lint-md`
+        never fails the build. Rules that fight Moodle's own conventions are excluded, each
+        with the reason it was excluded.
+    </description>
+
+    <rule ref="rulesets/cleancode.xml">
+        <!-- Moodle passes booleans into API functions everywhere (IGNORE_MISSING,
+             MUST_EXIST, $returnall). Flagging it produces hundreds of hits that can only be
+             fixed by diverging from core's own signatures. -->
+        <exclude name="BooleanArgumentFlag"/>
+        <!-- $DB, $CFG, $PAGE, $USER are how Moodle works. There is no alternative to flag. -->
+        <exclude name="StaticAccess"/>
+        <!-- Same reason: the services in classes/local/service are deliberately static, in
+             line with the rest of the plugin and with core. -->
+        <exclude name="ElseExpression"/>
+    </rule>
+
+    <rule ref="rulesets/codesize.xml">
+        <!-- external_api::execute_returns() is one long structure declaration by design; its
+             length says nothing about complexity. -->
+        <exclude name="ExcessiveMethodLength"/>
+    </rule>
+
+    <rule ref="rulesets/design.xml">
+        <!-- Moodle entry-point scripts legitimately call exit() after a redirect. -->
+        <exclude name="ExitExpression"/>
+    </rule>
+
+    <rule ref="rulesets/naming.xml">
+        <!-- Moodle field and variable names are lowercase and short by convention
+             ($cm, $qa, $id). The rule would flag core's own vocabulary. -->
+        <exclude name="ShortVariable"/>
+        <exclude name="LongVariable"/>
+    </rule>
+
+    <rule ref="rulesets/unusedcode.xml"/>
+</ruleset>

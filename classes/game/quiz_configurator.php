@@ -162,7 +162,14 @@ class quiz_configurator {
             'labelid'           => $newlabelid,
             'designid'          => $newdesignid,
             'enabled'           => empty($data['enabled']) ? 0 : 1,
-            'requiresbehaviour' => empty($data['requiresbehaviour']) ? 0 : 1,
+            // Never derive this from an absent key. The teacher form does not carry
+            // requiresbehaviour, so `empty($data[...]) ? 0 : 1` silently reset the stored 1 to 0
+            // on every single save - which switched the behaviour enforcement off exactly when a
+            // teacher was configuring the game. The field is only written when a caller states a
+            // value for it; otherwise the stored one stands.
+            'requiresbehaviour' => array_key_exists('requiresbehaviour', $data)
+                ? (empty($data['requiresbehaviour']) ? 0 : 1)
+                : (int)$record->requiresbehaviour,
             'teacherdisplayname' => $data['teacherdisplayname'] ?? $record->teacherdisplayname,
             'configjson'        => json_encode($configarr, JSON_UNESCAPED_UNICODE),
             'timemodified'      => time(),
