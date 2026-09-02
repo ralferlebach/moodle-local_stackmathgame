@@ -8,3 +8,6 @@
 # One path per line, relative to the plugin root.
 
 .github/workflows/moodle-ci.yml
+amd/src/fantasy_quiz.js
+amd/build/fantasy_quiz.min.js
+amd/build/fantasy_quiz.min.js.map

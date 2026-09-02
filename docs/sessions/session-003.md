@@ -211,6 +211,102 @@ bisher nur PHP-Syntax (alle Dateien, PHP 8.3), die Gültigkeit des Mustache-Beis
 JSON und der Gleichstand der Sprachschlüssel. PHPUnit und Behat müssen lokal beziehungsweise in
 der CI laufen.
 
+
+---
+
+## Patch 03 — Issue #2: Branching vollständig (abgeschlossen)
+
+### Der Befund war schärfer als im Issue beschrieben
+
+Das Issue sagt, die Mode-Module erzeugten den Weiter-Button nur für einen expliziten
+`slot`-Sprung. Das stimmt. Beim Nachlesen kam aber ein zweiter, gravierenderer Punkt dazu:
+
+**`prefetch_next_node` ruft `branch_resolver` überhaupt nicht auf.** Der Endpunkt lieferte
+schlicht „den nächsten ungelösten Slot in Map-Reihenfolge" und ignorierte die
+Verzweigungskonfiguration vollständig. Damit konnten Prefetch und Submit unterschiedlicher
+Meinung darüber sein, wohin die Spielenden gehen — und beim Seitenaufbau gewann immer der
+Prefetch. Es gab also nicht zwei, sondern drei Interpretationen desselben Schemas.
+
+### Lösung
+
+Ein einziger Interpret, serverseitig: `navigation_resolver`. Er ruft `branch_resolver` auf und
+liefert eine fertige Navigation aus `action` (`continue` / `finish` / `stay`), `nextslot`,
+`nextpage`, `url` und `label`. Der Client entscheidet nichts mehr.
+
+Drei Entscheidungen, die ich bewusst so getroffen habe:
+
+* **`gradedwrong` ergibt immer `stay`.** Eine falsche Antwort löst keine Verzweigung auf. Täte
+  sie es, bekämen die Spielenden in dem Moment einen Weg nach vorn, in dem die Antwort als
+  falsch bewertet wird — der Wiederholungsversuch ist aber der Sinn der Szene.
+* **`finish` ist ein Schritt, kein Nichts.** Vorher sah das Ende eines Durchlaufs für alle drei
+  Module genauso aus wie eine falsche Antwort: kein Button. Die Spielenden blieben auf der
+  letzten Szene stehen.
+* **Das Label kommt vom Server.** Ein Modul, das die Beschriftung selbst erfindet, trifft eine
+  Entscheidung über einen Zustand, der ihm nicht gehört — und die drei Module waren sich schon
+  darüber uneins, was „kein nächster Slot" überhaupt bedeutet.
+
+`quiz_slots.page` ist einsbasiert, der `page`-Parameter von `attempt.php` nullbasiert. Die
+Umrechnung liegt in `page_for_slot()` und ist getestet: ein Fehler dort ist unsichtbar, die
+Spielenden landen einfach auf der falschen Frage.
+
+### Geänderte Dateien
+
+```
+classes/local/service/navigation_resolver.php   (neu)
+classes/external/submit_answer.php              (navigation im Response)
+classes/external/prefetch_next_activity_node.php (outcome/attemptid, branch_resolver)
+classes/external/prefetch_next_node.php         (durchgereicht)
+amd/src/game_core.js                            (navigationFrom, applyNavigation, escapeHtml)
+amd/src/game_engine.js                          (outcome + attemptid an prefetch, store.navigation)
+amd/src/fantasy_quiz.js                         (entfernt)
+mode/rpg|exitgames|wisewizzard/amd/src/game.js  (Branch-Interpretation entfernt)
+lang/en|de/local_stackmathgame.php              (nav_continue/finish/stay)
+tests/unit/navigation_resolver_test.php         (neu)
+tests/jest/*                                    (neu: Harness + 12 Tests)
+tests/behat/branch_navigation.feature           (neu)
+tests/behat/behat_local_stackmathgame.php       (Steps für Branch-Konfiguration)
+makefile, .github/workflows/*                   (test-amd-Target und CI-Schritt)
+```
+
+### Entscheidung (d): `fantasy_quiz.js` entfernt
+
+Vorher geprüft, was brauchbar war:
+
+* **Aktivitätsbewusste Endpunktauswahl** (`cmid` statt nur `quizid`) — lag bereits vollständig in
+  `api_client.js`. Nichts zu übernehmen.
+* **HTML-Escaping** — fehlte in der Engine und in allen drei Modulen. Als `GameCore.escapeHtml()`
+  übernommen und an allen drei `innerHTML`-Stellen der Module eingesetzt. Narrativtext ist von
+  Lehrenden verfasster Inhalt, der ungefiltert ins DOM ging.
+* Fragment-Refresh, `collectAnswers`, `bindInputs` — bereits identisch in `game_engine.js`.
+
+Eingetragen in `db/removed_files.txt`.
+
+### Tests
+
+* **Jest: 12 Tests, ausgeführt, grün.** Der Harness (`tests/jest/amd_loader.js`) lädt die
+  AMD-Quellen so, wie sie ausgeliefert werden, statt sie für den Runner umzubauen — ein Test
+  gegen ein umgeschriebenes Modul sagt nichts über das aus, das der Browser bekommt.
+  Als `make test-amd` und als CI-Schritt eingebunden.
+* **PHPUnit:** acht Fälle für `navigation_resolver`, darunter der lineare Standardfall, `end`,
+  der letzte Slot, ein ungültiges Sprungziel und die Nullbasierung der Seitenzahl.
+* **Behat:** vier Szenarien plus vier neue Steps zum Setzen von Verzweigungsregeln. Die Steps
+  schreiben durch `slot_config_schema`, damit eine Feature-Datei keine Konfigurationsform
+  einschleusen kann, die der Resolver gar nicht akzeptiert.
+
+### Zwischenfall beim Refactoring
+
+Ein Regex zum Entfernen von `getSlotUrl()` hat in `mode/wisewizzard/amd/src/game.js` rund 120
+Zeilen zu viel gelöscht (`injectStyles`, `buildSlotMap`, `buildChatUI`). ESLint hat es als drei
+`no-undef` gemeldet; die Datei wurde aus dem Ausgangs-ZIP wiederhergestellt und die Änderung
+zeilengenau statt per Regex wiederholt. Anlass, künftig nach jedem strukturellen Eingriff in JS
+sofort zu linten statt erst am Ende.
+
+### Nicht ausgeführt
+
+`amd/build/` und `mode/*/amd/build/` sind **nicht** neu gebaut — dafür braucht es Grunt aus einem
+Moodle-Baum. Vor dem Testen im Browser ist `make amd` zwingend, sonst liefert der Browser die
+alten Module aus, während `amd/src` aktuell aussieht. PHPUnit und Behat stehen ebenfalls aus.
+
 ---
 
 ## Offene Risiken
@@ -219,6 +315,8 @@ der CI laufen.
   und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
   jede Skip-Meldung ehrlich protokolliert werden.
 * **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
+* **AMD-Build steht aus.** Bis `make amd` gelaufen ist, sind die Patch-03-Änderungen im Browser
+  nicht wirksam.
 * **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein
   gemessenes Ziel. Sie müssen nach dem ersten echten Lauf auf repräsentativer Hardware
   nachgezogen werden.

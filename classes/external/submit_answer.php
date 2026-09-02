@@ -27,6 +27,9 @@ namespace local_stackmathgame\external;
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/externallib.php');
+
+use local_stackmathgame\local\service\navigation_resolver;
+use local_stackmathgame\local\service\slot_config_schema;
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
 /**
@@ -266,6 +269,19 @@ class submit_answer extends \external_api {
             'xpdelta'       => $xpdelta,
             'canretry'      => true,
             'cannext'       => $cannext,
+            // Resolved here, once, from the same branch_resolver the rest of the server uses.
+            // The client used to re-read configjson and reach its own conclusion, which is how
+            // `linear` - the default every auto-created slot gets - ended up with no way forward.
+            'navigation'    => navigation_resolver::resolve(
+                (int)$cm->id,
+                $quizid,
+                $slot,
+                $cannext
+                    ? slot_config_schema::OUTCOME_GRADEDRIGHT
+                    : slot_config_schema::OUTCOME_GRADEDWRONG,
+                $profile,
+                $attemptid
+            ),
         ];
     }
 
@@ -302,6 +318,7 @@ class submit_answer extends \external_api {
             'xpdelta'       => new \external_value(PARAM_INT, 'XP delta'),
             'canretry'      => new \external_value(PARAM_BOOL, 'Whether retry remains possible'),
             'cannext'       => new \external_value(PARAM_BOOL, 'Whether frontend may advance immediately'),
+            'navigation'    => navigation_resolver::external_structure(),
         ]);
     }
 }

@@ -1,0 +1,17 @@
+{
+  "name": "local_stackmathgame-jest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jest unit tests for the local_stackmathgame AMD modules",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": ["**/*.test.js"]
+  }
+}

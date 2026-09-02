@@ -136,6 +136,13 @@ jobs:
         # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
         # what caught the undocumented @returns in the mode modules.
         run: set -o pipefail; moodle-plugin-ci grunt --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+      - name: Jest (AMD unit tests)
+        if: ${{ always() }}
+        run: |
+          set -o pipefail
+          cd plugin/tests/jest
+          npm install --no-audit --no-fund
+          npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
         run: set -o pipefail; moodle-plugin-ci phpunit --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log

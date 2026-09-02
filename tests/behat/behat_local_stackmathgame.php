@@ -81,6 +81,94 @@ class behat_local_stackmathgame extends behat_base {
     }
 
     /**
+     * Enable the game on a quiz, with a default design and a built question map.
+     *
+     * @Given the STACK Math Game is enabled for quiz :quizname
+     * @param string $quizname The quiz name.
+     */
+    public function the_game_is_enabled_for_quiz(string $quizname): void {
+        global $DB;
+
+        $cmid = self::cmid_for_quiz_name($quizname);
+        \local_stackmathgame\game\theme_manager::seed_default_theme();
+        $config = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
+        $config->enabled = 1;
+        $DB->update_record('local_stackmathgame', $config);
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+    }
+
+    /**
+     * Set a branching rule on one slot.
+     *
+     * Writes through slot_config_schema rather than hand-building JSON, so a feature file cannot
+     * quietly introduce a config shape the resolver does not accept.
+     *
+     * @Given slot :slot of quiz :quizname branches to slot :target on :outcome
+     * @param int $slot The slot number.
+     * @param string $quizname The quiz name.
+     * @param int $target The target slot number.
+     * @param string $outcome The outcome key.
+     */
+    public function slot_branches_to_slot(int $slot, string $quizname, int $target, string $outcome): void {
+        self::write_branch_rule($quizname, $slot, $outcome, ['mode' => 'slot', 'target' => $target]);
+    }
+
+    /**
+     * Set a non-slot branching rule on one slot.
+     *
+     * @Given slot :slot of quiz :quizname branches to :mode on :outcome
+     * @param int $slot The slot number.
+     * @param string $quizname The quiz name.
+     * @param string $mode The branch mode, "linear" or "end".
+     * @param string $outcome The outcome key.
+     */
+    public function slot_branches_to_mode(int $slot, string $quizname, string $mode, string $outcome): void {
+        self::write_branch_rule($quizname, $slot, $outcome, ['mode' => $mode]);
+    }
+
+    /**
+     * Persist one branching rule into a slot's configjson.
+     *
+     * @param string $quizname The quiz name.
+     * @param int $slot The slot number.
+     * @param string $outcome The outcome key.
+     * @param array $rule The rule.
+     */
+    protected static function write_branch_rule(string $quizname, int $slot, string $outcome, array $rule): void {
+        global $DB;
+
+        $cmid = self::cmid_for_quiz_name($quizname);
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+        $row = $DB->get_record(
+            'local_stackmathgame_questionmap',
+            ['cmid' => $cmid, 'slotnumber' => $slot],
+            '*',
+            MUST_EXIST
+        );
+        $config = \local_stackmathgame\local\service\slot_config_schema::parse((string)$row->configjson)
+            ?? \local_stackmathgame\local\service\slot_config_schema::defaults();
+        $config['branching'][$outcome] = $rule;
+        $DB->set_field(
+            'local_stackmathgame_questionmap',
+            'configjson',
+            json_encode($config, JSON_UNESCAPED_UNICODE),
+            ['id' => $row->id]
+        );
+    }
+
+    /**
+     * Navigate the attempt to the page holding a given slot.
+     *
+     * @When I follow the game navigation to slot :slot
+     * @param int $slot The slot number.
+     */
+    public function i_follow_the_game_navigation_to_slot(int $slot): void {
+        $node = $this->find('css', '#quiznavbutton' . $slot);
+        $node->click();
+        $this->wait_for_pending_js();
+    }
+
+    /**
      * Resolve a page instance URL for the "I am on the ... page" step.
      *
      * @param string $type The page type, e.g. "Game settings".

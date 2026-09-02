@@ -231,28 +231,6 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         }
     }
 
-    /**
-     * Return the URL of a target slot from the Moodle quiz nav buttons.
-     *
-     * @param {number} targetSlot The target slot number.
-     * @returns {string|null} The page URL, or null.
-     */
-    function getSlotUrl(targetSlot) {
-        var btn = document.querySelector('#quiznavbutton' + targetSlot);
-        if (!btn || !btn.href || btn.href === '#') {
-            return null;
-        }
-        var href = btn.href;
-        var relPos = href.indexOf('&scrollpos');
-        if (relPos === -1) {
-            relPos = href.indexOf('&page');
-        }
-        if (relPos === -1) {
-            relPos = href.indexOf('#');
-        }
-        return relPos > -1 ? href.substring(0, relPos) + '&page=' + btn.dataset.page : href;
-    }
-
     // ── Public interface ───────────────────────────────────────────────────
 
     /**
@@ -343,27 +321,16 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                     ? cfg.narrative[narrativeKey]
                     : '';
                 if (narrativeText) {
-                    bubble.innerHTML = narrativeText;
+                    bubble.innerHTML = GameCore.escapeHtml(narrativeText);
                     bubble.style.display = 'block';
                 } else {
                     bubble.style.display = 'none';
                 }
 
-                // Update next-scene button.
-                if (solved) {
-                    var branching = cfg.branching || {};
-                    var rule = branching.gradedright || branching.default || {};
-                    var targetSlot = (rule.mode === 'slot' && rule.target) ? rule.target : null;
-                    var nextUrl = targetSlot ? getSlotUrl(targetSlot) : null;
-                    if (nextUrl) {
-                        nextBtn.href = nextUrl;
-                        nextBtn.style.display = 'inline-block';
-                    } else {
-                        nextBtn.style.display = 'none';
-                    }
-                } else {
-                    nextBtn.style.display = 'none';
-                }
+                // Render the navigation the server resolved. This mode no longer reads
+                // cfg.branching: the resolver is canonical, and re-deciding here is what left
+                // linear scenes - the default - without any way forward.
+                GameCore.applyNavigation(nextBtn, GameCore.navigationFrom(response));
             }
         };
     }

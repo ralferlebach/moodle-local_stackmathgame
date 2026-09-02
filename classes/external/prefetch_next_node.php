@@ -24,6 +24,8 @@
 
 namespace local_stackmathgame\external;
 
+use local_stackmathgame\local\service\navigation_resolver;
+
 use xmldb_field;
 use xmldb_table;
 
@@ -53,6 +55,18 @@ class prefetch_next_node extends \external_api {
                 VALUE_DEFAULT,
                 0
             ),
+            'outcome' => new \external_value(
+                PARAM_ALPHA,
+                'Outcome to resolve branching for: gradedright, gradedwrong, complete or default',
+                VALUE_DEFAULT,
+                'default'
+            ),
+            'attemptid' => new \external_value(
+                PARAM_INT,
+                'Quiz attempt id, so the resolved navigation can carry a usable URL',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -61,21 +75,31 @@ class prefetch_next_node extends \external_api {
      *
      * @param int $quizid The quiz instance ID.
      * @param int $currentslot The currently active slot.
+     * @param string $outcome The outcome to resolve branching for.
+     * @param int $attemptid The quiz attempt ID, or 0 when the caller has none.
      * @return array The next-node payload.
      */
-    public static function execute(int $quizid, int $currentslot = 0): array {
+    public static function execute(
+        int $quizid,
+        int $currentslot = 0,
+        string $outcome = 'default',
+        int $attemptid = 0
+    ): array {
         $activity = api::resolve_activity_identity(0, 'quiz', $quizid, $quizid);
         $result = prefetch_next_activity_node::execute(
             (int)$activity['cmid'],
             (string)$activity['modname'],
             (int)$activity['instanceid'],
-            $currentslot
+            $currentslot,
+            $outcome,
+            $attemptid
         );
 
         return [
             'quizid' => (int)$result['quizid'],
             'currentslot' => (int)$result['currentslot'],
             'nextnode' => (array)$result['nextnode'],
+            'navigation' => (array)$result['navigation'],
         ];
     }
 
@@ -114,6 +138,7 @@ class prefetch_next_node extends \external_api {
             'quizid' => new \external_value(PARAM_INT, 'Quiz id'),
             'currentslot' => new \external_value(PARAM_INT, 'Current slot number'),
             'nextnode' => get_quiz_config::questionmap_structure(),
+            'navigation' => navigation_resolver::external_structure(),
         ]);
     }
 }

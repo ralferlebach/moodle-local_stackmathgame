@@ -130,49 +130,17 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         if (!text || !bubble) {
             return;
         }
-        bubble.innerHTML = text;
+        bubble.innerHTML = GameCore.escapeHtml(text);
         bubble.style.display = 'block';
     }
 
     /**
-     * Return the URL of a target slot by looking up Moodle quiz nav buttons.
+     * Update the next-question navigation control from the server's resolved navigation.
      *
-     * @param {number} targetSlot The target slot number.
-     * @returns {string|null} The URL, or null if not found.
-     */
-    function getSlotUrl(targetSlot) {
-        var btn = document.querySelector('#quiznavbutton' + targetSlot);
-        if (!btn || !btn.href || btn.href === '#') {
-            return null;
-        }
-        var href = btn.href;
-        var relPos = href.indexOf('&scrollpos');
-        if (relPos === -1) {
-            relPos = href.indexOf('&page');
-        }
-        if (relPos === -1) {
-            relPos = href.indexOf('#');
-        }
-        return relPos > -1 ? href.substring(0, relPos) + '&page=' + btn.dataset.page : href;
-    }
-
-    /**
-     * Update the next-question navigation button after an answer.
-     *
-     * @param {Object}  slotMap  Map of slot → configjson.
-     * @param {number}  slot     Current slot number.
-     * @param {boolean} solved   Whether the answer was correct.
+     * @param {Object} response The submit response, carrying the resolved navigation.
      * @returns {void}
      */
-    function updateNav(slotMap, slot, solved) {
-        var cfg = slotMap[String(slot)];
-        var branching = cfg && cfg.branching ? cfg.branching : {};
-        var rule = solved
-            ? (branching.gradedright || branching.default || {})
-            : (branching.gradedwrong || branching.default || {});
-        var targetSlot = (rule.mode === 'slot' && rule.target) ? rule.target : null;
-        var nextUrl = targetSlot ? getSlotUrl(targetSlot) : null;
-
+    function updateNav(response) {
         var nextBtn = document.querySelector('.smg-eg-next');
         if (!nextBtn) {
             nextBtn = document.createElement('a');
@@ -182,14 +150,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 shell.appendChild(nextBtn);
             }
         }
-
-        if (nextUrl) {
-            nextBtn.href = nextUrl;
-            nextBtn.textContent = 'Nächste Frage →';
-            nextBtn.style.display = 'inline-block';
-        } else {
-            nextBtn.style.display = 'none';
-        }
+        GameCore.applyNavigation(nextBtn, GameCore.navigationFrom(response));
     }
 
     // ── Public interface ───────────────────────────────────────────────────
@@ -236,7 +197,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 var slot = response.slot || currentSlot;
                 var solved = !!response.cannext;
                 showBubble(bubble, slotMap, slot, solved ? 'success' : 'fail');
-                updateNav(slotMap, slot, solved);
+                updateNav(response);
             }
         };
     }

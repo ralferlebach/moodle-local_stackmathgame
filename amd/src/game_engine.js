@@ -42,6 +42,7 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             questionmap: [],
             narrative: [],
             nextnode: null,
+            navigation: null,
             lastsubmit: null
         },
         activeInput: null
@@ -316,7 +317,12 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                     }),
                     call('local_stackmathgame_prefetch_next_node', {
                         quizid: state.config.quizid,
-                        currentslot: slot
+                        currentslot: slot,
+                        // The outcome and the attempt are what let the server resolve the branch
+                        // and build a usable URL. Without them the endpoint fell back to "next
+                        // unsolved slot in map order" and ignored the branching entirely.
+                        outcome: response.cannext ? 'gradedright' : 'gradedwrong',
+                        attemptid: attemptid
                     }),
                     call('local_stackmathgame_get_profile_state', {
                         quizid: state.config.quizid
@@ -327,6 +333,12 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                     results[0] && results[0].lines ? results[0].lines : [];
                 state.store.nextnode =
                     results[1] && results[1].nextnode ? results[1].nextnode : null;
+                // The submit response is the authority on where the player goes next, because it
+                // saw the actual outcome. The prefetch only fills in when submit predates the
+                // navigation field.
+                state.store.navigation = response.navigation
+                    || (results[1] && results[1].navigation)
+                    || null;
                 if (results[2] && results[2].profile) {
                     state.store.profile = results[2].profile;
                     state.store.design = results[2].design || state.store.design;
@@ -395,7 +407,8 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             }),
             call('local_stackmathgame_prefetch_next_node', {
                 quizid: state.config.quizid,
-                currentslot: getCurrentSlot() || 0
+                currentslot: getCurrentSlot() || 0,
+                attemptid: getAttemptId()
             })
         ]).then(function(results) {
             var quizconfig = results[0] || {};
@@ -405,6 +418,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             state.store.profile = results[1] ? results[1].profile : null;
             state.store.narrative = results[2] && results[2].lines ? results[2].lines : [];
             state.store.nextnode = results[3] && results[3].nextnode ? results[3].nextnode : null;
+            state.store.navigation = results[3] && results[3].navigation
+                ? results[3].navigation
+                : null;
 
             ensureShell();
             bindInputs();

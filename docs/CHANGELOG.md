@@ -23,7 +23,18 @@
   the game settings page, form validation that refuses to enable an unplayable game, and a guard
   in the asset-injection hook.
 
+* Branch navigation is now resolved on the server for every mode (issue #2): a
+  `navigation_resolver` service, a `navigation` block on the submit and prefetch responses, and
+  shared `navigationFrom` / `applyNavigation` helpers in `game_core`.
+
 ### Fixed
+
+* `prefetch_next_node` never called `branch_resolver` at all: it returned the next unsolved slot
+  in map order and ignored the branching configuration, so a prefetch and a submit could disagree
+  about where the player was going.
+* The three game modes only produced a navigation control for an explicit `slot` jump, leaving
+  `linear` - the default every auto-created slot receives - and `end` with no way forward.
+* Narrative text reached the DOM through `innerHTML` unescaped in all three game modes.
 
 * `requiresbehaviour` was reset to `0` on every save of the quiz game settings, because the
   teacher form does not carry the field and the value was derived with `empty()`. It is now only
@@ -36,6 +47,9 @@
 
 ### Removed
 
+* `amd/src/fantasy_quiz.js`, the standalone prototype module superseded by `game_engine`. Its
+  HTML escaping was salvaged into `game_core`; its activity-aware endpoint dispatch already
+  existed in `api_client`.
 * `.github/workflows/moodle-ci.yml`, superseded by the dev and main pipelines. Its dependency
   knowledge — in particular that `qtype_stack` needs `qbehaviour_adaptivemultipart` — was
   carried over.

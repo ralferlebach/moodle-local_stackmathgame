@@ -147,28 +147,6 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         return {chat: chat, bubble: bubble, next: nextBtn};
     }
 
-    /**
-     * Return the URL of a target slot from the Moodle quiz nav buttons.
-     *
-     * @param {number} targetSlot The target slot number.
-     * @returns {string|null} The page URL, or null.
-     */
-    function getSlotUrl(targetSlot) {
-        var btn = document.querySelector('#quiznavbutton' + targetSlot);
-        if (!btn || !btn.href || btn.href === '#') {
-            return null;
-        }
-        var href = btn.href;
-        var relPos = href.indexOf('&scrollpos');
-        if (relPos === -1) {
-            relPos = href.indexOf('&page');
-        }
-        if (relPos === -1) {
-            relPos = href.indexOf('#');
-        }
-        return relPos > -1 ? href.substring(0, relPos) + '&page=' + btn.dataset.page : href;
-    }
-
     // ── Public interface ───────────────────────────────────────────────────
 
     /**
@@ -200,7 +178,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
          */
         function say(text) {
             // Preserve the next button at the end of the bubble.
-            ui.bubble.innerHTML = text;
+            ui.bubble.innerHTML = GameCore.escapeHtml(text);
             ui.bubble.appendChild(ui.next);
             ui.chat.classList.add('active');
         }
@@ -240,21 +218,11 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
 
                 say(text);
 
-                // Show / hide next button.
-                if (solved) {
-                    var branching = cfg && cfg.branching ? cfg.branching : {};
-                    var rule = branching.gradedright || branching.default || {};
-                    var targetSlot = (rule.mode === 'slot' && rule.target) ? rule.target : null;
-                    var nextUrl = targetSlot ? getSlotUrl(targetSlot) : null;
-                    if (nextUrl) {
-                        ui.next.href = nextUrl;
-                        ui.next.style.display = 'inline-block';
-                    } else {
-                        ui.next.style.display = 'none';
-                    }
-                } else {
-                    ui.next.style.display = 'none';
-                }
+                // Render the navigation the server resolved. This mode no longer reads
+                // cfg.branching: the server resolver is canonical, and re-deciding here is what
+                // left linear scenes - the default every auto-created slot gets - with no way
+                // forward at all.
+                GameCore.applyNavigation(ui.next, GameCore.navigationFrom(response));
             }
         };
     }
