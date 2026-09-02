@@ -30,7 +30,10 @@ class behat_local_stackmathgame extends behat_base {
      */
     public function i_am_on_the_moodle_homepage(): void {
         $this->getSession()->visit($this->locate_path('/'));
-        $this->getSession()->wait(2000, "document.readyState === 'complete'");
+        // No wait(): BrowserKit loads synchronously and does not implement it, so waiting here
+        // made every non-@javascript scenario using this step fail with
+        // "JS is not supported by BrowserKitDriver" - a driver complaint, not a defect.
+        $this->wait_for_pending_js();
     }
 
     /**

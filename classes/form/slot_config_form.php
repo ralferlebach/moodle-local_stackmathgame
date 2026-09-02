@@ -88,7 +88,11 @@ class slot_config_form extends \moodleform {
             $mform->addElement(
                 'select',
                 'branch_' . $outcome . '_target',
-                get_string('flow_branchtarget', 'local_stackmathgame'),
+                get_string(
+                    'flow_branchtarget_for',
+                    'local_stackmathgame',
+                    get_string('flow_outcome_' . $outcome, 'local_stackmathgame')
+                ),
                 $slotoptions
             );
             // The target only means anything for a slot jump. Hiding it otherwise is not

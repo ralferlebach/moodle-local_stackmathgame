@@ -71,6 +71,7 @@ final class prerequisite_checker {
 
         $checks = [];
         $checks[] = self::check_plugin('qbehaviour_stackmathgame', 'prereq_plugin_behaviour');
+        $checks[] = self::check_behaviour_archetypal();
         $checks[] = self::check_plugin('qtype_stack', 'prereq_plugin_stack');
         $checks[] = self::check_plugin('filter_shortcodes', 'prereq_plugin_shortcodes');
         $checks[] = self::check_behaviour($cm, $config);
@@ -124,6 +125,44 @@ final class prerequisite_checker {
             $labelkey,
             $installed ? 'prereq_plugin_present' : 'prereq_plugin_missing',
             $component
+        );
+    }
+
+    /**
+     * Check that the question behaviour is usable as a quiz's preferred behaviour.
+     *
+     * A behaviour type that does not declare itself archetypal is invisible twice over: Moodle
+     * leaves it out of the quiz "Question behaviour" menu, so a teacher cannot pick it at all,
+     * and question_engine::make_archetypal_behaviour() throws a coding exception if the value
+     * gets into the database some other way. The failure then appears when a student starts an
+     * attempt, which is as far from the cause as it could land.
+     *
+     * The fix belongs in qbehaviour_stackmathgame, not here. This check exists so the problem is
+     * stated on the settings page instead of being discovered mid-attempt.
+     *
+     * @return array The check result.
+     */
+    private static function check_behaviour_archetypal(): array {
+        if (\core_component::get_component_directory('qbehaviour_stackmathgame') === null) {
+            // Already reported by the plugin-presence check; saying it twice helps nobody.
+            return self::result(
+                'archetypal',
+                self::STATUS_OK,
+                'prereq_archetypal',
+                'prereq_archetypal_skipped'
+            );
+        }
+
+        $archetypes = \question_engine::get_archetypal_behaviours();
+        if (array_key_exists(self::REQUIRED_BEHAVIOUR, $archetypes)) {
+            return self::result('archetypal', self::STATUS_OK, 'prereq_archetypal', 'prereq_archetypal_ok');
+        }
+
+        return self::result(
+            'archetypal',
+            self::STATUS_ERROR,
+            'prereq_archetypal',
+            'prereq_archetypal_missing'
         );
     }
 

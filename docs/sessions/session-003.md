@@ -672,13 +672,98 @@ Dateien hast du bereits gelöscht, diese fehlt noch.
 
 ---
 
+## Patch 08 — CI-Lauf 3: Moodle 5.1-Layout und die ersten echten Behat-Ergebnisse
+
+Erstmals ist Behat wirklich gelaufen: **25 Szenarien, 14 grün, 11 rot.** Das ist die
+Risikoposition, die ich seit Patch 02 mitschleppe — jetzt mit Befunden statt Vermutungen.
+
+### PHPUnit: nur Moodle 5.2 rot
+
+4.5 und 5.0 waren grün, 5.2 scheiterte an
+
+```
+Failed to run realpath('moodle/local/stackmathgame')
+```
+
+**Moodle 5.1 hat den Webroot nach `public/` verschoben.** Dort liegt das Plugin unter
+`moodle/public/local/stackmathgame`. Mein hartkodierter Pfad aus Patch 07 war für 4.5 und 5.0
+richtig und für 5.2 falsch.
+
+`moodle-plugin-ci` kennt das Layout bereits (`Moodle::getPublicDirectory()` prüft auf
+`public/version.php`) und exportiert den installierten Pfad als `PLUGIN_DIR`. Alle Prüfbefehle
+nach dem Install nutzen jetzt `"$PLUGIN_DIR"` — versionsunabhängig und ohne Annahme über das
+Layout. Die Lehre: wo das Werkzeug einen Pfad exportiert, ist Selberbauen immer falsch.
+
+### Behat: vier Ursachen
+
+**1. Das Frageverhalten ist nicht archetypal — der schwerste Befund.**
+
+```
+Coding error detected: The requested behaviour is not actually an archetypal one.
+* line 187 of /question/engine/lib.php
+```
+
+`qbehaviour_stackmathgame_type` überschreibt `is_archetypal()` nicht, und die Basisklasse liefert
+`false`. Das hat zwei Folgen, von denen keine auf die Ursache zeigt:
+
+* `question_engine::get_archetypal_behaviours()` baut die Auswahlliste „Frageverhalten" im
+  Quiz-Formular. Ein nicht-archetypales Verhalten fehlt dort — **Lehrende können STACK Math Game
+  gar nicht auswählen.**
+* Gelangt der Wert anders in `quiz.preferredbehaviour`, wirft
+  `make_archetypal_behaviour()` beim Start eines Versuchs.
+
+Der Fehler liegt in `moodle-qbehaviour_stackmathgame`, nicht hier. Patch beiliegend als
+`docs/patches/qbehaviour_stackmathgame_archetypal.patch` (drei Zeilen). Lokal angewendet und
+verifiziert: danach erscheint `stackmathgame` in `get_archetypal_behaviours()`.
+
+Damit das nicht wieder erst mitten in einem Versuch auffällt, prüft `prerequisite_checker` es
+jetzt und nennt im Panel die fehlende Methode beim Namen. Ein Unit-Test sichert es ab und
+überspringt sich sauber, wenn das Verhaltens-Plugin fehlt.
+
+**2. `Session->wait()` ohne JS-Treiber.** Der Schritt „I am on the Moodle homepage" rief
+`wait()` auf, was nur der JS-Treiber implementiert. Zwei Platzhalter-Szenarien scheiterten
+deshalb an einer Treiber-Beschwerde statt an ihrem Gegenstand. Ersetzt durch
+`wait_for_pending_js()`, das den Treiber selbst prüft.
+
+**3. `"2" "table_row"` war ein zu schwacher Locator.** Er trifft jede Zeile, deren Text eine „2"
+enthält — und die Question-ID in der Zeilenunterschrift enthielt eine. Das Szenario bearbeitete
+Slot 1 und prüfte dann Slot 2. Jetzt über den Fragetitel adressiert, der pro Zeile eindeutig ist.
+
+**4. Vier Selects mit identischem Label „Target slot".** Für Behat mehrdeutig, für einen
+Screenreader ebenso — und es verdeckte eine echte Lücke: ein Szenario konnte immer nur eines der
+vier Ziele setzen, die übrigen Sprünge wurden ohne Ziel gespeichert. Das Label enthält jetzt den
+Ausgang: „Target slot (After a correct answer)".
+
+Außerdem meinen eigenen Testfehler korrigiert: das Unerreichbarkeits-Szenario leitete nur
+`gradedright` und `default` um und ließ `complete` linear, sodass Slot 2 weiterhin erreichbar
+war. Die Analyse hatte recht, das Szenario war falsch.
+
+**Und drei Altlasten in `quiz_game_settings.feature`:** sie folgten einem Link „Game settings"
+auf der Quiz-Bearbeitungsseite, den das Plugin dort nicht anlegt (die Einstellungen hängen in der
+Modul-Navigationsleiste), und ein Szenario prüfte den **deutschen** Text „Spieleinstellungen" auf
+einer englischen Testsite — das konnte nie zutreffen. Auf den Page-Resolver umgestellt; das
+Dropdown-Szenario ist jetzt korrekt als `@javascript` markiert, weil der Eintrag per AMD injiziert
+wird.
+
+### Verifiziert
+
+Alle neun Gates PASS. **147 Tests, 459 Assertions, 0 Fehler, 9 Skips** — gegen einen Baum mit
+vollständigem Abhängigkeitsstapel und gepatchtem Verhaltens-Plugin.
+
+Behat konnte ich hier weiterhin nicht ausführen (Selenium/Chrome fehlen). Die elf Korrekturen
+sind aus den Logs und dem Quelltext abgeleitet, nicht durch einen grünen Lauf bestätigt.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
   und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
   jede Skip-Meldung ehrlich protokolliert werden.
 * **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
-* **Behat ist noch nie gelaufen.** Die Szenarien aus den Patches 02 und 03 sind ungeprüft.
+* **`qbehaviour_stackmathgame` muss gepatcht werden** (`docs/patches/`), sonst ist das Spiel
+  grundsätzlich nicht startbar und in der Quiz-Auswahl nicht sichtbar.
+* **Behat-Korrekturen sind nicht durch einen grünen Lauf bestätigt**, nur aus den Logs abgeleitet.
 * **Vier veraltete Dateien** müssen im Repository von Hand gelöscht werden.
 * **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein
   gemessenes Ziel. Sie müssen nach dem ersten echten Lauf auf repräsentativer Hardware

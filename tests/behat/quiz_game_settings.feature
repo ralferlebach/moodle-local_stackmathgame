@@ -20,16 +20,18 @@ Feature: STACK Math Game quiz settings configuration
     And I log in as "teacher1"
 
   Scenario: Game settings page is accessible for editing teacher
-    When I am on the "Test Quiz" "mod_quiz > Edit" page
-    And I follow "Game settings"
+    When I am on the "Test Quiz" "local_stackmathgame > Game settings" page
     Then I should see "Game settings"
+    And I should see "Prerequisites for running a game"
 
   Scenario: Saving game settings redirects back to the settings page
-    When I am on the "Test Quiz" "mod_quiz > Edit" page
-    And I follow "Game settings"
+    When I am on the "Test Quiz" "local_stackmathgame > Game settings" page
     And I press "Save changes"
     Then I should see "Changes saved"
 
+  @javascript
   Scenario: Game settings entry appears in the quiz tertiary nav dropdown
+    # The dropdown entry is injected by AMD, so this one needs a real browser. The label comes
+    # from the "gamesettings" string, which is English on an English test site.
     When I am on the "Test Quiz" "mod_quiz > Edit" page
-    Then I should see "Spieleinstellungen" in the quiz tertiary nav
+    Then I should see "Game settings" in the quiz tertiary nav

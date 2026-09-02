@@ -1,0 +1,45 @@
+From: Ralf Erlebach <ralf@example.org>
+Subject: [PATCH] Declare the behaviour type archetypal
+
+question_behaviour_type::is_archetypal() returns false by default, and
+qbehaviour_stackmathgame_type does not override it. That has two consequences,
+neither of which points at the cause:
+
+  1. question_engine::get_archetypal_behaviours() builds the list offered in the
+     quiz "Question behaviour" menu. A non-archetypal behaviour is left out, so a
+     teacher cannot select STACK Math Game for a quiz at all.
+
+  2. If the value reaches quiz.preferredbehaviour by any other route - a
+     generator, a restore, an SQL update - then
+     question_engine::make_archetypal_behaviour() throws
+     "The requested behaviour is not actually an archetypal one" the moment a
+     student starts an attempt.
+
+Symptom 2 is what local_stackmathgame's Behat run hit: four scenarios failed on
+"I press Attempt quiz" with a coding exception, several layers away from the
+missing method.
+
+An archetypal behaviour is simply one a quiz may be set to, which is exactly what
+this behaviour is for.
+
+--- a/behaviourtype.php
++++ b/behaviourtype.php
+@@ -11,6 +11,17 @@
+  */
+ class qbehaviour_stackmathgame_type extends question_behaviour_type {
+     /**
++     * This behaviour is meant to be chosen as a quiz's preferred behaviour.
++     *
++     * Without this, Moodle omits it from the quiz question behaviour menu and
++     * question_engine::make_archetypal_behaviour() refuses to instantiate it.
++     *
++     * @return bool
++     */
++    public function is_archetypal() {
++        return true;
++    }
++
++    /**
+      * Questions can finish during the attempt, matching adaptive STACK flows.
+      *
+      * @return bool

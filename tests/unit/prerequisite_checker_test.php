@@ -211,6 +211,27 @@ final class prerequisite_checker_test extends advanced_testcase {
     }
 
     /**
+     * The question behaviour must be selectable as a quiz's preferred behaviour.
+     *
+     * This is the defect the first Behat run surfaced, four layers from its cause: a behaviour
+     * type that does not declare itself archetypal is left out of the quiz behaviour menu, and
+     * question_engine::make_archetypal_behaviour() throws when an attempt starts. Asserting it
+     * here turns a mid-attempt coding exception into a named failure.
+     */
+    public function test_behaviour_is_archetypal(): void {
+        if (!\core_component::get_component_directory('qbehaviour_stackmathgame')) {
+            $this->markTestSkipped('qbehaviour_stackmathgame is not installed in this tree.');
+        }
+
+        $this->assertArrayHasKey(
+            prerequisite_checker::REQUIRED_BEHAVIOUR,
+            \question_engine::get_archetypal_behaviours(),
+            'qbehaviour_stackmathgame is not archetypal, so no quiz can be set to it. '
+                . 'Its behaviourtype.php needs is_archetypal() returning true.'
+        );
+    }
+
+    /**
      * Every check carries a label and a message, so the panel never renders an empty cell.
      */
     public function test_every_check_is_fully_populated(): void {

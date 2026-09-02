@@ -130,7 +130,7 @@ jobs:
 
       - name: Moodle Code Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci codechecker moodle/local/stackmathgame --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
+        run: set -o pipefail; moodle-plugin-ci codechecker "$PLUGIN_DIR" --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
       - name: PHP Mess Detector
         continue-on-error: true
         if: ${{ always() }}
@@ -210,13 +210,13 @@ jobs:
           MOODLE_BRANCH: MOODLE_405_STABLE
       - name: Moodle PHPDoc Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpdoc moodle/local/stackmathgame --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
+        run: set -o pipefail; moodle-plugin-ci phpdoc "$PLUGIN_DIR" --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
       - name: Check upgrade savepoints
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci savepoints moodle/local/stackmathgame 2>&1 | tee ci-logs/savepoints.log
+        run: set -o pipefail; moodle-plugin-ci savepoints "$PLUGIN_DIR" 2>&1 | tee ci-logs/savepoints.log
       - name: Validating
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci validate moodle/local/stackmathgame 2>&1 | tee ci-logs/validate.log
+        run: set -o pipefail; moodle-plugin-ci validate "$PLUGIN_DIR" 2>&1 | tee ci-logs/validate.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -319,13 +319,13 @@ jobs:
           MOODLE_BRANCH: ${{ matrix.moodle }}
       - name: Mustache Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci mustache moodle/local/stackmathgame 2>&1 | tee ci-logs/mustache.log
+        run: set -o pipefail; moodle-plugin-ci mustache "$PLUGIN_DIR" 2>&1 | tee ci-logs/mustache.log
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}
         # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
         # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
         # what caught the undocumented @returns in the mode modules.
-        run: set -o pipefail; moodle-plugin-ci grunt moodle/local/stackmathgame --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+        run: set -o pipefail; moodle-plugin-ci grunt "$PLUGIN_DIR" --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
         run: |
@@ -335,7 +335,7 @@ jobs:
           npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpunit moodle/local/stackmathgame --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
+        run: set -o pipefail; moodle-plugin-ci phpunit "$PLUGIN_DIR" --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -421,7 +421,7 @@ jobs:
       - name: Behat features
         id: behat
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci behat moodle/local/stackmathgame --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
+        run: set -o pipefail; moodle-plugin-ci behat "$PLUGIN_DIR" --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
       - name: Collect error summary and Behat dumps
         if: ${{ always() }}
         run: |
