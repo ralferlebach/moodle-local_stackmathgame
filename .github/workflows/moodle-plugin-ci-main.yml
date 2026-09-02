@@ -84,11 +84,20 @@ jobs:
           echo $(cd ci/bin; pwd) >> $GITHUB_PATH
           echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
           sudo locale-gen en_AU.UTF-8
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack's install.php runs a live CAS healthcheck while the site is being
+          # installed. Without a maxima binary it throws a coding exception, install_database.php
+          # aborts, and moodle-plugin-ci never gets to write MOODLE_DIR into the job environment.
+          # Every later step then resolves the Moodle root to the workspace and fails with a
+          # message about something else entirely: "Unable to find Gruntfile",
+          # "Could not load core_component", "vendor/bin/phpunit: not found".
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+          maxima --version
+
       - name: Install Moodle, dependencies and plugin
         run: |
-          # local_stackmathgame hard dependencies (version.php): qtype_stack,
-          # qbehaviour_stackmathgame, filter_shortcodes. block_xp / block_stash are soft
-          # integrations and are installed so the optional bridges are exercised too.
           # Hard dependencies from version.php: qtype_stack, qbehaviour_stackmathgame,
           # filter_shortcodes. qbehaviour_adaptivemultipart is a hard dependency OF
           # qtype_stack -- without it the Moodle install aborts before our plugin is
@@ -106,36 +115,36 @@ jobs:
           MOODLE_BRANCH: ${{ matrix.moodle }}
       - name: PHP Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phplint plugin 2>&1 | tee ci-logs/phplint.log
+        run: set -o pipefail; moodle-plugin-ci phplint moodle/local/stackmathgame 2>&1 | tee ci-logs/phplint.log
       - name: PHP Copy/Paste Detector
         continue-on-error: true
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpcpd plugin 2>&1 | tee ci-logs/phpcpd.log
+        run: set -o pipefail; moodle-plugin-ci phpcpd moodle/local/stackmathgame 2>&1 | tee ci-logs/phpcpd.log
       - name: PHP Mess Detector
         continue-on-error: true
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpmd plugin 2>&1 | tee ci-logs/phpmd.log
+        run: set -o pipefail; moodle-plugin-ci phpmd moodle/local/stackmathgame 2>&1 | tee ci-logs/phpmd.log
       - name: Moodle Code Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci codechecker plugin --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
+        run: set -o pipefail; moodle-plugin-ci codechecker moodle/local/stackmathgame --max-warnings 0 --exclude=PSR1.Classes.ClassDeclaration,moodle.Commenting.TodoComment 2>&1 | tee ci-logs/codechecker.log
       - name: Moodle PHPDoc Checker
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpdoc plugin --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
+        run: set -o pipefail; moodle-plugin-ci phpdoc moodle/local/stackmathgame --max-warnings 0 2>&1 | tee ci-logs/phpdoc.log
       - name: Validating
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci validate plugin 2>&1 | tee ci-logs/validate.log
+        run: set -o pipefail; moodle-plugin-ci validate moodle/local/stackmathgame 2>&1 | tee ci-logs/validate.log
       - name: Check upgrade savepoints
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci savepoints plugin 2>&1 | tee ci-logs/savepoints.log
+        run: set -o pipefail; moodle-plugin-ci savepoints moodle/local/stackmathgame 2>&1 | tee ci-logs/savepoints.log
       - name: Mustache Lint
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci mustache plugin 2>&1 | tee ci-logs/mustache.log
+        run: set -o pipefail; moodle-plugin-ci mustache moodle/local/stackmathgame 2>&1 | tee ci-logs/mustache.log
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}
         # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
         # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
         # what caught the undocumented @returns in the mode modules.
-        run: set -o pipefail; moodle-plugin-ci grunt plugin --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+        run: set -o pipefail; moodle-plugin-ci grunt moodle/local/stackmathgame --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
         run: |
@@ -145,11 +154,11 @@ jobs:
           npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci phpunit plugin --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
+        run: set -o pipefail; moodle-plugin-ci phpunit moodle/local/stackmathgame --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
       - name: Behat features
         id: behat
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci behat plugin --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
+        run: set -o pipefail; moodle-plugin-ci behat moodle/local/stackmathgame --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
       - name: Collect error summary
         if: ${{ always() }}
         run: |
@@ -329,11 +338,16 @@ jobs:
           sudo locale-gen en_AU.UTF-8
           echo "NVM_DIR=$HOME/.nvm" >> $GITHUB_ENV
 
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack's install.php runs a live CAS healthcheck during site installation.
+          # Without a maxima binary it aborts the whole install.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+          maxima --version
+
       - name: Install Moodle and the plugin ecosystem
         run: |
-          # local_stackmathgame hard dependencies (version.php): qtype_stack,
-          # qbehaviour_stackmathgame, filter_shortcodes. block_xp / block_stash are soft
-          # integrations and are installed so the optional bridges are exercised too.
           # Hard dependencies from version.php: qtype_stack, qbehaviour_stackmathgame,
           # filter_shortcodes. qbehaviour_adaptivemultipart is a hard dependency OF
           # qtype_stack -- without it the Moodle install aborts before our plugin is
@@ -355,7 +369,7 @@ jobs:
           # Clover XML instead of --coverage-text: the text report covers the whole Moodle tree
           # (its summary showed ~2% because it counts all of core), which says nothing about this
           # plugin. Clover gives per-file counters, so the gate can measure exactly this plugin.
-          moodle-plugin-ci phpunit --coverage-clover --coverage-pcov ./plugin
+          moodle-plugin-ci phpunit --coverage-clover --coverage-pcov moodle/local/stackmathgame
         env:
           DB: pgsql
           MOODLE_BRANCH: MOODLE_405_STABLE

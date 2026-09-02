@@ -186,5 +186,15 @@ if ($data = $form->get_data()) {
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gamesettings', 'local_stackmathgame'));
+// The flow lives on its own page but is reached from here: the settings are what a teacher
+// opens first, and a link they have to be told about is a link that does not exist.
+echo html_writer::div(
+    html_writer::link(
+        new moodle_url('/local/stackmathgame/flow.php', ['cmid' => $cmid]),
+        get_string('flow_heading', 'local_stackmathgame'),
+        ['class' => 'btn btn-primary']
+    ),
+    'mb-3'
+);
 $form->display();
 echo $OUTPUT->footer();

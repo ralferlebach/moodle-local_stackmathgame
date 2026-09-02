@@ -181,6 +181,10 @@ class behat_local_stackmathgame extends behat_base {
                 return new moodle_url('/local/stackmathgame/quiz_settings.php', [
                     'cmid' => self::cmid_for_quiz_name($identifier),
                 ]);
+            case 'game flow':
+                return new moodle_url('/local/stackmathgame/flow.php', [
+                    'cmid' => self::cmid_for_quiz_name($identifier),
+                ]);
             default:
                 throw new Exception('Unrecognised local_stackmathgame page type "' . $type . '".');
         }

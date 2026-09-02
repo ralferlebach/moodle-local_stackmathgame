@@ -4,6 +4,12 @@
 
 ### Added
 
+* A game flow authoring page (issue #1): `flow.php` lists every quiz slot beside its direction
+  card, `flow_service` reads and writes them through `slot_config_schema`, and the per-slot form
+  covers scene type, narrative, all four branch outcomes, rewards and display flags. Includes a
+  bulk apply that only touches the fields that were filled in, and an analysis that reports
+  unreachable slots and dead ends.
+
 * Full development and CI infrastructure adopted from `moodle-plugintemplate`: dev and main
   pipelines, Playwright browser journeys, k6 and JMeter load plans, makefile quality gates,
   coverage floor, release-artefact and stale-file gates.

@@ -59,6 +59,13 @@ jobs:
           php-version: '8.2'
           extensions: pgsql, gd, intl, zip, soap, mbstring, curl, xml, exif
           ini-values: max_input_vars=5000
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack runs a live CAS healthcheck from its install.php. Without a maxima binary
+          # install_database.php aborts and the site never comes up.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+
       - name: Build, install and seed a self-contained site
         id: selfcontained
         if: ${{ github.event.inputs.mode == 'selfcontained' }}

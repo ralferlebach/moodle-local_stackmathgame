@@ -54,6 +54,13 @@ jobs:
       - name: Check out Moodle
         run: git clone --depth 1 --branch "$MOODLE_BRANCH" https://github.com/moodle/moodle.git moodle
 
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack runs a live CAS healthcheck from its install.php. Without a maxima binary
+          # install_database.php aborts and the whole environment fails to come up.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+
       - name: Install the plugin ecosystem into Moodle
         run: |
           # ONE installation routine, one ref. Installing the siblings twice (once from a branch,

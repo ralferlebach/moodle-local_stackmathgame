@@ -503,14 +503,181 @@ Abhängigkeiten in der CI stehen.
 
 ---
 
+## Patch 06 — Issue #1, Teil 1: Regiekarten-Oberfläche (abgeschlossen, verifiziert)
+
+Entscheidung (c) umgesetzt: eigene Unterseite `flow.php?cmid=…`. **Kein React.** Für eine
+Tabelle mit zehn bis dreißig Zeilen und ein Formular pro Zeile bringt es nichts, kostet aber eine
+zweite Build-Kette — die makefile-Targets `lint-react` und `test-react` existieren zwar, aber
+nichts sonst im Plugin nutzt sie, und ein ungenutzter Toolchain-Zweig verrottet.
+
+### Warum eine eigene Seite
+
+Zwanzig Slots mit je fünf Abschnitten würden das Einstellungsformular unbenutzbar machen. Die
+beiden Aufgaben sind außerdem verschieden: Einstellungen wählt man einmal, den Ablauf bearbeitet
+man wiederholt, während ein Test Gestalt annimmt.
+
+### Kein paralleles Datenmodell
+
+Alles liest und schreibt `local_stackmathgame_questionmap.configjson` über
+`slot_config_schema`. Beim Speichern geht die Konfiguration durch `parse()` und wird erst dann
+validiert — geprüft wird also exakt das, was gespeichert wird. Etwas anderes zu validieren als
+zu speichern ist genau der Weg, auf dem beide auseinanderlaufen.
+
+### Was gebaut wurde
+
+```
+classes/local/service/flow_service.php   (neu) Lesen, Schreiben, Bulk, Erreichbarkeitsanalyse
+classes/form/slot_config_form.php        (neu) Die Regiekarte
+classes/output/flow_list.php             (neu) Renderable der Slot-Liste
+templates/flow_list.mustache             (neu)
+flow.php                                 (neu) Liste, Editor, Sync, Bulk
+quiz_settings.php                        Link auf den Ablauf
+lang/en|de/local_stackmathgame.php       68 neue Strings je Sprache (248 gesamt)
+tests/unit/flow_service_test.php         (neu) 11 Fälle
+tests/behat/flow_editor.feature          (neu) 6 Szenarien
+tests/behat/behat_local_stackmathgame.php  Page-Resolver für den Ablauf
+```
+
+### Drei Entscheidungen mit Begründung
+
+* **Bulk-Anwendung ist partiell.** Nur ausgefüllte Felder werden übernommen. Ein
+  Komplett-Überschreiben würde beim Setzen eines Szenentyps auf zwanzig Slots zwanzig Narrative
+  löschen — genau das, was man beim Massenbearbeiten am wenigsten erwartet.
+* **Erreichbarkeitsanalyse als eigene Prüfung.** Unerreichbare Slots und Sackgassen sind
+  Autorenfehler, bei denen *keine einzelne Regiekarte falsch ist*. Jede ist für sich gültig; erst
+  der Graph zeigt das Problem. Ohne die Analyse zeigt es sich als feststeckende Spielende
+  mitten im Test — die teuerste Stelle, es zu finden.
+* **Der letzte Slot bei linearer Verzweigung ist ein Ende, keine Sackgasse.** Ihn zu melden
+  hieße, die Warnung bei jedem korrekt konfigurierten Test auszulösen, und eine Warnung, die
+  immer erscheint, liest niemand.
+
+### Akzeptanzkriterien aus Issue #1
+
+Erfüllt: Slot-Liste in Quiz-Reihenfolge mit Slotnummer, Titel, Fragetyp und Question-ID;
+STACK-Kennzeichnung; explizite und automatische Synchronisierung; keine verwaisten Regiekarten;
+Szenentyp, Narrative, alle vier Verzweigungen, Score/XP, Achievement-Schlüssel und Display-Flags
+editierbar; Zielslot-Auswahl nur aus tatsächlich existierenden Slots; `mode = end` verlangt kein
+Ziel; serverseitige Validierung über `slot_config_schema`; kein JSON von Hand; Sackgassen- und
+Erreichbarkeitsprüfung; erreichbar aus den Spieleinstellungen; Defaults auf mehrere markierte
+Slots anwendbar.
+
+**Offen aus dem Issue:** die Einbindung vorhandener Stash-/Achievement-Mappings ist nur zur
+Hälfte da. Achievement-Schlüssel sind editierbar, die Stash-Zuordnung liegt weiterhin im
+bestehenden Formular unter `stashmapping_*`. Zusammenführen wäre sinnvoll, gehört aber in
+Teil 2.
+
+### Nebenbefund
+
+`question_map_service::ensure_for_cmid()` bewahrte vorhandenes `configjson` bereits korrekt und
+löschte verwaiste Zeilen — das war kein Mangel, sondern ungetestet. Jetzt durch zwei Fälle
+abgesichert, darunter ein doppelter Rebuild hintereinander.
+
+### Verifiziert
+
+| Gate | Ergebnis |
+|---|---|
+| phplint, phpcpd, phpmd | PASS |
+| codechecker, phpdoc, validate, savepoints, mustache | PASS |
+| grunt (Build + ESLint) | PASS |
+| **PHPUnit** | **145 Tests, 455 Assertions, 0 Fehler, 9 Skips** |
+
+Die elf neuen `flow_service`-Tests liefen im ersten Anlauf grün. PHPCS meldete beim ersten
+Durchgang 20 Formatierungsfehler an mehrzeiligen Kontrollstrukturen, die `phpcbf` behoben hat,
+plus Bannerkommentare (`// -----`), die an „Inline comments must end in full-stops" scheitern —
+bei `--max-warnings 0` ein Fehlschlag. Entfernt; die Abschnittsüberschriften darunter tragen die
+Bedeutung ohnehin.
+
+**Behat weiterhin nicht ausgeführt** — die sechs neuen Szenarien sind ungeprüft.
+
+---
+
+## Patch 07 — CI-Lauf 2: die eigentliche Ursache (abgeschlossen, verifiziert)
+
+### Was wirklich passiert ist
+
+Drei Jobs rot, mit drei völlig verschiedenen Fehlermeldungen — und alle drei waren Folgefehler
+**einer** Ursache:
+
+```
+Mustache Lint:  Could not load core_component from dirroot: <workspace>
+Grunt:          Unable to find Gruntfile / Failed to find <workspace>/version.php
+PHPUnit:        <workspace>/vendor/bin/phpunit: not found
+```
+
+Die Ursache steht im Install-Schritt darüber:
+
+```
+sh: 1: maxima: not found
+* line 96 of /question/type/stack/db/install.php: coding_exception thrown
+* line 494 of /lib/installlib.php: call to upgrade_noncore()
+```
+
+**`qtype_stack` führt in seiner `install.php` einen echten CAS-Healthcheck aus.** Ohne
+Maxima-Binary wirft es eine `coding_exception`, `install_database.php` bricht ab — und damit
+schreibt `moodle-plugin-ci install` nie `MOODLE_DIR` in die Job-Umgebung. Die Option `--moodle`
+fällt dann auf `getenv('MOODLE_DIR') ?: '.'` zurück, also auf das Workspace-Root. Jeder folgende
+Schritt sucht Moodle an der falschen Stelle und meldet etwas, das mit der Ursache nichts zu tun
+hat.
+
+Der `quality`-Job blieb grün, weil er `--no-init` verwendet: ohne Datenbankinstallation läuft
+`qtype_stack/db/install.php` nie.
+
+### Behoben
+
+* **Maxima wird installiert**, in jedem Job, der eine vollständige Moodle-Installation macht
+  (PHPUnit ×3, Behat, Coverage) sowie in den Playwright- und Lastworkflows.
+  **Lokal verifiziert:** mit `maxima maxima-share gnuplot-nox` installiert `qtype_stack` sauber
+  (`qtype_stack|2026080600` in `phpu_config_plugins`), und die vollständige Abhängigkeitskette
+  steht.
+
+* **Prüfbefehle nach dem Install zeigen jetzt auf `moodle/local/stackmathgame`.** Das war mein
+  Fehler aus Patch 05: dort hatte ich pauschal `plugin` an *jeden* Befehl gehängt. Für Jobs ohne
+  Install ist das richtig, für Jobs danach falsch — `install --plugin ./plugin` kopiert das
+  Plugin in den Moodle-Baum, und ein Prüflauf gegen das ursprüngliche Checkout ist genau der
+  „grün außerhalb des Baums"-Fall, vor dem die Doku warnt. Die eigentliche Ursache in Lauf 1 war
+  nicht das fehlende Argument, sondern der abgebrochene Install (falscher Branch), der die
+  Umgebung nie geschrieben hat.
+
+* **`codeanalysis` lief ohne Moodle-Baum.** Damit waren `moodle.PHPUnit.TestCaseNames` und
+  `TestCaseCovers` dort stumm — der Job meldete grün, während beide Sniffs nichts prüften. Genau
+  so überlebten zwanzig falsche Test-Namespaces. Der Job bekommt jetzt denselben leichten
+  `--no-init`-Install wie `quality` und prüft im Baum.
+
+### Zur Frage nach js/mustache/jest
+
+**Nichts davon wurde entfernt.** Die Schritte stehen im Log des Laufs als
+`9_Mustache Lint`, `10_Grunt (AMD build + ESLint)` und `11_Jest (AMD unit tests)`.
+Jest lief durch: 16 Tests grün. Mustache und Grunt scheiterten an der oben beschriebenen
+Folgekette — ihre Meldungen („kein Gruntfile", „core_component nicht ladbar") lesen sich, als
+sei der Schritt selbst falsch konfiguriert, deshalb der Eindruck. Verifizierbar in
+`PHPUnit _ MOODLE_405_STABLE _ PHP 8.2 _ pgsql/` des hochgeladenen Log-Archivs.
+
+### Lücke aus Patch 05 geschlossen
+
+Mit installierbarem `qtype_stack` ist der **Positivfall von `is_playable()`** endlich testbar
+und getestet. Bis dahin waren alle acht Fälle in `prerequisite_checker_test` Ablehnungen — ein
+Prüfer, der alles ablehnt, hätte sie sämtlich bestanden. Der Test überspringt sich sauber, wenn
+`qtype_stack` fehlt.
+
+### Verifiziert
+
+Alle neun Gates PASS. **146 Tests, 454 Assertions, 0 Fehler, 9 Skips** — diesmal gegen einen
+Baum mit vollständigem Abhängigkeitsstapel: `qtype_stack`, `qbehaviour_adaptivemultipart`,
+`qbehaviour_stackmathgame` und `filter_shortcodes` installiert.
+
+### Weiterhin offen
+
+`tests/behat/behat_local_stackmatheditor.php` liegt noch im Repository — die anderen vier
+Dateien hast du bereits gelöscht, diese fehlt noch.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
   und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
   jede Skip-Meldung ehrlich protokolliert werden.
 * **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
-* **Positivfall von `is_playable()` ungetestet**, solange die harten Abhängigkeiten nicht im
-  Testbaum stehen (siehe Patch 05).
 * **Behat ist noch nie gelaufen.** Die Szenarien aus den Patches 02 und 03 sind ungeprüft.
 * **Vier veraltete Dateien** müssen im Repository von Hand gelöscht werden.
 * **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein
