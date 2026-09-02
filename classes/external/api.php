@@ -274,6 +274,9 @@ class api {
                 'mechanicsjson' => '{}',
                 'assetmanifestjson' => '{}',
                 'runtimejson' => '{}',
+                'runtimeassets' => [],
+                'thumbnailurl' => '',
+                'themeclass' => '',
             ];
         }
         $config = theme_manager::get_theme_config((int)$design->id);
@@ -297,7 +300,36 @@ class api {
                 'ui' => (array)($config['ui'] ?? []),
                 'mechanics' => (array)($config['mechanics'] ?? []),
             ], JSON_UNESCAPED_UNICODE),
+            // Also exported as a structured field. runtimejson stays for backwards
+            // compatibility, but nothing should be reading assets out of it any more: a nested
+            // JSON string is exactly the shape that let the client read the wrong level and get
+            // an empty map without any error.
+            'runtimeassets' => self::export_runtime_assets($config),
+            'thumbnailurl' => (string)($config['thumbnailurl'] ?? ''),
+            'themeclass' => (string)($config['themeclass'] ?? ''),
         ];
+    }
+
+    /**
+     * Flatten the resolved asset map into a list of key/url pairs.
+     *
+     * A list rather than an object because Moodle's external API cannot describe a structure
+     * with arbitrary keys, and the keys here come from a package manifest - a design author can
+     * introduce new ones without touching this plugin.
+     *
+     * @param array $config The theme config from theme_manager::get_theme_config().
+     * @return array[] List of ['key' => ..., 'url' => ...].
+     */
+    private static function export_runtime_assets(array $config): array {
+        $assets = [];
+        foreach ((array)($config['runtimeassets'] ?? []) as $key => $url) {
+            $url = (string)$url;
+            if ($url === '') {
+                continue;
+            }
+            $assets[] = ['key' => (string)$key, 'url' => $url];
+        }
+        return $assets;
     }
 
     /**

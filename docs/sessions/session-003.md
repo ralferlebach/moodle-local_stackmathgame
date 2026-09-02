@@ -309,6 +309,80 @@ alten Module aus, während `amd/src` aktuell aussieht. PHPUnit und Behat stehen 
 
 ---
 
+## Patch 04 — Issue #4: Design-Assets mit der Runtime verdrahten (abgeschlossen)
+
+### Vier Fehler in einer Kette
+
+Serverseitig war fast alles richtig — Manifeste, `package_registry`, `get_theme_config` liefern
+korrekte URLs. Auf dem Weg zum Bildschirm ging es an vier Stellen verloren:
+
+1. **`theme_manager::asset_base_url($slug)` verwarf sein Argument** und gab konstant
+   `/pix/packages/shared/` zurück, für jedes Design gleich.
+2. **`game_engine.js` las `quizconfig.runtimejson`** — das Feld liegt aber auf dem Design, nicht
+   auf der Quiz-Konfiguration. Eine Ebene zu hoch gelesen, Ergebnis immer `{}`. Und weil `{}` ein
+   vollkommen gültiger Wert ist, hat sich nie etwas beschwert.
+3. **Die Engine reichte `assetBaseUrl` (einen Pfad) statt der Assetmap** an die Module weiter.
+4. **`wisewizzard` baute daraus `assetBaseUrl + '/mentor_happy.svg'`** — ein handgebauter Pfad,
+   der selbst bei korrekter Basis nur für gebündelte Pakete funktioniert hätte.
+
+### Fünfter Befund: die Sprites wurden nie angefordert
+
+Beim Verdrahten fiel auf, dass `rpg` und `exitgames` **überhaupt keine** Manifest-Assets
+verwenden. Die Manifeste deklarieren `player_idle`, `enemy_idle`, `bg_forest`, `guide_happy`,
+`guide_think` — die Module zeichneten stattdessen CSS-Verläufe. Nur `wisewizzard` hat es
+überhaupt versucht.
+
+Das ist mehr als ein kosmetischer Mangel: solange kein Modul ein Asset anfordert, ist die ganze
+Auflösungskette nicht prüfbar. Ein Resolver, der eine falsche URL liefert, sieht exakt aus wie
+einer, der die richtige liefert. Deshalb rendert `rpg` jetzt eine Bühne mit Hintergrund und zwei
+Sprites, `exitgames` einen Guide, der auf richtig/falsch reagiert. Alle Assets sind optional —
+ein Design ohne `bg_forest` hat schlicht keinen Hintergrund statt eines kaputten Bildes. Die
+Sprites sind als `role="presentation"` mit leerem `alt` ausgezeichnet: der mathematische Inhalt
+ist die Frage, nicht die Kulisse.
+
+### Assetmap als eigenes Feld, nicht als verschachteltes JSON
+
+`runtimeassets` ist jetzt ein strukturiertes Feld der Design-Struktur, nicht mehr ein
+JSON-String in einem JSON-String. Als **Liste von key/url-Paaren**, nicht als Objekt: Moodles
+External API kann keine Struktur mit beliebigen Schlüsseln beschreiben, und die Schlüssel kommen
+aus einem Paketmanifest, das Design-Schaffende erweitern dürfen.
+
+`runtimejson` bleibt aus Kompatibilitätsgründen erhalten, aber nichts liest dort noch Assets
+heraus. Genau diese Form — JSON in JSON — hat es ermöglicht, die falsche Ebene zu lesen und
+kommentarlos eine leere Map zu bekommen.
+
+Module adressieren Assets ausschließlich über `GameCore.assetUrl(gameState, key, fallback)`.
+
+### Geänderte Dateien
+
+```
+classes/game/theme_manager.php                  (asset_base_url respektiert den Slug)
+classes/external/api.php                        (export_design + export_runtime_assets)
+classes/external/get_quiz_config.php            (runtimeassets/thumbnailurl/themeclass)
+amd/src/game_engine.js                          (buildAssetMap, runtimejson-Ebene korrigiert)
+amd/src/game_core.js                            (assetUrl)
+mode/rpg/amd/src/game.js                        (Bühne mit Hintergrund und Sprites)
+mode/exitgames/amd/src/game.js                  (Guide-Sprite)
+mode/wisewizzard/amd/src/game.js                (Asset per Schlüssel statt per Pfad)
+tests/unit/design_assets_test.php               (neu)
+tests/jest/game_core.test.js                    (assetUrl-Tests)
+tests/playwright/game.spec.js                   (Assertion verschärft)
+```
+
+### Tests
+
+* **Jest: 16 Tests, ausgeführt, grün** (12 aus Patch 03 plus 4 für `assetUrl`). Darunter, dass
+  ein fehlender Schlüssel `''` liefert und nicht `undefined` — ein `undefined` im `src` wird vom
+  Browser als Literal relativ zum Site-Root angefordert und erzeugt einen 404, den man dem Plugin
+  anlastet.
+* **PHPUnit:** sechs Fälle, darunter dass zwei Designs nie auf dasselbe Verzeichnis auflösen und
+  dass **jede im Manifest deklarierte Datei tatsächlich existiert**. Eine fehlende Datei ist zur
+  Laufzeit unsichtbar.
+* **Playwright:** prüft jetzt, dass mindestens ein Asset aus `/mode/rpg/packages/` angefordert
+  wurde und die Bühne sichtbar ist — nicht mehr nur, dass nichts 404 liefert.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle

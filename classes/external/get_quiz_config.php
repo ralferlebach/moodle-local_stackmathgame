@@ -140,6 +140,31 @@ class get_quiz_config extends \external_api {
             'mechanicsjson' => new \external_value(PARAM_RAW, 'Mechanics json'),
             'assetmanifestjson' => new \external_value(PARAM_RAW, 'Asset manifest json'),
             'runtimejson' => new \external_value(PARAM_RAW, 'Runtime config json'),
+            // The resolved asset map as a first-class field rather than a JSON string nested
+            // inside runtimejson. The client used to have to parse runtimejson to reach it, and
+            // read it at the wrong level - so every mode received an empty map and silently
+            // rendered nothing where a sprite should have been.
+            'runtimeassets' => new \external_multiple_structure(
+                new \external_single_structure([
+                    'key' => new \external_value(PARAM_ALPHANUMEXT, 'Asset key from the package manifest'),
+                    'url' => new \external_value(PARAM_URL, 'Resolved URL of the asset'),
+                ]),
+                'Resolved asset URLs, addressed by key',
+                VALUE_DEFAULT,
+                []
+            ),
+            'thumbnailurl' => new \external_value(
+                PARAM_URL,
+                'Resolved design thumbnail URL',
+                VALUE_DEFAULT,
+                ''
+            ),
+            'themeclass' => new \external_value(
+                PARAM_TEXT,
+                'CSS classes identifying mode and design',
+                VALUE_DEFAULT,
+                ''
+            ),
         ]);
     }
 

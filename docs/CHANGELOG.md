@@ -27,7 +27,17 @@
   `navigation_resolver` service, a `navigation` block on the submit and prefetch responses, and
   shared `navigationFrom` / `applyNavigation` helpers in `game_core`.
 
+* Design assets now reach the game runtime (issue #4): `runtimeassets` is a structured field on
+  the design export, `game_core.assetUrl()` addresses assets by manifest key, and the RPG and
+  ExitGames modes render the sprites their packages declare.
+
 ### Fixed
+
+* `theme_manager::asset_base_url()` accepted a design slug and ignored it, returning the generic
+  shared directory for every design alike.
+* `game_engine.js` read `runtimejson` from the quiz config instead of from the design, one level
+  too high, so the runtime was always an empty object.
+* `stackmathgamemode_wisewizzard` built an asset path by appending a filename to a base URL.
 
 * `prefetch_next_node` never called `branch_resolver` at all: it returned the next unsolved slot
   in map order and ignored the branching configuration, so a prefetch and a submit could disagree

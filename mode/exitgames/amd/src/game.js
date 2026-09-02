@@ -70,6 +70,13 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             '.smg-eg-bubble {',
             '  position: relative;',
             '  background: #fcefdc;',
+            '}',
+            '.smg-eg-guide {',
+            '  max-height: 96px;',
+            '  margin-bottom: .25rem;',
+            '}',
+            '.smg-eg-bubble-spacer {',
+            '  background: #fcefdc;',
             '  padding: 1.125em 1.5em;',
             '  font-size: 1.1em;',
             '  border-radius: 1rem;',
@@ -135,6 +142,41 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
     }
 
     /**
+     * Show the guide sprite matching the current mood.
+     *
+     * The ExitGames manifest declares guide_happy and guide_think; neither was ever requested
+     * before, so the design's own artwork never reached the screen and a wrong asset URL was
+     * indistinguishable from a correct one.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {Element} bubble The speech bubble to attach the guide to.
+     * @param {boolean} solved Whether the last answer was correct.
+     * @returns {void}
+     */
+    function showGuide(gameState, bubble, solved) {
+        var url = GameCore.assetUrl(gameState, solved ? 'guide_happy' : 'guide_think');
+        var guide = document.querySelector('.smg-eg-guide');
+        if (!url) {
+            if (guide) {
+                guide.style.display = 'none';
+            }
+            return;
+        }
+        if (!guide) {
+            guide = document.createElement('img');
+            guide.className = 'smg-eg-guide';
+            // Decorative: the guide echoes the feedback text, it does not add information.
+            guide.alt = '';
+            guide.setAttribute('role', 'presentation');
+            if (bubble && bubble.parentNode) {
+                bubble.parentNode.insertBefore(guide, bubble);
+            }
+        }
+        guide.src = url;
+        guide.style.display = 'block';
+    }
+
+    /**
      * Update the next-question navigation control from the server's resolved navigation.
      *
      * @param {Object} response The submit response, carrying the resolved navigation.
@@ -172,6 +214,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         injectStyles();
         var slotMap = buildSlotMap(gameState.questionmap);
         var bubble = buildBubble();
+        showGuide(gameState, bubble, true);
         var currentSlot = parseInt(
             (document.querySelector('.que') || {}).getAttribute
                 ? (document.querySelector('.que').getAttribute('data-smg-slot') || '0')
@@ -198,6 +241,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 var solved = !!response.cannext;
                 showBubble(bubble, slotMap, slot, solved ? 'success' : 'fail');
                 updateNav(response);
+                showGuide(gameState, bubble, !!response.cannext);
             }
         };
     }

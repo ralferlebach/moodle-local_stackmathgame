@@ -133,10 +133,31 @@ define([], function() {
         return div.innerHTML;
     }
 
+    /**
+     * Look up a design asset by its manifest key.
+     *
+     * Modes must go through this rather than assembling a URL. A hand-built path works only for
+     * a bundled package and breaks as soon as a design is imported - and it breaks silently,
+     * because a broken image src renders as nothing rather than as an error.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {string} key The asset key from the package manifest.
+     * @param {string} [fallback] URL to use when the design does not supply that key.
+     * @returns {string} The resolved URL, or the fallback, or an empty string.
+     */
+    function assetUrl(gameState, key, fallback) {
+        var assets = (gameState && gameState.assets) || {};
+        if (assets[key]) {
+            return assets[key];
+        }
+        return fallback || '';
+    }
+
     return {
         defaultConfig: defaultConfig,
         navigationFrom: navigationFrom,
         applyNavigation: applyNavigation,
-        escapeHtml: escapeHtml
+        escapeHtml: escapeHtml,
+        assetUrl: assetUrl
     };
 });

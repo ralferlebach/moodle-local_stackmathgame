@@ -61,12 +61,19 @@ test.describe('Game runtime', () => {
     expect(assets.failed, `Fehlende Assets: ${assets.failed.join(', ')}`).toEqual([]);
 
     // Issue #4: the seeded quiz uses the RPG design, so its assets must come from the RPG
-    // package - not from the generic shared directory that asset_base_url() used to return
-    // for every design alike.
-    const fromSharedOnly =
-      assets.urls.length > 0 &&
-      assets.urls.every((url) => url.includes('/pix/packages/shared/'));
-    expect(fromSharedOnly, 'Alle Assets kamen aus dem generischen shared-Pfad.').toBe(false);
+    // package - not from the generic shared directory that asset_base_url() returned for every
+    // design alike. Asserting that at least one package asset was actually fetched is the point:
+    // a wrong path is invisible in the DOM, the element simply renders empty.
+    const packageAssets = assets.urls.filter((url) =>
+      url.includes('/mode/rpg/packages/')
+    );
+    expect(
+      packageAssets.length,
+      `Kein Asset aus dem RPG-Paket angefordert. Gesehen: ${assets.urls.join(', ')}`
+    ).toBeGreaterThan(0);
+
+    // The sprites the manifest declares must be on screen, not merely downloaded.
+    await expect(page.locator('.smg-rpg-stage')).toBeVisible();
   });
 
   test('a teacher reaches the game settings for the quiz', async ({ page }) => {

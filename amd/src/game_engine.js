@@ -43,6 +43,7 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             narrative: [],
             nextnode: null,
             navigation: null,
+            assets: {},
             lastsubmit: null
         },
         activeInput: null
@@ -273,6 +274,13 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                         profile: state.store.profile,
                         questionmap: state.store.questionmap,
                         narrative: state.store.narrative,
+                        // Assets are addressed by key, from the map the server resolved out of
+                        // the design's package manifest. A mode must not build a path: doing so
+                        // works only for bundled packages and breaks the moment a design is
+                        // imported, and it fails invisibly because a broken src renders empty.
+                        assets: state.store.assets,
+                        // Kept for the shared fallback directory only. Not a place to append
+                        // filenames to - use assets[key].
                         assetBaseUrl: state.config.themeAssetUrl || ''
                     });
                 }
@@ -354,6 +362,27 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
     // ── Bootstrap ──────────────────────────────────────────────────────────
 
     /**
+     * Turn the server's resolved asset list into a lookup by key.
+     *
+     * The web service sends a list of key/url pairs rather than an object, because Moodle's
+     * external API cannot describe a structure with arbitrary keys - and the keys come from a
+     * package manifest, which a design author may extend.
+     *
+     * @param {Object} design The exported design record.
+     * @returns {Object} Map of asset key to URL.
+     */
+    function buildAssetMap(design) {
+        var map = {};
+        var list = (design && design.runtimeassets) || [];
+        list.forEach(function(entry) {
+            if (entry && entry.key) {
+                map[entry.key] = entry.url || '';
+            }
+        });
+        return map;
+    }
+
+    /**
      * Ensure the minimal game shell element exists and wire the check button.
      *
      * The subplugin game module may replace this shell with its own UI.
@@ -413,8 +442,15 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
         ]).then(function(results) {
             var quizconfig = results[0] || {};
             state.store.design = quizconfig.design || null;
+            state.store.assets = buildAssetMap(state.store.design);
             state.store.questionmap = quizconfig.questionmap || [];
-            state.runtime = parseJson(quizconfig.runtimejson || '{}', {});
+            // runtimejson lives on the design, not on the quiz config. Reading it one level too
+            // high is why the runtime was always an empty object and no design data ever reached
+            // the modes - and because {} is a perfectly valid value, nothing ever complained.
+            state.runtime = parseJson(
+                (state.store.design && state.store.design.runtimejson) || '{}',
+                {}
+            );
             state.store.profile = results[1] ? results[1].profile : null;
             state.store.narrative = results[2] && results[2].lines ? results[2].lines : [];
             state.store.nextnode = results[3] && results[3].nextnode ? results[3].nextnode : null;

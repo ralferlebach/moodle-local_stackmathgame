@@ -84,6 +84,24 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             /* HUD container */
             '.smg-rpg-hud {',
             '  background: linear-gradient(135deg, #1a1a2e, #16213e);',
+            '}',
+            '.smg-rpg-stage {',
+            '  position: relative;',
+            '  min-height: 160px;',
+            '  margin-bottom: .5rem;',
+            '  border-radius: .5rem;',
+            '  background-size: cover;',
+            '  background-position: center;',
+            '}',
+            '.smg-rpg-sprite {',
+            '  position: absolute;',
+            '  bottom: 0;',
+            '  max-height: 120px;',
+            '}',
+            '.smg-rpg-sprite-player { left: 8%; }',
+            '.smg-rpg-sprite-enemy { right: 8%; }',
+            '.smg-rpg-hud-spacer {',
+            '  background: linear-gradient(135deg, #1a1a2e, #16213e);',
             '  color: #e0e0ff;',
             '  padding: .75em 1em;',
             '  border-radius: .5em;',
@@ -147,6 +165,54 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             '}',
         ].join('\n');
         document.head.appendChild(style);
+    }
+
+    /**
+     * Build the scene stage from the design's own assets.
+     *
+     * The RPG package manifest declares bg_forest, player_idle and enemy_idle, and until now
+     * nothing requested any of them - the mode drew CSS gradients instead. That made the asset
+     * chain untestable: a resolver returning the wrong URL looked exactly like one returning the
+     * right URL.
+     *
+     * Every asset is optional. A design that omits one simply has no sprite there, rather than a
+     * broken image.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {Element} anchor The element to insert the stage before.
+     * @returns {Element|null} The stage element, or null when the design supplies no assets.
+     */
+    function buildStage(gameState, anchor) {
+        var background = GameCore.assetUrl(gameState, 'bg_forest');
+        var player = GameCore.assetUrl(gameState, 'player_idle');
+        var enemy = GameCore.assetUrl(gameState, 'enemy_idle');
+        if (!background && !player && !enemy) {
+            return null;
+        }
+
+        var stage = document.createElement('div');
+        stage.className = 'smg-rpg-stage';
+        if (background) {
+            stage.style.backgroundImage = 'url("' + background + '")';
+        }
+        [['player', player], ['enemy', enemy]].forEach(function(pair) {
+            if (!pair[1]) {
+                return;
+            }
+            var sprite = document.createElement('img');
+            sprite.className = 'smg-rpg-sprite smg-rpg-sprite-' + pair[0];
+            sprite.src = pair[1];
+            // Decorative: the mathematical content is the question, not the scenery, and a
+            // screen reader announcing "player idle" on every scene is noise.
+            sprite.alt = '';
+            sprite.setAttribute('role', 'presentation');
+            stage.appendChild(sprite);
+        });
+
+        if (anchor && anchor.parentNode) {
+            anchor.parentNode.insertBefore(stage, anchor);
+        }
+        return stage;
     }
 
     /**
@@ -242,7 +308,8 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
      * @param {Object} gameState.profile Player profile.
      * @param {Array}  gameState.questionmap Array of questionmap rows.
      * @param {Array}  gameState.narrative Initial narrative lines.
-     * @param {string} gameState.assetBaseUrl Base URL for design assets.
+     * @param {Object} gameState.assets Design assets by manifest key.
+     * @param {string} gameState.assetBaseUrl Shared fallback directory; do not append to it.
      * @returns {{onAnswer: Function}} Game module interface.
      */
     function init(gameState) {
@@ -250,6 +317,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
 
         var slotMap  = buildSlotMap(gameState.questionmap);
         var hudParts = buildHUD();
+        buildStage(gameState, hudParts.hud);
         var bubble   = buildNarrativeBubble(hudParts.hud);
         var nextBtn  = buildNextButton(bubble);
 

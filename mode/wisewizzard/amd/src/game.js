@@ -158,16 +158,18 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
      * @param {Object} gameState.profile Player profile.
      * @param {Array}  gameState.questionmap Array of questionmap rows.
      * @param {Array}  gameState.narrative Initial narrative lines.
-     * @param {string} gameState.assetBaseUrl Base URL for design assets.
+     * @param {Object} gameState.assets Design assets by manifest key.
+     * @param {string} gameState.assetBaseUrl Shared fallback directory; do not append to it.
      * @returns {{onAnswer: Function}} Game module interface.
      */
     function init(gameState) {
         injectStyles();
 
         var slotMap = buildSlotMap(gameState.questionmap);
-        var avatarUrl = gameState.assetBaseUrl
-            ? gameState.assetBaseUrl + '/mentor_happy.svg'
-            : AVATAR_URL;
+        // By key, from the design's resolved asset map. The previous version appended a
+        // filename to a base URL, which only ever worked for the bundled package - and the base
+        // URL it appended to was the generic shared directory for every design alike.
+        var avatarUrl = GameCore.assetUrl(gameState, 'mentor_happy', AVATAR_URL);
         var ui = buildChatUI(avatarUrl);
 
         /**

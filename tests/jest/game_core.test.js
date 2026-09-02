@@ -135,3 +135,29 @@ describe('defaultConfig', () => {
     expect(GameCore.defaultConfig().rewards.xp).toBe(0);
   });
 });
+
+describe('assetUrl', () => {
+  const state = {
+    assets: { mentor_happy: '/local/stackmathgame/mode/wisewizzard/packages/ww_default/a.svg' },
+  };
+
+  test('resolves an asset by its manifest key', () => {
+    expect(GameCore.assetUrl(state, 'mentor_happy')).toContain('/mode/wisewizzard/packages/');
+  });
+
+  test('falls back when the design does not supply the key', () => {
+    // A design may legitimately omit an asset. That is a missing sprite, not a broken game.
+    expect(GameCore.assetUrl(state, 'mentor_hint', '/fallback.svg')).toBe('/fallback.svg');
+  });
+
+  test('returns an empty string rather than undefined when nothing is available', () => {
+    // An undefined src attribute renders as the literal string "undefined" relative to the site
+    // root, which produces a 404 the browser reports against the plugin.
+    expect(GameCore.assetUrl({}, 'anything')).toBe('');
+    expect(GameCore.assetUrl(null, 'anything')).toBe('');
+  });
+
+  test('does not resolve keys the design never declared', () => {
+    expect(GameCore.assetUrl(state, 'bg_forest')).toBe('');
+  });
+});
