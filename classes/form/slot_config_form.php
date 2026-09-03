@@ -122,6 +122,27 @@ class slot_config_form extends \moodleform {
         $mform->setType('reward_achievements', PARAM_TEXT);
         $mform->addHelpButton('reward_achievements', 'flow_reward_achievements', 'local_stackmathgame');
 
+        // Only offered when block_stash is installed and the course actually has a stash: a
+        // select with nothing in it is worse than no control at all.
+        $stashitems = (array)($this->_customdata['stashitems'] ?? []);
+        if ($stashitems) {
+            $mform->addElement(
+                'select',
+                'reward_stashitem',
+                get_string('stashmapping_item', 'local_stackmathgame'),
+                $stashitems
+            );
+            $mform->addElement(
+                'text',
+                'reward_stashqty',
+                get_string('stashmapping_qty', 'local_stackmathgame'),
+                ['size' => 4]
+            );
+            $mform->setType('reward_stashqty', PARAM_INT);
+            $mform->setDefault('reward_stashqty', 1);
+            $mform->hideIf('reward_stashqty', 'reward_stashitem', 'eq', 0);
+        }
+
         $mform->addElement('header', 'displayheader', get_string('flow_display', 'local_stackmathgame'));
         $mform->setExpanded('displayheader', false);
         foreach (['showxp', 'showinventory', 'showavatar'] as $flag) {
@@ -193,6 +214,8 @@ class slot_config_form extends \moodleform {
             'reward_score' => (int)($config['rewards']['score'] ?? 0),
             'reward_xp' => (int)($config['rewards']['xp'] ?? 0),
             'reward_achievements' => implode(', ', (array)($config['rewards']['achievementkeys'] ?? [])),
+            'reward_stashitem' => (int)($config['rewards']['stash']['itemid'] ?? 0),
+            'reward_stashqty' => max(1, (int)($config['rewards']['stash']['quantity'] ?? 1)),
         ];
         foreach (['intro', 'success', 'fail'] as $key) {
             $values['narrative_' . $key] = (string)($config['narrative'][$key] ?? '');
@@ -244,6 +267,15 @@ class slot_config_form extends \moodleform {
             explode(',', (string)($data->reward_achievements ?? ''))
         ));
         $config['rewards']['achievementkeys'] = array_values($achievements);
+        // Written unconditionally: when block_stash is absent the form has no control, and
+        // reading the absent field as 0 would silently drop a mapping a colleague configured on
+        // a site where the block was installed.
+        if (property_exists($data, 'reward_stashitem')) {
+            $config['rewards']['stash'] = [
+                'itemid' => max(0, (int)$data->reward_stashitem),
+                'quantity' => max(1, (int)($data->reward_stashqty ?? 1)),
+            ];
+        }
 
         foreach (['showxp', 'showinventory', 'showavatar'] as $flag) {
             $config['display'][$flag] = !empty($data->{'display_' . $flag});

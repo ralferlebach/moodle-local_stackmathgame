@@ -147,7 +147,12 @@ if ($action === 'editslot' && $slotnumber > 0) {
     ]);
     $PAGE->set_url($editurl);
 
-    $form = new slot_config_form($editurl, ['slotoptions' => $slotoptions]);
+    $form = new slot_config_form($editurl, [
+        'slotoptions' => $slotoptions,
+        'stashitems' => \local_stackmathgame\local\service\stash_mapping_service::get_stash_items_for_course(
+            (int)$course->id
+        ),
+    ]);
     $form->set_data(slot_config_form::config_to_form($existing, $cmid, $slotnumber));
 
     if ($form->is_cancelled()) {

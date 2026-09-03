@@ -122,7 +122,10 @@ final class slot_config_schema {
                 'xp'              => 0,
                 'achievementkeys' => [],
                 'badgeids'        => [],
-                'stash'           => [],
+                // An itemid of 0 means "no stash reward". The shape is fixed here rather than
+                // left free-form, so the bridge and the editor cannot drift apart on what a
+                // stash reward looks like.
+                'stash'           => ['itemid' => 0, 'quantity' => 1],
             ],
             'narrative' => ['intro' => '', 'success' => '', 'fail' => ''],
             'display'   => ['showxp' => true, 'showinventory' => false, 'showavatar' => false],
@@ -177,6 +180,14 @@ final class slot_config_schema {
         $data['scene'] = array_merge($defaults['scene'], (array)($data['scene'] ?? []));
         $data['branching'] = array_merge($defaults['branching'], (array)($data['branching'] ?? []));
         $data['rewards'] = array_merge($defaults['rewards'], (array)($data['rewards'] ?? []));
+        // Normalise the nested stash reward too: array_merge is shallow, so a config that
+        // carries only an itemid would otherwise lose the quantity default.
+        $data['rewards']['stash'] = array_merge(
+            $defaults['rewards']['stash'],
+            (array)($data['rewards']['stash'] ?? [])
+        );
+        $data['rewards']['stash']['itemid'] = max(0, (int)$data['rewards']['stash']['itemid']);
+        $data['rewards']['stash']['quantity'] = max(1, (int)$data['rewards']['stash']['quantity']);
         $data['narrative'] = array_merge($defaults['narrative'], (array)($data['narrative'] ?? []));
         $data['display'] = array_merge($defaults['display'], (array)($data['display'] ?? []));
         return $data;

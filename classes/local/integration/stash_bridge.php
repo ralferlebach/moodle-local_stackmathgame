@@ -87,6 +87,46 @@ final class stash_bridge {
     }
 
     /**
+     * Read the stash reward of a slot from its direction card.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @param int $slot The slot number.
+     * @return \stdClass|null A mapping-shaped record, or null when the slot awards no item.
+     */
+    private static function mapping_from_direction_card(int $quizid, int $slot): ?\stdClass {
+        global $DB;
+
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return null;
+        }
+        $row = $DB->get_record(
+            'local_stackmathgame_questionmap',
+            ['cmid' => (int)$cm->id, 'slotnumber' => $slot],
+            'configjson',
+            IGNORE_MISSING
+        );
+        if (!$row || empty($row->configjson)) {
+            return null;
+        }
+        $config = \local_stackmathgame\local\service\slot_config_schema::parse((string)$row->configjson);
+        $stash = (array)($config['rewards']['stash'] ?? []);
+        $itemid = (int)($stash['itemid'] ?? 0);
+        if ($itemid <= 0) {
+            return null;
+        }
+
+        return (object)[
+            'quizid' => $quizid,
+            'slotnumber' => $slot,
+            'stashitemid' => $itemid,
+            'grantquantity' => max(1, (int)($stash['quantity'] ?? 1)),
+            'stashcourseid' => (int)$cm->course,
+            'enabled' => 1,
+        ];
+    }
+
+    /**
      * Award a block_stash item via direct DB writes.
      *
      * Looks up the stashmap for this quiz/slot. Increments block_stash_user_items
@@ -104,11 +144,18 @@ final class stash_bridge {
     ): ?array {
         global $DB;
 
-        $mapping = $DB->get_record('local_stackmathgame_stashmap', [
-            'quizid' => $quizid,
-            'slotnumber' => $slot,
-            'enabled' => 1,
-        ]);
+        // The direction card is the source of truth: a stash reward is per-slot game
+        // configuration, and that lives in configjson like every other reward. The legacy
+        // local_stackmathgame_stashmap table is still consulted afterwards so sites that already
+        // have rows in it keep working, but it can no longer be edited into existence.
+        $mapping = self::mapping_from_direction_card($quizid, $slot);
+        if (!$mapping) {
+            $mapping = $DB->get_record('local_stackmathgame_stashmap', [
+                'quizid' => $quizid,
+                'slotnumber' => $slot,
+                'enabled' => 1,
+            ]);
+        }
         if (!$mapping) {
             return null;
         }

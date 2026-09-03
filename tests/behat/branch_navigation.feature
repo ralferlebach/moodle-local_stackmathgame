@@ -24,10 +24,10 @@ Feature: Branch navigation works for every branching mode
       | contextlevel | reference | name           |
       | Course       | C1        | Test questions |
     And the following "questions" exist:
-      | questioncategory | qtype       | name       | questiontext |
-      | Test questions   | shortanswer | Scene one  | 1 + 1?       |
-      | Test questions   | shortanswer | Scene two  | 2 + 2?       |
-      | Test questions   | shortanswer | Scene three| 3 + 3?       |
+      | questioncategory | qtype | name        | template |
+      | Test questions   | stack | Scene one   | test3    |
+      | Test questions   | stack | Scene two   | test3    |
+      | Test questions   | stack | Scene three | test3    |
     And quiz "Game Quiz" contains the following questions:
       | question    | page |
       | Scene one   | 1    |
@@ -38,8 +38,8 @@ Feature: Branch navigation works for every branching mode
   Scenario: The default linear branching offers a way to the next scene
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
-    When I set the field "Answer" to "2"
-    And I press "Antwort prüfen"
+    When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I press "Check"
     Then I should see "Next scene"
 
   Scenario: The last scene finishes the run rather than offering nothing
@@ -47,25 +47,25 @@ Feature: Branch navigation works for every branching mode
     And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I follow the game navigation to slot 3
-    And I set the field "Answer" to "6"
-    And I press "Antwort prüfen"
+    And I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I press "Check"
     Then I should see "Finish the run"
 
   Scenario: An explicit slot jump is followed
     Given slot 1 of quiz "Game Quiz" branches to slot 3 on "gradedright"
     And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
-    When I set the field "Answer" to "2"
-    And I press "Antwort prüfen"
+    When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I press "Check"
     And I press "Next scene"
-    Then I should see "3 + 3?"
+    Then I should see "Scene three"
 
   Scenario: A wrong answer offers no way forward
     # The retry is the point of the scene. Offering a way on would let a player walk past every
     # question without solving any of them.
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
-    When I set the field "Answer" to "nonsense"
-    And I press "Antwort prüfen"
+    When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^2"
+    And I press "Check"
     Then I should not see "Next scene"
     And I should not see "Finish the run"

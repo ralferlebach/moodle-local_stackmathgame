@@ -14,6 +14,11 @@ Keep the documents that outlive a single change here.
   Superseded piece by piece as the automated suites grow; keep it until they cover the same
   ground.
 
+Fixes that belong to the sibling plugin `qbehaviour_stackmathgame` are not kept here. They are
+delivered as a complete plugin ZIP for that repository, because a copy of another component's
+source in this tree fails the code checker on its @package tag - correctly, since the file is not
+part of this plugin.
+
 Suggested further documents: a requirements document, a technical blueprint describing the
 boundaries between core, mode subplugins and designs, and a backlog. The blueprint matters more
 here than in a single-component plugin, because the mode subplugin contract

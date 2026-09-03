@@ -264,4 +264,49 @@ final class flow_service_test extends advanced_testcase {
         $this->assertCount(2, $remaining);
         $this->assertSame(2, $DB->count_records('local_stackmathgame_questionmap', ['cmid' => $this->cmid]));
     }
+    /**
+     * A stash reward round-trips through the direction card.
+     *
+     * It used to live in a second per-slot list on the game settings form - which never rendered,
+     * because the page did not supply the item list, and whose save method had no caller outside
+     * its own tests. It is per-slot game configuration, so it belongs in configjson with the
+     * other rewards.
+     */
+    public function test_stash_reward_round_trips(): void {
+        $config = flow_service::get_slot_config($this->cmid, 1);
+        $config['rewards']['stash'] = ['itemid' => 7, 'quantity' => 3];
+
+        $this->assertSame([], flow_service::save_slot_config($this->cmid, 1, $config));
+
+        $stored = flow_service::get_slot_config($this->cmid, 1);
+        $this->assertSame(7, $stored['rewards']['stash']['itemid']);
+        $this->assertSame(3, $stored['rewards']['stash']['quantity']);
+    }
+
+    /**
+     * A slot with no stash reward reads back as "no item" rather than as a missing key.
+     *
+     * The bridge treats itemid 0 as "award nothing", so the default has to be present and
+     * numeric - an absent key would make every unconfigured slot a special case.
+     */
+    public function test_stash_defaults_are_present(): void {
+        $stash = flow_service::get_slot_config($this->cmid, 2)['rewards']['stash'];
+
+        $this->assertSame(0, $stash['itemid']);
+        $this->assertSame(1, $stash['quantity']);
+    }
+
+    /**
+     * A quantity below one is corrected rather than stored.
+     *
+     * Awarding zero of an item is not a thing block_stash can do, and a negative quantity would
+     * take items away from a player who just solved a scene.
+     */
+    public function test_stash_quantity_is_clamped(): void {
+        $config = flow_service::get_slot_config($this->cmid, 1);
+        $config['rewards']['stash'] = ['itemid' => 4, 'quantity' => -5];
+        flow_service::save_slot_config($this->cmid, 1, $config);
+
+        $this->assertSame(1, flow_service::get_slot_config($this->cmid, 1)['rewards']['stash']['quantity']);
+    }
 }

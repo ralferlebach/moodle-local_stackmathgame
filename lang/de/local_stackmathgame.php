@@ -86,6 +86,7 @@ $string['flow_err_targetrequired'] = 'Bitte einen Zielplatz für den Sprung wäh
 $string['flow_err_unknownslot'] = 'Platz {$a} existiert in diesem Test nicht.';
 $string['flow_err_unparseable'] = 'Die Szenenkonfiguration konnte nicht gelesen werden.';
 $string['flow_hasnarrative'] = 'Narrativ gesetzt';
+$string['flow_hasstash'] = 'Vergibt einen Stash-Gegenstand';
 $string['flow_heading'] = 'Spielablauf';
 $string['flow_narrative'] = 'Narrativ';
 $string['flow_narrative_fail'] = 'Wird nach einer falschen Antwort gezeigt';

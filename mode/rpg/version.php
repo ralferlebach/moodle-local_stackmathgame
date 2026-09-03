@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component  = 'stackmathgamemode_rpg';
-$plugin->version    = 2026090210;
+$plugin->version    = 2026090212;
 $plugin->requires   = 2024100700; // Moodle 4.5.
 $plugin->maturity   = MATURITY_ALPHA;
 $plugin->release    = '0.9.0';

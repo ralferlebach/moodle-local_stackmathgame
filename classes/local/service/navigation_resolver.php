@@ -152,15 +152,15 @@ final class navigation_resolver {
     /**
      * Describe the navigation payload for a web service return structure.
      *
-     * @return \external_single_structure The structure.
+     * @return \core_external\external_single_structure The structure.
      */
-    public static function external_structure(): \external_single_structure {
-        return new \external_single_structure([
-            'action' => new \external_value(PARAM_ALPHA, 'continue, finish or stay'),
-            'nextslot' => new \external_value(PARAM_INT, 'Resolved next slot number, 0 when none'),
-            'nextpage' => new \external_value(PARAM_INT, 'Zero-based attempt page of the next slot'),
-            'url' => new \external_value(PARAM_URL, 'Where to navigate, empty when staying'),
-            'label' => new \external_value(PARAM_TEXT, 'Label for the navigation control'),
+    public static function external_structure(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'action' => new \core_external\external_value(PARAM_ALPHA, 'continue, finish or stay'),
+            'nextslot' => new \core_external\external_value(PARAM_INT, 'Resolved next slot number, 0 when none'),
+            'nextpage' => new \core_external\external_value(PARAM_INT, 'Zero-based attempt page of the next slot'),
+            'url' => new \core_external\external_value(PARAM_URL, 'Where to navigate, empty when staying'),
+            'label' => new \core_external\external_value(PARAM_TEXT, 'Label for the navigation control'),
         ]);
     }
 }

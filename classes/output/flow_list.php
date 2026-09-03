@@ -78,6 +78,7 @@ class flow_list implements \renderable, \templatable {
                 'branchsummary' => $this->branch_summary($config),
                 'score' => (int)($config['rewards']['score'] ?? 0),
                 'xp' => (int)($config['rewards']['xp'] ?? 0),
+                'hasstash' => (int)($config['rewards']['stash']['itemid'] ?? 0) > 0,
                 'hasnarrative' => trim((string)($config['narrative']['intro'] ?? '')) !== ''
                     || trim((string)($config['narrative']['success'] ?? '')) !== ''
                     || trim((string)($config['narrative']['fail'] ?? '')) !== '',

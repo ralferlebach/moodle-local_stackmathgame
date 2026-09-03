@@ -86,6 +86,7 @@ $string['flow_err_targetrequired'] = 'Choose a target slot for the jump.';
 $string['flow_err_unknownslot'] = 'Slot {$a} does not exist in this quiz.';
 $string['flow_err_unparseable'] = 'The scene configuration could not be read.';
 $string['flow_hasnarrative'] = 'Narrative set';
+$string['flow_hasstash'] = 'Awards a stash item';
 $string['flow_heading'] = 'Game flow';
 $string['flow_narrative'] = 'Narrative';
 $string['flow_narrative_fail'] = 'Shown after a wrong answer';

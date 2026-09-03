@@ -901,6 +901,66 @@ Alle zwölf Gates PASS, inklusive der drei Mode-Subplugins einzeln.
 
 ---
 
+## Patch 12 — Issue #1, Teil 2: die Stash-Belohnung in die Regiekarte
+
+### Der Befund war schlimmer als „zwei Orte"
+
+Es waren **null** Orte. Die Stash-Sektion im Spieleinstellungs-Formular hing an
+`if (!empty($customdata['stashitems']))` — und `quiz_settings.php` hat `stashitems` nie geliefert.
+Der ganze Block, 68 Zeilen, wurde nie gerendert. Passend dazu hatte
+`stash_mapping_service::save_for_quiz()` außerhalb der eigenen Tests **keinen einzigen Aufrufer**.
+
+Die Zuordnung war also nicht doppelt gepflegt, sondern über die Oberfläche überhaupt nicht
+erreichbar. Wer sie nutzen wollte, musste in die Datenbank schreiben.
+
+### Lösung: dorthin, wo die anderen Belohnungen liegen
+
+Eine Stash-Belohnung ist Konfiguration eines Slots, also gehört sie in `configjson` — wie Score,
+XP und Achievements. `slot_config_schema` hatte dafür bereits ein `rewards.stash`-Feld, das nie
+benutzt wurde; es bekommt jetzt eine feste Form (`itemid`, `quantity`), damit Bridge und Editor
+nicht auseinanderlaufen können.
+
+* Das Feld steht in der Regiekarte unter „Belohnungen", direkt neben Score und XP, und erscheint
+  nur, wenn `block_stash` installiert ist und der Kurs einen Stash hat. Ein leeres Auswahlfeld
+  wäre schlimmer als gar keines.
+* Die Mengenangabe blendet sich aus, solange kein Gegenstand gewählt ist.
+* Die Slot-Liste zeigt an, welche Szene einen Gegenstand vergibt, damit man dafür nicht jede
+  Karte öffnen muss.
+* Die 68 toten Zeilen im alten Formular sind entfernt, mit einer Notiz an ihrer Stelle.
+
+### Die Bridge liest jetzt die Regiekarte
+
+`stash_bridge` nimmt zuerst die Karte und fällt nur dann auf die alte Tabelle
+`local_stackmathgame_stashmap` zurück, wenn dort nichts steht. Instanzen, die bereits Zeilen in
+der Tabelle haben, funktionieren also weiter — aber neu anlegen lässt sie sich nicht mehr, und
+damit gibt es genau eine Quelle der Wahrheit.
+
+### Nebenbefund beim Aufräumen
+
+Die Kopie des Geschwister-Renderers unter `docs/patches/` ließ den Code-Checker scheitern: sie
+trägt `@package qbehaviour_stackmathgame`, was in diesem Plugin falsch ist — und der Sniff hat
+recht, die Datei gehört nicht hierher. Sie wird stattdessen als vollständiges Plugin-ZIP für das
+andere Repository ausgeliefert. In `docs/DOCUMENTATION.md` steht jetzt, warum.
+
+### Verifiziert
+
+Alle zwölf Gates PASS. **170 Tests, 492 Assertions, 0 Fehler, 18 Skips** — darunter drei neue
+Fälle für die Stash-Belohnung (Round-Trip, vorhandene Defaults, Mengenbegrenzung) und die
+bestehenden `stash_bridge`- und `stash_mapping_service`-Tests, die unverändert grün bleiben.
+
+## Auslieferungsformat
+
+Ab jetzt heißt das Paket `local_stackmathgame_<version>_full.zip`. Inhaltlich ändert sich nichts:
+schon `smg_patch_2026090101.zip` und alle folgenden enthielten den vollständigen Plugin-Baum,
+nicht nur die geänderten Dateien. Der Name „patch" hat das Gegenteil suggeriert und war
+irreführend — die ZIPs waren nie Deltas.
+
+Der Inhalt bleibt: 318 Dateien, darunter `classes/` (66), `mode/` mit allen drei Subplugins (88),
+`amd/src` und das gebaute `amd/build` (12 + 23), `templates/`, beide Sprachpakete, `tests/` (63)
+und die CI-Workflows. Entpacken nach `local/stackmathgame`, dann Moodle-Upgrade.
+
+---
+
 ## Offene Risiken
 
 * **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle

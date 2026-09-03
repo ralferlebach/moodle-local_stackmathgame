@@ -58,6 +58,13 @@ final class stack_submit_test extends advanced_testcase {
 
         parent::setUp();
 
+        // Registered before anything else, because the CAS probe below talks to Maxima and STACK
+        // caches the result in the database. Any write made before this call is reported as an
+        // "unexpected database modification" and fails the test - which is what happened on
+        // every runner where Maxima actually works, so the check meant to make the suite honest
+        // was itself breaking it.
+        $this->resetAfterTest();
+
         foreach (['qtype_stack', 'qbehaviour_stackmathgame'] as $component) {
             if (!\core_component::get_component_directory($component)) {
                 $this->markTestSkipped($component . ' is not installed in this tree.');
@@ -75,7 +82,6 @@ final class stack_submit_test extends advanced_testcase {
             );
         }
 
-        $this->resetAfterTest();
         // Question creation writes into a user file area, so it needs a logged-in user. Without
         // this the generator fails with "Invalid user" from deep inside the question type.
         $this->setAdminUser();

@@ -40,6 +40,7 @@
       * branchsummary string Where a correct answer leads.
       * score int Score reward.
       * xp int XP reward.
+      * hasstash bool Whether the slot awards a stash item.
       * hasnarrative bool Whether any narrative text is set.
       * unreachable bool Whether no path reaches this slot.
       * deadend bool Whether no path leaves this slot.
@@ -70,6 +71,7 @@
                 "branchsummary": "Next slot in order",
                 "score": 10,
                 "xp": 20,
+                "hasstash": false,
                 "hasnarrative": true,
                 "unreachable": false,
                 "deadend": false,
@@ -145,7 +147,10 @@
                     {{#unreachable}}<div><span class="badge badge-warning">{{#str}}flow_badge_unreachable, local_stackmathgame{{/str}}</span></div>{{/unreachable}}
                     {{#deadend}}<div><span class="badge badge-danger">{{#str}}flow_badge_deadend, local_stackmathgame{{/str}}</span></div>{{/deadend}}
                 </td>
-                <td>{{score}} / {{xp}}</td>
+                <td>
+                    {{score}} / {{xp}}
+                    {{#hasstash}}<div class="small text-muted">{{#str}}flow_hasstash, local_stackmathgame{{/str}}</div>{{/hasstash}}
+                </td>
                 <td><a href="{{editurl}}" class="btn btn-secondary btn-sm">{{#str}}flow_edit, local_stackmathgame{{/str}}</a></td>
             </tr>
         {{/rows}}

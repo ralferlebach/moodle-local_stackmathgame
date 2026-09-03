@@ -145,74 +145,11 @@ class quiz_settings_form extends \moodleform {
         }
 
         // Stash integration section (only shown when block_stash is installed).
-        if (!empty($customdata['stashitems'])) {
-            $stashitems = $customdata['stashitems'];
-            $stashslots = $customdata['stashslots'] ?? [];
-
-            $mform->addElement(
-                'header',
-                'stashheader',
-                get_string('stashmapping_header', 'local_stackmathgame')
-            );
-            $mform->addElement(
-                'html',
-                html_writer::tag(
-                    'p',
-                    get_string('stashmapping_desc', 'local_stackmathgame'),
-                    ['class' => 'text-muted small']
-                )
-            );
-
-            if (empty($stashslots)) {
-                $mform->addElement(
-                    'html',
-                    html_writer::tag(
-                        'p',
-                        get_string('stashmapping_noslots', 'local_stackmathgame'),
-                        ['class' => 'alert alert-info']
-                    )
-                );
-            } else {
-                $existingmaps = $customdata['stashmappings'] ?? [];
-                foreach ($stashslots as $slot) {
-                    $existing = $existingmaps[$slot] ?? null;
-                    $prefix = 'stashmap_' . $slot . '_';
-
-                    $mform->addElement(
-                        'header',
-                        $prefix . 'slothdr',
-                        get_string('stashmapping_slot', 'local_stackmathgame', $slot)
-                    );
-
-                    $mform->addElement(
-                        'select',
-                        $prefix . 'itemid',
-                        get_string('stashmapping_item', 'local_stackmathgame'),
-                        $stashitems
-                    );
-                    $mform->setDefault($prefix . 'itemid', (int)($existing->stashitemid ?? 0));
-
-                    $mform->addElement(
-                        'text',
-                        $prefix . 'qty',
-                        get_string('stashmapping_qty', 'local_stackmathgame'),
-                        ['size' => 4]
-                    );
-                    $mform->setType($prefix . 'qty', PARAM_INT);
-                    $mform->setDefault($prefix . 'qty', (int)($existing->grantquantity ?? 1));
-
-                    $mform->addElement(
-                        'advcheckbox',
-                        $prefix . 'enabled',
-                        get_string('stashmapping_enabled', 'local_stackmathgame')
-                    );
-                    $mform->setDefault($prefix . 'enabled', (int)($existing->enabled ?? 1));
-
-                    $mform->addElement('hidden', $prefix . 'slot', $slot);
-                    $mform->setType($prefix . 'slot', PARAM_INT);
-                }
-            }
-        }
+        // The stash reward used to be edited here, in a second per-slot list parallel to the
+        // direction cards. It never actually appeared: quiz_settings.php never supplied
+        // 'stashitems', so the whole block was dead, and stash_mapping_service::save_for_quiz()
+        // had no caller outside its own tests. A stash reward is per-slot game configuration and
+        // now lives where the other rewards live - in the direction card on flow.php.
 
         $mform->addElement('hidden', 'quizid');
         $mform->setType('quizid', PARAM_INT);
