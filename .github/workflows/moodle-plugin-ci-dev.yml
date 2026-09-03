@@ -156,6 +156,120 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  lint-js:
+    name: "JS / AMD / Jest"
+    # A job of its own, running in parallel with the PHP checks. The JS work does not need a
+    # database or a test site, so tying it to the PHPUnit matrix meant it ran three times over
+    # and only after a full install - and a broken mode/*/game.js was reported minutes later
+    # than it could have been, inside a job named after PHPUnit.
+    runs-on: ubuntu-22.04
+    services:
+      # Needed only because moodle-plugin-ci install writes a config.php with a database
+      # connection, even with --no-init.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+      - name: Prepare log directory
+        run: mkdir -p ci-logs
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          ini-values: max_input_vars=5000
+          coverage: none
+      - name: Cache Composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ github.sha }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo $(cd ci/bin; pwd) >> $GITHUB_PATH
+          echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
+          sudo locale-gen en_AU.UTF-8
+      - name: Install Moodle and the plugin (no test init)
+        run: |
+          # --no-init: linting AMD and templates needs the Moodle tree and its node_modules, not
+          # a test database. It also keeps qtype_stack's install.php - and therefore Maxima -
+          # out of this job entirely.
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfexplicitvaildate
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfcbmexplicitvaildate
+          moodle-plugin-ci add-plugin --branch main maths/moodle-qbank_importasversion
+          moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
+          moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
+          moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1 --no-init
+        env:
+          DB: pgsql
+          MOODLE_BRANCH: MOODLE_405_STABLE
+      - name: Mustache Lint
+        if: ${{ always() }}
+        run: set -o pipefail; moodle-plugin-ci mustache 2>&1 | tee ci-logs/mustache.log
+      - name: Grunt (AMD build + ESLint)
+        if: ${{ always() }}
+        # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
+        # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
+        # what caught the undocumented @returns in the mode modules.
+        run: set -o pipefail; moodle-plugin-ci grunt --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
+      - name: Grunt for the bundled mode subplugins (AMD build + ESLint)
+        if: ${{ always() }}
+        run: |
+          # Grunt resolves the component from the directory it runs in, so the step above only
+          # ever touches local_stackmathgame's own amd/src. The three game modes under mode/ are
+          # separate Moodle components with their own amd/src and amd/build, and until this step
+          # existed nothing in CI linted or rebuilt them: a run stayed green with a deliberately
+          # broken mode/rpg/amd/src/game.js, and a stale mode/*/amd/build/game.min.js shipped an
+          # old game module while the source next to it looked current.
+          set -o pipefail
+          # PLUGIN_DIR is written into moodle-plugin-ci's own ci/.env, not into $GITHUB_ENV, so
+          # it is NOT a shell variable here - referencing it directly yields an empty string.
+          # Read it back from that file instead.
+          plugindir=$(sed -n 's/^PLUGIN_DIR=//p' ci/.env)
+          if [ -z "$plugindir" ]; then
+            echo "PLUGIN_DIR not found in ci/.env - did the install step run?" >&2
+            exit 1
+          fi
+          status=0
+          for mode in "$plugindir"/mode/*/; do
+            [ -d "${mode}amd/src" ] || continue
+            echo "==> $(basename "$mode")"
+            moodle-plugin-ci grunt "$mode" --max-lint-warnings 0 2>&1 \
+              | tee -a ci-logs/grunt-modes.log || status=1
+          done
+          exit $status
+
+      - name: Jest (AMD unit tests)
+        if: ${{ always() }}
+        run: |
+          set -o pipefail
+          cd plugin/tests/jest
+          npm install --no-audit --no-fund
+          npx jest 2>&1 | tee ../../../ci-logs/jest.log
+      - name: Collect error summary
+        if: ${{ always() }}
+        run: |
+          { echo "job: lint-js"; echo "status: ${{ job.status }}"; echo "ref: ${{ github.ref }}"; echo ""; ls -1 ci-logs; } > ci-logs/summary.txt
+          cat ci-logs/summary.txt
+      - name: Upload error summary (ZIP)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: error-summary-dev-lint-js
+          path: ci-logs
+          retention-days: 7
+          if-no-files-found: ignore
+
   quality:
     name: "Quality (phpdoc / savepoints / validate)"
     runs-on: ubuntu-22.04
@@ -326,66 +440,17 @@ jobs:
         env:
           DB: ${{ matrix.database }}
           MOODLE_BRANCH: ${{ matrix.moodle }}
-      - name: Mustache Lint
-        if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci mustache 2>&1 | tee ci-logs/mustache.log
-      - name: Grunt (AMD build + ESLint)
-        if: ${{ always() }}
-        # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
-        # (mode/*/amd/src/). --max-lint-warnings 0 keeps ESLint warnings failing, which is
-        # what caught the undocumented @returns in the mode modules.
-        run: set -o pipefail; moodle-plugin-ci grunt --max-lint-warnings 0 2>&1 | tee ci-logs/grunt.log
-      - name: Grunt for the bundled mode subplugins (AMD build + ESLint)
-        if: ${{ always() }}
+      - name: Initialise the STACK CAS for PHPUnit
         run: |
-          # Grunt resolves the component from the directory it runs in, so the step above only
-          # ever touches local_stackmathgame's own amd/src. The three game modes under mode/ are
-          # separate Moodle components with their own amd/src and amd/build, and until this step
-          # existed nothing in CI linted or rebuilt them: a run stayed green with a deliberately
-          # broken mode/rpg/amd/src/game.js, and a stale mode/*/amd/build/game.min.js shipped an
-          # old game module while the source next to it looked current.
-          set -o pipefail
-          # PLUGIN_DIR is written into moodle-plugin-ci's own ci/.env, not into $GITHUB_ENV, so
-          # it is NOT a shell variable here - referencing it directly yields an empty string.
-          # Read it back from that file instead.
-          plugindir=$(sed -n 's/^PLUGIN_DIR=//p' ci/.env)
-          if [ -z "$plugindir" ]; then
-            echo "PLUGIN_DIR not found in ci/.env - did the install step run?" >&2
-            exit 1
-          fi
-          status=0
-          for mode in "$plugindir"/mode/*/; do
-            [ -d "${mode}amd/src" ] || continue
-            echo "==> $(basename "$mode")"
-            moodle-plugin-ci grunt "$mode" --max-lint-warnings 0 2>&1 \
-              | tee -a ci-logs/grunt-modes.log || status=1
-          done
-          exit $status
-
-      - name: Configure STACK for the CAS
-        run: |
-          # A fresh qtype_stack install defaults to a 10 second CAS timeout. A cold Maxima on a
-          # GitHub runner does not answer in that window, and STACK then renders
-          # "CAS failed to return any data due to timeout" instead of the question inputs - which
-          # in the Behat log looks like a missing field rather than a slow CAS.
-          #
-          # The first call is also the slowest, because Maxima compiles STACK's library on it, so
-          # the healthcheck below is run once to warm it up and to fail loudly here rather than
-          # inside an unrelated scenario.
+          # admin/cli/cfg.php cannot be used here: moodle-plugin-ci installs the test databases
+          # (phpu_ / bht_ prefixes) but never the main site, so cfg.php dies with
+          # "Table config does not exist". The helper enters the PHPUnit database the same way
+          # Moodle's own tool_phpunit CLI does, and - crucially - writes maximalocal.mac into the
+          # PHPUnit dataroot, which the installer never creates. Without that file STACK cannot
+          # grade at all and the end-to-end tests skip themselves permanently.
           cd moodle
-          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
-          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
-          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
-          php question/type/stack/cli/stacklibrarycheck.php || true
-          php question/type/stack/cli/maximalibcheck.php || true
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-phpunit-init.php"
 
-      - name: Jest (AMD unit tests)
-        if: ${{ always() }}
-        run: |
-          set -o pipefail
-          cd plugin/tests/jest
-          npm install --no-audit --no-fund
-          npx jest 2>&1 | tee ../../../ci-logs/jest.log
       - name: PHPUnit tests
         if: ${{ always() }}
         run: set -o pipefail; moodle-plugin-ci phpunit --fail-on-warning --testdox 2>&1 | tee ci-logs/phpunit.log
@@ -474,18 +539,13 @@ jobs:
         env:
           DB: mariadb
           MOODLE_BRANCH: MOODLE_405_STABLE
-      - name: Configure STACK for the CAS
+      - name: Initialise the STACK CAS for Behat
         run: |
-          # Same reason as in the PHPUnit job: a fresh qtype_stack install times the CAS out
-          # after 10 seconds, and a cold Maxima on a runner needs longer. Without this the
-          # question renders "CAS failed to return any data due to timeout" and the Behat step
-          # reports a missing input field, several layers from the cause.
+          # Same reasoning as in the PHPUnit job, against the Behat database. Without this STACK
+          # renders "CAS failed to return any data due to timeout" and the scenario reports a
+          # missing input field, several layers from the cause.
           cd moodle
-          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
-          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
-          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
-          php question/type/stack/cli/stacklibrarycheck.php || true
-          php question/type/stack/cli/maximalibcheck.php || true
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-behat-init.php"
 
       - name: Behat features
         id: behat
@@ -551,14 +611,14 @@ jobs:
 
   ci-complete:
     name: CI complete
-    needs: [lint-php, codeanalysis, quality, phpunit, behat, stale-files]
+    needs: [lint-php, codeanalysis, lint-js, quality, phpunit, behat, stale-files]
     runs-on: ubuntu-22.04
     if: always()
     steps:
       - name: All dev jobs must have succeeded
         run: |
-          result="${{ needs.lint-php.result }}-${{ needs.codeanalysis.result }}-${{ needs.quality.result }}-${{ needs.phpunit.result }}-${{ needs.behat.result }}-${{ needs.stale-files.result }}"
-          if [[ "$result" == "success-success-success-success-success-success" ]]; then
+          result="${{ needs.lint-php.result }}-${{ needs.codeanalysis.result }}-${{ needs.lint-js.result }}-${{ needs.quality.result }}-${{ needs.phpunit.result }}-${{ needs.behat.result }}-${{ needs.stale-files.result }}"
+          if [[ "$result" == "success-success-success-success-success-success-success" ]]; then
             echo "All dev CI jobs passed."
           else
             echo "CI result: $result - one or more jobs failed or were cancelled."

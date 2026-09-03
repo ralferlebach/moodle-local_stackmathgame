@@ -175,22 +175,16 @@ jobs:
           done
           exit $status
 
-      - name: Configure STACK for the CAS
+      - name: Initialise the STACK CAS for PHPUnit
         run: |
-          # A fresh qtype_stack install defaults to a 10 second CAS timeout. A cold Maxima on a
-          # GitHub runner does not answer in that window, and STACK then renders
-          # "CAS failed to return any data due to timeout" instead of the question inputs - which
-          # in the Behat log looks like a missing field rather than a slow CAS.
-          #
-          # The first call is also the slowest, because Maxima compiles STACK's library on it, so
-          # the healthcheck below is run once to warm it up and to fail loudly here rather than
-          # inside an unrelated scenario.
+          # admin/cli/cfg.php cannot be used here: moodle-plugin-ci installs the test databases
+          # (phpu_ / bht_ prefixes) but never the main site, so cfg.php dies with
+          # "Table config does not exist". The helper enters the PHPUnit database the same way
+          # Moodle's own tool_phpunit CLI does, and - crucially - writes maximalocal.mac into the
+          # PHPUnit dataroot, which the installer never creates. Without that file STACK cannot
+          # grade at all and the end-to-end tests skip themselves permanently.
           cd moodle
-          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
-          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
-          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
-          php question/type/stack/cli/stacklibrarycheck.php || true
-          php question/type/stack/cli/maximalibcheck.php || true
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-phpunit-init.php"
 
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
