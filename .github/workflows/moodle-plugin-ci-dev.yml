@@ -119,6 +119,9 @@ jobs:
           # that say nothing about the code. --no-init keeps it cheap: no test databases.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfexplicitvaildate
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfcbmexplicitvaildate
+          moodle-plugin-ci add-plugin --branch main maths/moodle-qbank_importasversion
           moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
@@ -200,6 +203,9 @@ jobs:
           # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfexplicitvaildate
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfcbmexplicitvaildate
+          moodle-plugin-ci add-plugin --branch main maths/moodle-qbank_importasversion
           moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
@@ -309,6 +315,9 @@ jobs:
           # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfexplicitvaildate
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfcbmexplicitvaildate
+          moodle-plugin-ci add-plugin --branch main maths/moodle-qbank_importasversion
           moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
@@ -352,6 +361,23 @@ jobs:
               | tee -a ci-logs/grunt-modes.log || status=1
           done
           exit $status
+
+      - name: Configure STACK for the CAS
+        run: |
+          # A fresh qtype_stack install defaults to a 10 second CAS timeout. A cold Maxima on a
+          # GitHub runner does not answer in that window, and STACK then renders
+          # "CAS failed to return any data due to timeout" instead of the question inputs - which
+          # in the Behat log looks like a missing field rather than a slow CAS.
+          #
+          # The first call is also the slowest, because Maxima compiles STACK's library on it, so
+          # the healthcheck below is run once to warm it up and to fail loudly here rather than
+          # inside an unrelated scenario.
+          cd moodle
+          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
+          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
+          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
+          php question/type/stack/cli/stacklibrarycheck.php || true
+          php question/type/stack/cli/maximalibcheck.php || true
 
       - name: Jest (AMD unit tests)
         if: ${{ always() }}
@@ -437,6 +463,9 @@ jobs:
           # missing ref rather than falling back to the default one.
           moodle-plugin-ci add-plugin --branch master maths/moodle-qtype_stack
           moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_adaptivemultipart
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfexplicitvaildate
+          moodle-plugin-ci add-plugin --branch master maths/moodle-qbehaviour_dfcbmexplicitvaildate
+          moodle-plugin-ci add-plugin --branch main maths/moodle-qbank_importasversion
           moodle-plugin-ci add-plugin --branch main ralferlebach/moodle-qbehaviour_stackmathgame
           moodle-plugin-ci add-plugin --branch master branchup/moodle-filter_shortcodes
           moodle-plugin-ci add-plugin --branch master FMCorz/moodle-block_xp
@@ -445,6 +474,19 @@ jobs:
         env:
           DB: mariadb
           MOODLE_BRANCH: MOODLE_405_STABLE
+      - name: Configure STACK for the CAS
+        run: |
+          # Same reason as in the PHPUnit job: a fresh qtype_stack install times the CAS out
+          # after 10 seconds, and a cold Maxima on a runner needs longer. Without this the
+          # question renders "CAS failed to return any data due to timeout" and the Behat step
+          # reports a missing input field, several layers from the cause.
+          cd moodle
+          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
+          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
+          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
+          php question/type/stack/cli/stacklibrarycheck.php || true
+          php question/type/stack/cli/maximalibcheck.php || true
+
       - name: Behat features
         id: behat
         if: ${{ always() }}

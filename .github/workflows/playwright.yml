@@ -96,6 +96,9 @@ jobs:
           # subplugins are bundled inside this repository and need no separate clone.
           install_plugin maths/moodle-qtype_stack                     question/type/stack                  master
           install_plugin maths/moodle-qbehaviour_adaptivemultipart    question/behaviour/adaptivemultipart master
+          install_plugin maths/moodle-qbehaviour_dfexplicitvaildate    question/behaviour/dfexplicitvaildate     master
+          install_plugin maths/moodle-qbehaviour_dfcbmexplicitvaildate question/behaviour/dfcbmexplicitvaildate master
+          install_plugin maths/moodle-qbank_importasversion            question/bank/importasversion            main
           install_plugin ralferlebach/moodle-qbehaviour_stackmathgame question/behaviour/stackmathgame     main
           install_plugin branchup/moodle-filter_shortcodes            filter/shortcodes                    master
           # Soft integrations: installed so the XP / Stash bridges are exercised, not skipped.
@@ -104,23 +107,37 @@ jobs:
 
       - name: Verify a clean plugin layout
         run: |
-          # A plugin root must contain exactly one version.php. More than one means a repository
-          # was copied into an existing plugin directory, in which case the tested ecosystem is not
-          # the one this workflow claims to test.
-          rc=0
-          for dest in local/stackmathgame local/stackmathgame local/stackmathgame local/stackmathgame; do
-            count=$(find "moodle/$dest" -name version.php | wc -l)
-            if [ "$count" -ne 1 ]; then
-              echo "moodle/$dest enthaelt $count version.php (erwartet: genau 1)"
-              find "moodle/$dest" -name version.php
-              rc=1
+          # A version.php outside the plugin root or a declared subplugin directory means a
+          # repository was copied into an existing plugin directory, in which case the tested
+          # ecosystem is not the one this workflow claims to test.
+          #
+          # local_stackmathgame legitimately bundles three game-mode subplugins under mode/, each
+          # with its own version.php. The expected set is therefore derived from
+          # db/subplugins.json instead of being hardcoded: a check that demanded exactly one
+          # version.php failed on a perfectly correct tree, and relaxing it to make the job pass
+          # would have thrown away the only thing it was watching for.
+          plugin=moodle/local/stackmathgame
+          {
+            echo "$plugin/version.php"
+            if [ -f "$plugin/db/subplugins.json" ]; then
+              dirs=$(tr -d ' \t"' < "$plugin/db/subplugins.json" \
+                | sed -n '/subplugintypes/,/}/p' | sed -n 's/^[^:]*:\([^,}]*\).*/\1/p')
+              for dir in $dirs; do
+                [ -n "$dir" ] || continue
+                for sub in "$plugin/$dir"/*/version.php; do
+                  [ -e "$sub" ] && echo "$sub"
+                done
+              done
             fi
-          done
-          if [ "$rc" -ne 0 ]; then
-            echo "Verschachtelte Plugin-Kopien gefunden - das getestete Oekosystem waere nicht reproduzierbar."
+          } | sort > /tmp/expected.txt
+          find "$plugin" -name version.php | sort > /tmp/found.txt
+          if ! diff -u /tmp/expected.txt /tmp/found.txt; then
+            echo "Unerwartete version.php gefunden - verschachtelte Plugin-Kopie?"
+            echo "Erwartet: Plugin-Root plus je ein Subplugin unter den in db/subplugins.json"
+            echo "deklarierten Verzeichnissen."
             exit 1
           fi
-          echo "Plugin-Layout ist sauber."
+          echo "Plugin-Layout ist sauber: $(wc -l < /tmp/expected.txt) erwartete Komponenten."
 
       # install.php WRITES config.php itself and aborts when one already exists
       # ("The configuration file config.php already exists"), so we must not
@@ -139,6 +156,16 @@ jobs:
             --wwwroot="$MOODLE_WWWROOT" --dataroot=/tmp/moodledata \
             --fullname="CI" --shortname="CI" \
             --adminpass="Admin!23" --adminemail=ci@example.invalid
+
+          # A fresh qtype_stack install times the CAS out after 10 seconds; a cold Maxima on a
+          # runner needs longer, and STACK then renders "CAS failed to return any data due to
+          # timeout" instead of the question. The first call is also the slowest because Maxima
+          # compiles STACK's library on it, so warm it here rather than mid-run.
+          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
+          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
+          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
+          php question/type/stack/cli/stacklibrarycheck.php || true
+          php question/type/stack/cli/maximalibcheck.php || true
 
       # PHP's built-in server is single-threaded unless PHP_CLI_SERVER_WORKERS is
       # set. A Moodle page pulls many subresources in parallel, so one worker

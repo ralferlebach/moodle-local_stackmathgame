@@ -86,8 +86,14 @@ jobs:
             cp -a /tmp/dep "moodle/${dest}"
             rm -rf "moodle/${dest}/.git" /tmp/dep
           }
+          # qtype_stack declares FOUR dependencies, not one. Missing any of them aborts the
+          # install with "Dependencies check failed for qtype_stack" - which reads like a problem
+          # with STACK rather than an incomplete dependency list.
           clone_dep maths/moodle-qtype_stack                    question/type/stack            master
           clone_dep maths/moodle-qbehaviour_adaptivemultipart   question/behaviour/adaptivemultipart master
+          clone_dep maths/moodle-qbehaviour_dfexplicitvaildate    question/behaviour/dfexplicitvaildate master
+          clone_dep maths/moodle-qbehaviour_dfcbmexplicitvaildate question/behaviour/dfcbmexplicitvaildate master
+          clone_dep maths/moodle-qbank_importasversion            question/bank/importasversion  main
           clone_dep ralferlebach/moodle-qbehaviour_stackmathgame question/behaviour/stackmathgame main
           clone_dep branchup/moodle-filter_shortcodes           filter/shortcodes              master
           mkdir -p /tmp/moodledata
@@ -99,6 +105,16 @@ jobs:
             --wwwroot="$MOODLE_WWWROOT" --dataroot=/tmp/moodledata \
             --fullname="CI" --shortname="CI" \
             --adminpass="Admin!23" --adminemail=ci@example.invalid
+
+          # A fresh qtype_stack install times the CAS out after 10 seconds; a cold Maxima on a
+          # runner needs longer, and STACK then renders "CAS failed to return any data due to
+          # timeout" instead of the question. The first call is also the slowest because Maxima
+          # compiles STACK's library on it, so warm it here rather than mid-run.
+          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
+          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
+          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
+          php question/type/stack/cli/stacklibrarycheck.php || true
+          php question/type/stack/cli/maximalibcheck.php || true
           # No web server is started here: seeding below is a CLI script and does not need one,
           # and a background server does not reliably survive beyond the step that started it.
           # Every step that needs HTTP starts and awaits its own server.

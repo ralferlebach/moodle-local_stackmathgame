@@ -71,10 +71,28 @@ final class stack_submit_test extends advanced_testcase {
             }
         }
 
+        // PHPUnit runs against its own database, so whatever a site administrator configured is
+        // not present here. Without these three settings STACK has no CAS to talk to and every
+        // input stays "invalid" - which looked for a long time like "this environment has no
+        // Maxima" when in fact Maxima was installed and simply never wired up.
+        $maxima = trim((string)shell_exec('command -v maxima'));
+        if ($maxima !== '') {
+            set_config('platform', 'linux', 'qtype_stack');
+            set_config('maximacommand', $maxima, 'qtype_stack');
+            // A cold Maxima compiles STACK's library on the first call, which takes far longer
+            // than the 10 second default.
+            set_config('castimeout', 60, 'qtype_stack');
+        }
+
         // A STACK question cannot be graded without a working CAS connection: every input stays
         // in the "invalid" state and no mark is ever produced. Reporting that as a passing test
         // would be worse than reporting nothing, so the grading cases skip themselves loudly.
-        // The check is STACK's own, so it stays right if their healthcheck changes.
+        //
+        // Known remaining obstacle: STACK generates maximalocal.mac into $CFG->dataroot from its
+        // install.php, and the PHPUnit dataroot never gets one - so compute() returns an empty
+        // result here even where Maxima itself answers in a couple of seconds. Generating that
+        // file for the test dataroot is what these nine cases still need; it is not a defect in
+        // this plugin, and pretending the tests passed would hide it.
         if (!self::cas_is_available()) {
             $this->markTestSkipped(
                 'No working Maxima connection - STACK cannot grade, so these assertions '
