@@ -23,6 +23,26 @@
  */
 
 /**
+ * Return the directory that holds Moodle's lib/ and config.php.
+ *
+ * From Moodle 5.1 the web root lives in public/, so the working directory alone is not the
+ * answer - and getting it wrong fails with "Failed opening required lib/phpunit/bootstrap.php",
+ * which says nothing about the layout change that caused it.
+ *
+ * @return string The Moodle root, without a trailing slash.
+ */
+function local_stackmathgame_moodle_root(): string {
+    $cwd = rtrim(getcwd(), '/');
+    foreach ([$cwd . '/public', $cwd] as $candidate) {
+        if (file_exists($candidate . '/config.php') && is_dir($candidate . '/lib')) {
+            return $candidate;
+        }
+    }
+    fwrite(STDERR, "ERROR: no Moodle root found under $cwd (looked in ./ and ./public).\n");
+    exit(1);
+}
+
+/**
  * Configure qtype_stack, write maximalocal.mac and verify the CAS answers.
  *
  * Three things have to happen, and leaving any of them out looks like a

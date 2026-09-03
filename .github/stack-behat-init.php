@@ -37,8 +37,8 @@
 define('BEHAT_UTIL', true);
 define('CLI_SCRIPT', true);
 
-require_once(getcwd() . '/config.php');
 require_once(__DIR__ . '/stack-cas-lib.php');
+require_once(local_stackmathgame_moodle_root() . '/config.php');
 
 global $CFG, $DB;
 

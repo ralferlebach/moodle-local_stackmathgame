@@ -44,11 +44,17 @@ putenv('BEHAT_CLI=0');
 
 define('PHPUNIT_UTIL', true);
 
-// The bootstrap uses PHPUnit's own classes, so Composer's autoloader has to be in place first -
-// exactly the order admin/tool/phpunit/cli/util.php uses.
-require(getcwd() . '/vendor/autoload.php');
-require(getcwd() . '/lib/phpunit/bootstrap.php');
 require_once(__DIR__ . '/stack-cas-lib.php');
+$moodleroot = local_stackmathgame_moodle_root();
+
+// The bootstrap uses PHPUnit's own classes, so Composer's autoloader has to be in place first -
+// exactly the order admin/tool/phpunit/cli/util.php uses. Composer lives beside the Moodle root,
+// which under the 5.1+ public/ layout is one level above lib/.
+$vendor = file_exists($moodleroot . '/vendor/autoload.php')
+    ? $moodleroot . '/vendor/autoload.php'
+    : dirname($moodleroot) . '/vendor/autoload.php';
+require($vendor);
+require($moodleroot . '/lib/phpunit/bootstrap.php');
 
 global $CFG, $DB;
 

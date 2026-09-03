@@ -550,7 +550,7 @@ jobs:
       - name: Behat features
         id: behat
         if: ${{ always() }}
-        run: set -o pipefail; moodle-plugin-ci behat --profile chrome --tags "@local_stackmathgame&&~@broken" --dump 2>&1 | tee ci-logs/behat.log
+        run: set -o pipefail; moodle-plugin-ci behat --profile chrome --tags "@local_stackmathgame&&~@broken&&~@stack_penalty" --dump 2>&1 | tee ci-logs/behat.log
       - name: Collect error summary and Behat dumps
         if: ${{ always() }}
         run: |

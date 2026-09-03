@@ -84,6 +84,54 @@ class behat_local_stackmathgame extends behat_base {
     }
 
     /**
+     * Configure STACK and confirm it can reach Maxima, from inside the Behat run.
+     *
+     * The CI step that does this before Behat starts is not enough on its own: starting the
+     * Behat servers resets parts of the Behat dataroot, and maximalocal.mac goes with it. STACK
+     * then renders "CAS failed to return any data due to timeout" and the scenario reports a
+     * missing input field - four layers from the cause. local_stackmatheditor solves the same
+     * problem with a preflight; doing it as a step keeps it attached to the scenarios that need
+     * it rather than to the pipeline.
+     *
+     * @Given the STACK CAS is ready
+     */
+    public function the_stack_cas_is_ready(): void {
+        global $CFG;
+
+        if (!\core_component::get_component_directory('qtype_stack')) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException(
+                'qtype_stack is not installed.'
+            );
+        }
+
+        $maxima = trim((string)shell_exec('command -v maxima'));
+        if ($maxima === '') {
+            throw new \Moodle\BehatExtension\Exception\SkippedException(
+                'No maxima binary - STACK cannot grade, so these scenarios would test nothing.'
+            );
+        }
+
+        require_once($CFG->dirroot . '/question/type/stack/stack/cas/installhelper.class.php');
+        require_once($CFG->dirroot . '/question/type/stack/stack/cas/connectorhelper.class.php');
+
+        set_config('platform', 'linux', 'qtype_stack');
+        set_config('maximacommand', $maxima, 'qtype_stack');
+        set_config('maximaversion', 'default', 'qtype_stack');
+        set_config('casresultscache', 'db', 'qtype_stack');
+        set_config('casdebugging', '0', 'qtype_stack');
+        // The first call compiles STACK's library, which on a cold runner takes minutes.
+        set_config('castimeout', '300', 'qtype_stack');
+        set_config('maximalibraries', '', 'qtype_stack');
+
+        \stack_cas_configuration::create_maximalocal();
+
+        [$message, $debug, $ok] = \stack_connection_helper::stackmaxima_genuine_connect();
+        if (!$ok) {
+            throw new \Exception("STACK CAS is not usable: $message\n$debug");
+        }
+    }
+
+    /**
      * Enable the game on a quiz, with a default design and a built question map.
      *
      * @Given the STACK Math Game is enabled for quiz :quizname
