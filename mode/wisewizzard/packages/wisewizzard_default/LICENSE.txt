@@ -1,1 +1,24 @@
-License status to be curated later. Replace before distribution.
+Assets in this package
+======================
+
+All files under assets/ and preview/ are placeholder graphics created for this plugin: a plain
+coloured rectangle carrying the asset key as a label. They contain no third-party artwork.
+
+Licence: GPL v3 or later, the same as the rest of the plugin.
+Copyright: 2026 Ralf Erlebach.
+
+Why this note exists
+--------------------
+
+The prototype this plugin grew out of used sprites from craftpix.net and UI elements from
+freepik, whose licence terms do not allow redistribution inside a published Moodle plugin. None
+of that artwork was carried over. The placeholders are here so that the asset resolution chain -
+manifest, package_registry, the runtime asset map - has something real to resolve, and so that a
+broken path fails visibly instead of leaving an element blank.
+
+Replacing them
+--------------
+
+Any replacement must be licence-compatible with GPL v3. OpenGameArt.org and itch.io both list
+CC0 assets suitable for this. Keep the file names: they are the manifest keys the game modes
+address, and a renamed file resolves to nothing.

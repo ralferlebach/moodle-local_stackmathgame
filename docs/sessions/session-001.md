@@ -60,9 +60,15 @@ UI-Elemente vermutlich von freepik/fontawesome. Beide arbeiten mit Lizenzmodelle
 Übernahme in ein veröffentlichtes Plugin nicht ohne Weiteres erlauben — craftpix mit Free- und
 Bezahlvarianten, freepik mit Attributionspflicht im Free-Tier.
 
-**Das ist als potentieller Blocker für eine Veröffentlichung festgehalten worden und, soweit
-aus den späteren Sitzungen erkennbar, bis heute nicht abschließend geklärt.** Als Ausweg wurden
+Das wurde als potentieller Blocker für eine Veröffentlichung festgehalten. Als Ausweg wurden
 CC0-Quellen wie OpenGameArt.org und itch.io genannt.
+
+> **Nachtrag aus Sitzung 003 (Patch 21): erledigt, und zwar von selbst.** Beim Nachsehen im
+> ausgelieferten Stand zeigte sich, dass keines dieser Assets je übernommen wurde. Ausgeliefert
+> werden 18 selbst erzeugte SVG-Platzhalter — ein farbiges Rechteck mit dem Asset-Schlüssel als
+> Beschriftung. Der Blocker bestand nur noch auf dem Papier. Geblieben war eine irreführende
+> `LICENSE.txt` je Paket („License status to be curated later"), die einen offenen Rechtsstatus
+> suggerierte, wo keiner war; sie ist durch eine präzise Angabe ersetzt.
 
 ## Ergebnis
 

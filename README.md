@@ -266,4 +266,9 @@ Ralf Erlebach
 The RPG mode is derived from `alquiz-fantasy-bg-ver3.js`, © 2022 Malte Neugebauer,
 Hochschule Bochum, used under the MIT Licence.
 
+The artwork of that prototype was **not** carried over. It used sprites from craftpix.net and UI
+elements from freepik, neither of which may be redistributed inside a published Moodle plugin.
+Every graphic shipped here is a placeholder created for this plugin and licensed GPL v3 with the
+rest of it — see `mode/*/packages/*/LICENSE.txt`.
+
 Individual copyrights of individual developers are tracked in PHPDoc comments and Git commits.
