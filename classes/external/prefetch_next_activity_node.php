@@ -24,12 +24,10 @@
 
 namespace local_stackmathgame\external;
 
+use local_stackmathgame\local\service\navigation_resolver;
 use local_stackmathgame\local\service\profile_service;
 use local_stackmathgame\local\service\question_map_service;
-
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
+use local_stackmathgame\local\service\slot_config_schema;
 
 /**
  * Return the next mapped node or next quiz slot as prefetch data.
@@ -38,18 +36,30 @@ require_once($CFG->libdir . '/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class prefetch_next_activity_node extends \external_api {
+class prefetch_next_activity_node extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
-            'currentslot' => new \external_value(PARAM_INT, 'Current slot number', VALUE_DEFAULT, 0),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
+            'currentslot' => new \core_external\external_value(PARAM_INT, 'Current slot number', VALUE_DEFAULT, 0),
+            'outcome' => new \core_external\external_value(
+                PARAM_ALPHA,
+                'Outcome to resolve branching for: gradedright, gradedwrong, complete or default',
+                VALUE_DEFAULT,
+                slot_config_schema::OUTCOME_DEFAULT
+            ),
+            'attemptid' => new \core_external\external_value(
+                PARAM_INT,
+                'Quiz attempt id, so the resolved navigation can carry a usable URL',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -60,13 +70,17 @@ class prefetch_next_activity_node extends \external_api {
      * @param string $modname The activity module name.
      * @param int $instanceid The activity instance ID.
      * @param int $currentslot The currently active slot.
+     * @param string $outcome The outcome to resolve branching for.
+     * @param int $attemptid The quiz attempt ID, or 0 when the caller has none.
      * @return array The next-node payload.
      */
     public static function execute(
         int $cmid,
         string $modname = 'quiz',
         int $instanceid = 0,
-        int $currentslot = 0
+        int $currentslot = 0,
+        string $outcome = slot_config_schema::OUTCOME_DEFAULT,
+        int $attemptid = 0
     ): array {
         [, , $config, $profile, , $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
         if (!api::activity_supports_question_flow($activity)) {
@@ -74,6 +88,14 @@ class prefetch_next_activity_node extends \external_api {
             return array_merge(api::export_activity($activity), [
                 'currentslot' => $currentslot,
                 'nextnode' => $payload,
+                'navigation' => navigation_resolver::resolve(
+                    (int)$activity['cmid'],
+                    (int)$activity['quizid'],
+                    $currentslot,
+                    slot_config_schema::OUTCOME_COMPLETE,
+                    $profile,
+                    $attemptid
+                ),
             ]);
         }
 
@@ -142,9 +164,23 @@ class prefetch_next_activity_node extends \external_api {
             ['currentslot' => $currentslot] + $payload
         );
 
+        // The branch configuration is consulted here, not only in submit_answer. Before, this
+        // endpoint returned "the next unsolved slot in map order" and never called
+        // branch_resolver at all - so a prefetch and a submit could disagree about where the
+        // player was going, and the prefetch always won on page load.
+        $navigation = navigation_resolver::resolve(
+            (int)$activity['cmid'],
+            $quizid,
+            $currentslot,
+            $outcome,
+            $profile,
+            $attemptid
+        );
+
         return array_merge(api::export_activity($activity), [
             'currentslot' => $currentslot,
             'nextnode' => $payload,
+            'navigation' => $navigation,
         ]);
     }
 
@@ -167,16 +203,17 @@ class prefetch_next_activity_node extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id'),
-            'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
-            'currentslot' => new \external_value(PARAM_INT, 'Current slot number'),
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id'),
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Legacy quiz id when applicable'),
+            'currentslot' => new \core_external\external_value(PARAM_INT, 'Current slot number'),
             'nextnode' => get_quiz_config::questionmap_structure(),
+            'navigation' => navigation_resolver::external_structure(),
         ]);
     }
 }

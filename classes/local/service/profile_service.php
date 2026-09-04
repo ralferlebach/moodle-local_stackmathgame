@@ -39,6 +39,30 @@ use local_stackmathgame\game\theme_manager;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class profile_service {
+    /** Reward granted when a slot has no configured score. */
+    const DEFAULT_SCORE = 10;
+
+    /** Reward granted when a slot has no configured XP. */
+    const DEFAULT_XP = 5;
+
+    /**
+     * Mark at or above which a scene counts as solved.
+     *
+     * Deliberately below 1.0. Under adaptivemultipart - which the STACK Math Game behaviour
+     * extends - STACK requires a validation step before it grades, and that step carries the
+     * question's penalty. A student who answers correctly first time therefore scores below the
+     * full mark, and a threshold of 1.0 would refuse to open the next scene for a correct answer.
+     *
+     * The product decision is that a penalised but correct answer advances: the mathematics was
+     * right, and the penalty already expresses itself in the score. That is achieved by feeding
+     * this comparison the *unpenalised* mark - see submit_answer::raw_fraction() - rather than
+     * by lowering the threshold, which would also let a genuinely partial answer through.
+     */
+    const SOLVED_FRACTION = 1.0;
+
+    /** Share of the full reward paid for partial credit. */
+    const PARTIAL_FACTOR = 0.5;
+
     /**
      * Calculate the level number for a given XP total.
      *
@@ -80,25 +104,89 @@ class profile_service {
     }
 
     /**
+     * Return the best mark already recorded for a slot.
+     *
+     * @param \stdClass $profile The profile record.
+     * @param int $slot The slot number.
+     * @return float|null The stored fraction, or null when none was recorded.
+     */
+    public static function get_slot_fraction(\stdClass $profile, int $slot): ?float {
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $slots    = (array)($progress['slots'] ?? []);
+        $slotkey  = (string)$slot;
+        if (
+            isset($slots[$slotkey]) && is_array($slots[$slotkey])
+                && array_key_exists('fraction', $slots[$slotkey])
+                && $slots[$slotkey]['fraction'] !== null
+        ) {
+            return (float)$slots[$slotkey]['fraction'];
+        }
+        return null;
+    }
+
+    /**
      * Calculate score/XP deltas for a state transition.
      *
      * @param string $previousstate Previous question state string.
      * @param string $newstate      New question state string.
+     * @param array|null $slotconfig The slot's direction card, for its configured rewards.
+     * @param float|null $fraction The mark achieved now, 0..1, or null when unavailable.
+     * @param float|null $previousfraction The mark already achieved before this submission.
      * @return array Array with keys 'score', 'xp', 'solved'.
      */
-    public static function calculate_submit_deltas(string $previousstate, string $newstate): array {
-        $rightstates   = ['gradedright', 'complete'];
-        $partialstates = ['gradedpartial'];
-        $wasright   = in_array($previousstate, $rightstates, true);
-        $isright    = in_array($newstate, $rightstates, true);
-        $waspartial = in_array($previousstate, $partialstates, true);
-        $ispartial  = in_array($newstate, $partialstates, true);
+    public static function calculate_submit_deltas(
+        string $previousstate,
+        string $newstate,
+        ?array $slotconfig = null,
+        ?float $fraction = null,
+        ?float $previousfraction = null
+    ): array {
+        // Correctness comes from the mark, not from the state name. Under adaptivemultipart -
+        // which the STACK Math Game behaviour extends - a correct answer during an attempt lands
+        // in "complete", not "gradedright"; "gradedright" only appears once the attempt is
+        // finished. Keying the reward off state names therefore either paid nothing for a
+        // correct answer, or paid full marks for merely having answered. The fraction says
+        // which of the two actually happened.
+        $score = max(0, (int)($slotconfig['rewards']['score'] ?? self::DEFAULT_SCORE));
+        $xp    = max(0, (int)($slotconfig['rewards']['xp'] ?? self::DEFAULT_XP));
+
+        if ($fraction === null) {
+            // No mark available: fall back to the state names, which is all the older callers
+            // ever had. Partial credit is handled here too - dropping it silently changed the
+            // payout for every caller that cannot supply a fraction.
+            $isright = $newstate === 'gradedright';
+            $wasright = $previousstate === 'gradedright';
+            $ispartial = $newstate === 'gradedpartial';
+            $waspartial = $previousstate === 'gradedpartial';
+            if ($isright && !$wasright) {
+                return ['score' => $score, 'xp' => $xp, 'solved' => true];
+            }
+            if ($ispartial && !$wasright && !$waspartial) {
+                return [
+                    'score' => (int)floor($score * self::PARTIAL_FACTOR),
+                    'xp' => (int)floor($xp * self::PARTIAL_FACTOR),
+                    'solved' => false,
+                ];
+            }
+            return ['score' => 0, 'xp' => 0, 'solved' => $wasright || $isright];
+        }
+
+        $wasright = ($previousfraction ?? 0.0) >= self::SOLVED_FRACTION;
+        $isright  = $fraction >= self::SOLVED_FRACTION;
+        $waspartial = ($previousfraction ?? 0.0) > 0.0 && !$wasright;
+        $ispartial  = $fraction > 0.0 && !$isright;
 
         if ($isright && !$wasright) {
-            return ['score' => 10, 'xp' => 5, 'solved' => true];
+            return ['score' => $score, 'xp' => $xp, 'solved' => true];
         }
         if ($ispartial && !$wasright && !$waspartial) {
-            return ['score' => 5, 'xp' => 2, 'solved' => false];
+            // Partial credit pays a share of the same figure rather than a second one the
+            // teacher never chose, so the payout stays explainable from one number per scene.
+            return [
+                'score' => (int)floor($score * self::PARTIAL_FACTOR),
+                'xp' => (int)floor($xp * self::PARTIAL_FACTOR),
+                'solved' => false,
+            ];
         }
         return ['score' => 0, 'xp' => 0, 'solved' => $wasright || $isright];
     }

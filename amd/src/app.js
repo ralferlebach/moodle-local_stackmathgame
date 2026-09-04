@@ -13,7 +13,7 @@ define([
             ready: M.util.get_string('gamestatusready', 'local_stackmathgame'),
             error: M.util.get_string('gameruntimeerror', 'local_stackmathgame'),
             check: M.util.get_string('gamecheckanswer', 'local_stackmathgame'),
-            native: M.util.get_string('gameusenative', 'local_stackmathgame'),
+            'native': M.util.get_string('gameusenative', 'local_stackmathgame'),
             profile: M.util.get_string('gameprofile', 'local_stackmathgame'),
             design: M.util.get_string('gamecurrentdesign', 'local_stackmathgame'),
             nextnode: M.util.get_string('gamenextnode', 'local_stackmathgame')
@@ -95,6 +95,7 @@ define([
                                 nextNodeDescription: NavigationController.describeNextNode(nextNodeResult.nextnode || null),
                                 loading: false
                             });
+                            return true;
                         })
                         .catch(function(error) {
                             store.patch({loading: false, error: error && error.message ? error.message : 'Request failed.'});
@@ -125,6 +126,7 @@ define([
                 nextNode: nextNode.nextnode || null,
                 nextNodeDescription: NavigationController.describeNextNode(nextNode.nextnode || null)
             });
+            return true;
         }).catch(function(error) {
             store.patch({loading: false, error: error && error.message ? error.message : 'Initialisation failed.'});
             Notification.exception(error);

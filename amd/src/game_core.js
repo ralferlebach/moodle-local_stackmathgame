@@ -47,7 +47,7 @@ define([], function() {
                 gradedright: {mode: 'linear'},
                 gradedwrong: {mode: 'linear'},
                 complete:    {mode: 'linear'},
-                default:     {mode: 'linear'}
+                'default':   {mode: 'linear'}
             },
             rewards: {
                 score: 0,
@@ -61,5 +61,103 @@ define([], function() {
         };
     }
 
-    return {defaultConfig: defaultConfig};
+    /**
+     * Read the navigation the server resolved.
+     *
+     * A mode calls this and renders the result. It must not look at cfg.branching itself: the
+     * server resolver is canonical, and a second interpretation in JavaScript is exactly the
+     * defect this replaced - the modes only handled an explicit `slot` jump, so `linear`, which
+     * is the default every auto-created slot gets, and `end` produced no way forward at all.
+     *
+     * Tolerates a missing navigation block so a mode running against an older server payload
+     * degrades to "no control shown" rather than throwing.
+     *
+     * @param {Object} source A submit response or a prefetch response.
+     * @returns {{action: string, hasNext: boolean, isEnd: boolean, url: string, label: string,
+     *   nextslot: number}} The resolved navigation.
+     */
+    function navigationFrom(source) {
+        var nav = (source && source.navigation) || {};
+        var action = nav.action || 'stay';
+        return {
+            action: action,
+            hasNext: action === 'continue' || action === 'finish',
+            isEnd: action === 'finish',
+            url: nav.url || '',
+            label: nav.label || '',
+            nextslot: parseInt(nav.nextslot, 10) || 0
+        };
+    }
+
+    /**
+     * Apply a resolved navigation to a link element.
+     *
+     * Centralised so the three modes cannot drift apart on what "no next step" looks like. They
+     * previously disagreed: one hid the button, one left it pointing at the current page.
+     *
+     * @param {Element} element The anchor or button to update.
+     * @param {Object} navigation A value returned by navigationFrom().
+     * @returns {void}
+     */
+    function applyNavigation(element, navigation) {
+        if (!element) {
+            return;
+        }
+        if (!navigation.hasNext || !navigation.url) {
+            element.style.display = 'none';
+            element.removeAttribute('href');
+            return;
+        }
+        element.href = navigation.url;
+        if (navigation.label) {
+            element.textContent = navigation.label;
+        }
+        // The end of a run is a different act from continuing, and a mode may want to style it
+        // differently without having to work out which case it is in.
+        element.classList.toggle('smg-nav-finish', navigation.isEnd);
+        element.style.display = 'inline-block';
+    }
+
+    /**
+     * Escape a value for safe insertion as HTML.
+     *
+     * Narrative text is authored content that reaches the DOM through innerHTML in every mode.
+     * Escaping belongs here rather than in each mode, where it was simply absent.
+     *
+     * @param {*} value The value to escape.
+     * @returns {string} The escaped string.
+     */
+    function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = value === null || value === undefined ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    /**
+     * Look up a design asset by its manifest key.
+     *
+     * Modes must go through this rather than assembling a URL. A hand-built path works only for
+     * a bundled package and breaks as soon as a design is imported - and it breaks silently,
+     * because a broken image src renders as nothing rather than as an error.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {string} key The asset key from the package manifest.
+     * @param {string} [fallback] URL to use when the design does not supply that key.
+     * @returns {string} The resolved URL, or the fallback, or an empty string.
+     */
+    function assetUrl(gameState, key, fallback) {
+        var assets = (gameState && gameState.assets) || {};
+        if (assets[key]) {
+            return assets[key];
+        }
+        return fallback || '';
+    }
+
+    return {
+        defaultConfig: defaultConfig,
+        navigationFrom: navigationFrom,
+        applyNavigation: applyNavigation,
+        escapeHtml: escapeHtml,
+        assetUrl: assetUrl
+    };
 });

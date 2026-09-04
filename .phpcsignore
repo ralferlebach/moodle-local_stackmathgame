@@ -1,4 +1,11 @@
-# Exclude developer tools from PHP CodeSniffer.
-# These scripts are not shipped with the plugin (see .gitattributes export-ignore)
-# and are not required to comply with the Moodle coding standard.
-/tools/
+# Files excluded from the Moodle coding standard, with the reason.
+
+# CI helper scripts. They deliberately bootstrap Moodle from a working directory rather than by
+# including config.php in the usual place - stack-phpunit-init.php enters the PHPUnit database
+# through lib/phpunit/bootstrap.php the same way Moodle's own tool_phpunit CLI does. The sniff
+# cannot see that and demands a MOODLE_INTERNAL check that would be wrong here. They are also
+# export-ignored, so they never reach an installed site.
+.github/stack-behat-init.php
+.github/stack-phpunit-init.php
+.github/stack-cas-lib.php
+.github/stack-site-init.php

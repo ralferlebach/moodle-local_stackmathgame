@@ -30,7 +30,10 @@ class behat_local_stackmathgame extends behat_base {
      */
     public function i_am_on_the_moodle_homepage(): void {
         $this->getSession()->visit($this->locate_path('/'));
-        $this->getSession()->wait(2000, "document.readyState === 'complete'");
+        // No wait(): BrowserKit loads synchronously and does not implement it, so waiting here
+        // made every non-@javascript scenario using this step fail with
+        // "JS is not supported by BrowserKitDriver" - a driver complaint, not a defect.
+        $this->wait_for_pending_js();
     }
 
     /**
@@ -81,6 +84,161 @@ class behat_local_stackmathgame extends behat_base {
     }
 
     /**
+     * Wait until the game's navigation control has been written by the mode module.
+     *
+     * The control appears only after the submit round-trip finishes and the mode module renders
+     * the navigation the server resolved. Asserting on it immediately is a race the scenario
+     * loses on a slow runner - and it looked like a missing button rather than a timing problem.
+     *
+     * @Then I should eventually see the game navigation :label
+     * @param string $label The expected control label.
+     */
+    public function i_should_eventually_see_the_game_navigation(string $label): void {
+        $this->execute('behat_general::wait_until_the_page_is_ready');
+        $this->execute('behat_general::should_exist', [
+            '//*[contains(@class,"smg-nav") or self::a][contains(normalize-space(.), "'
+                . $label . '")]',
+            'xpath_element',
+        ]);
+    }
+
+    /**
+     * Configure STACK and confirm it can reach Maxima, from inside the Behat run.
+     *
+     * The CI step that does this before Behat starts is not enough on its own: starting the
+     * Behat servers resets parts of the Behat dataroot, and maximalocal.mac goes with it. STACK
+     * then renders "CAS failed to return any data due to timeout" and the scenario reports a
+     * missing input field - four layers from the cause. local_stackmatheditor solves the same
+     * problem with a preflight; doing it as a step keeps it attached to the scenarios that need
+     * it rather than to the pipeline.
+     *
+     * @Given the STACK CAS is ready
+     */
+    public function the_stack_cas_is_ready(): void {
+        global $CFG;
+
+        if (!\core_component::get_component_directory('qtype_stack')) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException(
+                'qtype_stack is not installed.'
+            );
+        }
+
+        $maxima = trim((string)shell_exec('command -v maxima'));
+        if ($maxima === '') {
+            throw new \Moodle\BehatExtension\Exception\SkippedException(
+                'No maxima binary - STACK cannot grade, so these scenarios would test nothing.'
+            );
+        }
+
+        require_once($CFG->dirroot . '/question/type/stack/stack/cas/installhelper.class.php');
+        require_once($CFG->dirroot . '/question/type/stack/stack/cas/connectorhelper.class.php');
+
+        set_config('platform', 'linux', 'qtype_stack');
+        set_config('maximacommand', $maxima, 'qtype_stack');
+        set_config('maximaversion', 'default', 'qtype_stack');
+        set_config('casresultscache', 'db', 'qtype_stack');
+        set_config('casdebugging', '0', 'qtype_stack');
+        // The first call compiles STACK's library, which on a cold runner takes minutes.
+        set_config('castimeout', '300', 'qtype_stack');
+        set_config('maximalibraries', '', 'qtype_stack');
+
+        \stack_cas_configuration::create_maximalocal();
+
+        [$message, $debug, $ok] = \stack_connection_helper::stackmaxima_genuine_connect();
+        if (!$ok) {
+            throw new \Exception("STACK CAS is not usable: $message\n$debug");
+        }
+    }
+
+    /**
+     * Enable the game on a quiz, with a default design and a built question map.
+     *
+     * @Given the STACK Math Game is enabled for quiz :quizname
+     * @param string $quizname The quiz name.
+     */
+    public function the_game_is_enabled_for_quiz(string $quizname): void {
+        global $DB;
+
+        $cmid = self::cmid_for_quiz_name($quizname);
+        \local_stackmathgame\game\theme_manager::seed_default_theme();
+        $config = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
+        $config->enabled = 1;
+        $DB->update_record('local_stackmathgame', $config);
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+    }
+
+    /**
+     * Set a branching rule on one slot.
+     *
+     * Writes through slot_config_schema rather than hand-building JSON, so a feature file cannot
+     * quietly introduce a config shape the resolver does not accept.
+     *
+     * @Given slot :slot of quiz :quizname branches to slot :target on :outcome
+     * @param int $slot The slot number.
+     * @param string $quizname The quiz name.
+     * @param int $target The target slot number.
+     * @param string $outcome The outcome key.
+     */
+    public function slot_branches_to_slot(int $slot, string $quizname, int $target, string $outcome): void {
+        self::write_branch_rule($quizname, $slot, $outcome, ['mode' => 'slot', 'target' => $target]);
+    }
+
+    /**
+     * Set a non-slot branching rule on one slot.
+     *
+     * @Given slot :slot of quiz :quizname branches to :mode on :outcome
+     * @param int $slot The slot number.
+     * @param string $quizname The quiz name.
+     * @param string $mode The branch mode, "linear" or "end".
+     * @param string $outcome The outcome key.
+     */
+    public function slot_branches_to_mode(int $slot, string $quizname, string $mode, string $outcome): void {
+        self::write_branch_rule($quizname, $slot, $outcome, ['mode' => $mode]);
+    }
+
+    /**
+     * Persist one branching rule into a slot's configjson.
+     *
+     * @param string $quizname The quiz name.
+     * @param int $slot The slot number.
+     * @param string $outcome The outcome key.
+     * @param array $rule The rule.
+     */
+    protected static function write_branch_rule(string $quizname, int $slot, string $outcome, array $rule): void {
+        global $DB;
+
+        $cmid = self::cmid_for_quiz_name($quizname);
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+        $row = $DB->get_record(
+            'local_stackmathgame_questionmap',
+            ['cmid' => $cmid, 'slotnumber' => $slot],
+            '*',
+            MUST_EXIST
+        );
+        $config = \local_stackmathgame\local\service\slot_config_schema::parse((string)$row->configjson)
+            ?? \local_stackmathgame\local\service\slot_config_schema::defaults();
+        $config['branching'][$outcome] = $rule;
+        $DB->set_field(
+            'local_stackmathgame_questionmap',
+            'configjson',
+            json_encode($config, JSON_UNESCAPED_UNICODE),
+            ['id' => $row->id]
+        );
+    }
+
+    /**
+     * Navigate the attempt to the page holding a given slot.
+     *
+     * @When I follow the game navigation to slot :slot
+     * @param int $slot The slot number.
+     */
+    public function i_follow_the_game_navigation_to_slot(int $slot): void {
+        $node = $this->find('css', '#quiznavbutton' . $slot);
+        $node->click();
+        $this->wait_for_pending_js();
+    }
+
+    /**
      * Resolve a page instance URL for the "I am on the ... page" step.
      *
      * @param string $type The page type, e.g. "Game settings".
@@ -91,6 +249,10 @@ class behat_local_stackmathgame extends behat_base {
         switch (strtolower($type)) {
             case 'game settings':
                 return new moodle_url('/local/stackmathgame/quiz_settings.php', [
+                    'cmid' => self::cmid_for_quiz_name($identifier),
+                ]);
+            case 'game flow':
+                return new moodle_url('/local/stackmathgame/flow.php', [
                     'cmid' => self::cmid_for_quiz_name($identifier),
                 ]);
             default:

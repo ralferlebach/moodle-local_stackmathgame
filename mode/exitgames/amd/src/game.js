@@ -70,6 +70,13 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             '.smg-eg-bubble {',
             '  position: relative;',
             '  background: #fcefdc;',
+            '}',
+            '.smg-eg-guide {',
+            '  max-height: 96px;',
+            '  margin-bottom: .25rem;',
+            '}',
+            '.smg-eg-bubble-spacer {',
+            '  background: #fcefdc;',
             '  padding: 1.125em 1.5em;',
             '  font-size: 1.1em;',
             '  border-radius: 1rem;',
@@ -130,49 +137,52 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         if (!text || !bubble) {
             return;
         }
-        bubble.innerHTML = text;
+        bubble.innerHTML = GameCore.escapeHtml(text);
         bubble.style.display = 'block';
     }
 
     /**
-     * Return the URL of a target slot by looking up Moodle quiz nav buttons.
+     * Show the guide sprite matching the current mood.
      *
-     * @param {number} targetSlot The target slot number.
-     * @returns {string|null} The URL, or null if not found.
+     * The ExitGames manifest declares guide_happy and guide_think; neither was ever requested
+     * before, so the design's own artwork never reached the screen and a wrong asset URL was
+     * indistinguishable from a correct one.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {Element} bubble The speech bubble to attach the guide to.
+     * @param {boolean} solved Whether the last answer was correct.
+     * @returns {void}
      */
-    function getSlotUrl(targetSlot) {
-        var btn = document.querySelector('#quiznavbutton' + targetSlot);
-        if (!btn || !btn.href || btn.href === '#') {
-            return null;
+    function showGuide(gameState, bubble, solved) {
+        var url = GameCore.assetUrl(gameState, solved ? 'guide_happy' : 'guide_think');
+        var guide = document.querySelector('.smg-eg-guide');
+        if (!url) {
+            if (guide) {
+                guide.style.display = 'none';
+            }
+            return;
         }
-        var href = btn.href;
-        var relPos = href.indexOf('&scrollpos');
-        if (relPos === -1) {
-            relPos = href.indexOf('&page');
+        if (!guide) {
+            guide = document.createElement('img');
+            guide.className = 'smg-eg-guide';
+            // Decorative: the guide echoes the feedback text, it does not add information.
+            guide.alt = '';
+            guide.setAttribute('role', 'presentation');
+            if (bubble && bubble.parentNode) {
+                bubble.parentNode.insertBefore(guide, bubble);
+            }
         }
-        if (relPos === -1) {
-            relPos = href.indexOf('#');
-        }
-        return relPos > -1 ? href.substring(0, relPos) + '&page=' + btn.dataset.page : href;
+        guide.src = url;
+        guide.style.display = 'block';
     }
 
     /**
-     * Update the next-question navigation button after an answer.
+     * Update the next-question navigation control from the server's resolved navigation.
      *
-     * @param {Object}  slotMap  Map of slot → configjson.
-     * @param {number}  slot     Current slot number.
-     * @param {boolean} solved   Whether the answer was correct.
+     * @param {Object} response The submit response, carrying the resolved navigation.
      * @returns {void}
      */
-    function updateNav(slotMap, slot, solved) {
-        var cfg = slotMap[String(slot)];
-        var branching = cfg && cfg.branching ? cfg.branching : {};
-        var rule = solved
-            ? (branching.gradedright || branching.default || {})
-            : (branching.gradedwrong || branching.default || {});
-        var targetSlot = (rule.mode === 'slot' && rule.target) ? rule.target : null;
-        var nextUrl = targetSlot ? getSlotUrl(targetSlot) : null;
-
+    function updateNav(response) {
         var nextBtn = document.querySelector('.smg-eg-next');
         if (!nextBtn) {
             nextBtn = document.createElement('a');
@@ -182,14 +192,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 shell.appendChild(nextBtn);
             }
         }
-
-        if (nextUrl) {
-            nextBtn.href = nextUrl;
-            nextBtn.textContent = 'Nächste Frage →';
-            nextBtn.style.display = 'inline-block';
-        } else {
-            nextBtn.style.display = 'none';
-        }
+        GameCore.applyNavigation(nextBtn, GameCore.navigationFrom(response));
     }
 
     // ── Public interface ───────────────────────────────────────────────────
@@ -211,6 +214,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         injectStyles();
         var slotMap = buildSlotMap(gameState.questionmap);
         var bubble = buildBubble();
+        showGuide(gameState, bubble, true);
         var currentSlot = parseInt(
             (document.querySelector('.que') || {}).getAttribute
                 ? (document.querySelector('.que').getAttribute('data-smg-slot') || '0')
@@ -236,7 +240,8 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 var slot = response.slot || currentSlot;
                 var solved = !!response.cannext;
                 showBubble(bubble, slotMap, slot, solved ? 'success' : 'fail');
-                updateNav(slotMap, slot, solved);
+                updateNav(response);
+                showGuide(gameState, bubble, !!response.cannext);
             }
         };
     }

@@ -86,7 +86,7 @@ define([], function() {
      * @returns {void}
      */
     function init(config) {
-        var url   = config.url;
+        var url = config.url;
         var label = config.label;
 
         // Attempt 1: immediate (works when select is already in DOM).

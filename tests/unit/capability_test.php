@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_stackmathgame\tests\unit;
+namespace local_stackmathgame\unit;
 
 use advanced_testcase;
 
@@ -26,7 +26,12 @@ use advanced_testcase;
  *   - configurequiz: editingteacher+ (module context)
  *   - play: student+ (module context)
  *
+ * The subject is db/access.php, which declares definitions rather than a class, so there is
+ * nothing for a coverage annotation to name. Stating that explicitly is the point: a test
+ * class without one is indistinguishable from one where it was simply forgotten.
+ *
  * @package    local_stackmathgame
+ * @coversNothing
  * @copyright  2026 Ralf Erlebach
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */

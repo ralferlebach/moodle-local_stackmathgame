@@ -24,11 +24,6 @@
 
 namespace local_stackmathgame\external;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once($CFG->libdir . '/externallib.php');
-require_once($CFG->dirroot . '/mod/quiz/locallib.php');
-
 /**
  * Return a refreshed HTML fragment for the current question where possible.
  *
@@ -36,16 +31,16 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_question_fragment extends \external_api {
+class get_question_fragment extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'attemptid' => new \external_value(PARAM_INT, 'Quiz attempt id'),
-            'slot'      => new \external_value(PARAM_INT, 'Question slot'),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'attemptid' => new \core_external\external_value(PARAM_INT, 'Quiz attempt id'),
+            'slot'      => new \core_external\external_value(PARAM_INT, 'Question slot'),
         ]);
     }
 
@@ -57,9 +52,17 @@ class get_question_fragment extends \external_api {
      * @return array The question fragment array.
      */
     public static function execute(int $attemptid, int $slot): array {
-        global $PAGE;
+        global $CFG, $PAGE;
 
-        require_sesskey();
+        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
+
+        // The session key protects browser-originated POSTs against cross-site request forgery.
+        // A web-service call authenticates with a token and carries no cookie session, so there
+        // is nothing to forge against - and requiring it there makes the endpoint unusable over
+        // REST, which is how the load plans found this.
+        if (!defined('WS_SERVER') || !WS_SERVER) {
+            require_sesskey();
+        }
 
         $attemptobj = \mod_quiz\quiz_attempt::create($attemptid);
         $cm         = $attemptobj->get_cm();
@@ -124,7 +127,9 @@ class get_question_fragment extends \external_api {
             'attemptid'     => $attemptid,
             'slot'          => $slot,
             'questionid'    => (int)$qa->get_question()->id,
-            'state'         => (string)$qa->get_state()->get_name(),
+            // A string cast, not get_name(): question_state_todo has no get_name(), so the
+            // previous form threw for exactly the state a freshly opened scene is in.
+            'state'         => (string)$qa->get_state(),
             'sequencecheck' => (int)$qa->get_sequence_check_count(),
             'questionhtml'  => (string)$questionhtml,
             'inputnames'    => array_values($inputnames),
@@ -134,19 +139,19 @@ class get_question_fragment extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'status'        => new \external_value(PARAM_TEXT, 'Render status'),
-            'attemptid'     => new \external_value(PARAM_INT, 'Quiz attempt id'),
-            'slot'          => new \external_value(PARAM_INT, 'Question slot'),
-            'questionid'    => new \external_value(PARAM_INT, 'Question id'),
-            'state'         => new \external_value(PARAM_TEXT, 'Question state'),
-            'sequencecheck' => new \external_value(PARAM_INT, 'Sequence check count'),
-            'questionhtml'  => new \external_value(PARAM_RAW, 'Rendered question html if available'),
-            'inputnames'    => new \external_multiple_structure(
-                new \external_value(PARAM_RAW_TRIMMED, 'Known question input name')
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'status'        => new \core_external\external_value(PARAM_TEXT, 'Render status'),
+            'attemptid'     => new \core_external\external_value(PARAM_INT, 'Quiz attempt id'),
+            'slot'          => new \core_external\external_value(PARAM_INT, 'Question slot'),
+            'questionid'    => new \core_external\external_value(PARAM_INT, 'Question id'),
+            'state'         => new \core_external\external_value(PARAM_TEXT, 'Question state'),
+            'sequencecheck' => new \core_external\external_value(PARAM_INT, 'Sequence check count'),
+            'questionhtml'  => new \core_external\external_value(PARAM_RAW, 'Rendered question html if available'),
+            'inputnames'    => new \core_external\external_multiple_structure(
+                new \core_external\external_value(PARAM_RAW_TRIMMED, 'Known question input name')
             ),
         ]);
     }

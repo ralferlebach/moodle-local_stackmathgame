@@ -63,6 +63,13 @@ jobs:
           php-version: '8.2'
           extensions: pgsql, gd, intl, zip, soap, mbstring, curl, xml, exif
           ini-values: max_input_vars=5000
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack runs a live CAS healthcheck from its install.php. Without a maxima binary
+          # install_database.php aborts and the site never comes up.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+
       - name: Build, install and seed a self-contained site
         id: selfcontained
         if: ${{ github.event.inputs.mode == 'selfcontained' }}
@@ -83,8 +90,14 @@ jobs:
             cp -a /tmp/dep "moodle/${dest}"
             rm -rf "moodle/${dest}/.git" /tmp/dep
           }
+          # qtype_stack declares FOUR dependencies, not one. Missing any of them aborts the
+          # install with "Dependencies check failed for qtype_stack" - which reads like a problem
+          # with STACK rather than an incomplete dependency list.
           clone_dep maths/moodle-qtype_stack                    question/type/stack            master
           clone_dep maths/moodle-qbehaviour_adaptivemultipart   question/behaviour/adaptivemultipart master
+          clone_dep maths/moodle-qbehaviour_dfexplicitvaildate    question/behaviour/dfexplicitvaildate master
+          clone_dep maths/moodle-qbehaviour_dfcbmexplicitvaildate question/behaviour/dfcbmexplicitvaildate master
+          clone_dep maths/moodle-qbank_importasversion            question/bank/importasversion  main
           clone_dep ralferlebach/moodle-qbehaviour_stackmathgame question/behaviour/stackmathgame main
           clone_dep branchup/moodle-filter_shortcodes           filter/shortcodes              master
           mkdir -p /tmp/moodledata
@@ -96,16 +109,25 @@ jobs:
             --wwwroot="$MOODLE_WWWROOT" --dataroot=/tmp/moodledata \
             --fullname="CI" --shortname="CI" \
             --adminpass="Admin!23" --adminemail=ci@example.invalid
+
+          # The CAS settings and maximalocal.mac, via the same helper the CI pipelines use.
+          # admin/cli/cfg.php was the old approach and it also ran STACK's sample-library checks,
+          # which scan 4267 questions, take minutes and prove nothing about this plugin.
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
           # No web server is started here: seeding below is a CLI script and does not need one,
           # and a background server does not reliably survive beyond the step that started it.
           # Every step that needs HTTP starts and awaits its own server.
-          # seed_large.php prints "export KEY='value'" lines (BASE_URL, COURSEID, INSTANCEID);
-          # expose the ones the load plan needs as step outputs.
+          # seed_large.php prints "export KEY='value'" lines. The load plans address the web
+          # services, so they need QUIZID and the token as well as the base URL - passing only
+          # base_url and courseid left the plan with nothing to call and it aborted in setup().
           php local/stackmathgame/tests/load/seed_large.php > /tmp/seed.env
           get() { sed -n "s/^export $1='\(.*\)'$/\1/p" /tmp/seed.env; }
           {
             echo "base_url=$(get BASE_URL)"
             echo "courseid=$(get COURSEID)"
+            echo "cmid=$(get CMID)"
+            echo "quizid=$(get QUIZID)"
+            echo "token=$(get TOKEN)"
           } >> "$GITHUB_OUTPUT"
       - name: Resolve run parameters
         id: params
@@ -113,9 +135,15 @@ jobs:
           if [ "${{ github.event.inputs.mode }}" = "external" ]; then
             echo "base_url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
             echo "courseid=${{ github.event.inputs.courseid }}" >> "$GITHUB_OUTPUT"
+            echo "cmid=" >> "$GITHUB_OUTPUT"
+            echo "quizid=" >> "$GITHUB_OUTPUT"
+            echo "token=" >> "$GITHUB_OUTPUT"
           else
             echo "base_url=${{ steps.selfcontained.outputs.base_url }}" >> "$GITHUB_OUTPUT"
             echo "courseid=${{ steps.selfcontained.outputs.courseid }}" >> "$GITHUB_OUTPUT"
+            echo "cmid=${{ steps.selfcontained.outputs.cmid }}" >> "$GITHUB_OUTPUT"
+            echo "quizid=${{ steps.selfcontained.outputs.quizid }}" >> "$GITHUB_OUTPUT"
+            echo "token=${{ steps.selfcontained.outputs.token }}" >> "$GITHUB_OUTPUT"
           fi
       - name: Set up JMeter
         run: |
@@ -162,6 +190,9 @@ jobs:
             -t plugin/tests/load/stackmathgame-read-endpoints.jmx \
             -Jbase_url='${{ steps.params.outputs.base_url }}' \
             -Jcourseid='${{ steps.params.outputs.courseid }}' \
+            -Jquizid='${{ steps.params.outputs.quizid }}' \
+            -Jcmid='${{ steps.params.outputs.cmid }}' \
+            -Jtoken='${{ steps.params.outputs.token }}' \
             -Jthreads='${{ github.event.inputs.threads }}' \
             -Jrampup='${{ github.event.inputs.rampup }}' \
             -Jduration='${{ github.event.inputs.duration }}' \

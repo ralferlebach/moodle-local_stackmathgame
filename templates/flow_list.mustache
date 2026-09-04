@@ -1,0 +1,178 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_stackmathgame/flow_list
+
+    The game flow of a quiz: one row per slot, question and direction card side by side.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * none
+
+    Context variables required for this template:
+    * cmid int The course-module id.
+    * sesskey string Session key for the bulk form.
+    * actionurl string Where the bulk form posts.
+    * hasrows bool Whether the quiz has any slots.
+    * rows array One entry per slot.
+      * slotnumber int The slot number.
+      * questionname string The question title.
+      * questionid int The question id.
+      * qtype string The question type.
+      * isstack bool Whether this is a STACK question.
+      * scenetype string Localised scene type.
+      * branchsummary string Where a correct answer leads.
+      * score int Score reward.
+      * xp int XP reward.
+      * hasstash bool Whether the slot awards a stash item.
+      * hasnarrative bool Whether any narrative text is set.
+      * unreachable bool Whether no path reaches this slot.
+      * deadend bool Whether no path leaves this slot.
+      * editurl string Link to the direction card.
+    * hasproblems bool Whether the flow analysis found anything.
+    * hasunreachable bool Whether unreachable slots exist.
+    * unreachable string Comma-separated slot numbers.
+    * hasdeadends bool Whether dead ends exist.
+    * deadends string Comma-separated slot numbers.
+    * scenetypes array Options for the bulk scene-type control.
+      * value string The stored value.
+      * label string The localised label.
+
+    Example context (json):
+    {
+        "cmid": 42,
+        "sesskey": "abc123",
+        "actionurl": "https://example.org/local/stackmathgame/flow.php",
+        "hasrows": true,
+        "rows": [
+            {
+                "slotnumber": 1,
+                "questionname": "Differentiate a polynomial",
+                "questionid": 77,
+                "qtype": "stack",
+                "isstack": true,
+                "scenetype": "Challenge",
+                "branchsummary": "Next slot in order",
+                "score": 10,
+                "xp": 20,
+                "hasstash": false,
+                "hasnarrative": true,
+                "unreachable": false,
+                "deadend": false,
+                "editurl": "https://example.org/local/stackmathgame/flow.php?cmid=42&slot=1"
+            }
+        ],
+        "hasproblems": false,
+        "hasunreachable": false,
+        "unreachable": "",
+        "hasdeadends": false,
+        "deadends": "",
+        "scenetypes": [
+            {"value": "challenge", "label": "Challenge"}
+        ]
+    }
+}}
+<div class="local-stackmathgame-flow">
+{{#hasproblems}}
+    <div class="alert alert-warning" role="status">
+        <p>{{#str}}flow_problems, local_stackmathgame{{/str}}</p>
+        {{#hasunreachable}}<p>{{#str}}flow_unreachable, local_stackmathgame{{/str}}: {{unreachable}}</p>{{/hasunreachable}}
+        {{#hasdeadends}}<p>{{#str}}flow_deadends, local_stackmathgame{{/str}}: {{deadends}}</p>{{/hasdeadends}}
+    </div>
+{{/hasproblems}}
+
+{{^hasrows}}
+    <div class="alert alert-info" role="status">{{#str}}flow_noslots, local_stackmathgame{{/str}}</div>
+{{/hasrows}}
+
+{{#hasrows}}
+<form method="post" action="{{actionurl}}">
+    <input type="hidden" name="sesskey" value="{{sesskey}}">
+    <input type="hidden" name="cmid" value="{{cmid}}">
+    <input type="hidden" name="action" value="bulk">
+    <table class="table table-sm">
+        <caption class="sr-only">{{#str}}flow_heading, local_stackmathgame{{/str}}</caption>
+        <thead>
+            <tr>
+                <th scope="col"><span class="sr-only">{{#str}}flow_select, local_stackmathgame{{/str}}</span></th>
+                <th scope="col">{{#str}}flow_col_slot, local_stackmathgame{{/str}}</th>
+                <th scope="col">{{#str}}flow_col_question, local_stackmathgame{{/str}}</th>
+                <th scope="col">{{#str}}flow_col_scene, local_stackmathgame{{/str}}</th>
+                <th scope="col">{{#str}}flow_col_branch, local_stackmathgame{{/str}}</th>
+                <th scope="col">{{#str}}flow_col_rewards, local_stackmathgame{{/str}}</th>
+                <th scope="col">{{#str}}flow_col_actions, local_stackmathgame{{/str}}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{#rows}}
+            <tr data-slot="{{slotnumber}}">
+                <td>
+                    <input type="checkbox" name="slots[]" value="{{slotnumber}}"
+                           id="smg-flow-slot-{{slotnumber}}">
+                    <label class="sr-only" for="smg-flow-slot-{{slotnumber}}">
+                        {{#str}}flow_col_slot, local_stackmathgame{{/str}} {{slotnumber}}
+                    </label>
+                </td>
+                <th scope="row" class="font-weight-normal">{{slotnumber}}</th>
+                <td>
+                    {{questionname}}
+                    <div class="small text-muted">
+                        {{qtype}} &middot; ID {{questionid}}
+                        {{#isstack}}<span class="badge badge-info ml-1">STACK</span>{{/isstack}}
+                        {{^isstack}}<span class="badge badge-secondary ml-1">{{#str}}flow_nonstack, local_stackmathgame{{/str}}</span>{{/isstack}}
+                    </div>
+                </td>
+                <td>
+                    {{scenetype}}
+                    {{#hasnarrative}}<div class="small text-muted">{{#str}}flow_hasnarrative, local_stackmathgame{{/str}}</div>{{/hasnarrative}}
+                </td>
+                <td>
+                    {{branchsummary}}
+                    {{#unreachable}}<div><span class="badge badge-warning">{{#str}}flow_badge_unreachable, local_stackmathgame{{/str}}</span></div>{{/unreachable}}
+                    {{#deadend}}<div><span class="badge badge-danger">{{#str}}flow_badge_deadend, local_stackmathgame{{/str}}</span></div>{{/deadend}}
+                </td>
+                <td>
+                    {{score}} / {{xp}}
+                    {{#hasstash}}<div class="small text-muted">{{#str}}flow_hasstash, local_stackmathgame{{/str}}</div>{{/hasstash}}
+                </td>
+                <td><a href="{{editurl}}" class="btn btn-secondary btn-sm">{{#str}}flow_edit, local_stackmathgame{{/str}}</a></td>
+            </tr>
+        {{/rows}}
+        </tbody>
+    </table>
+
+    <fieldset class="border p-3 mb-3">
+        <legend class="h6">{{#str}}flow_bulk, local_stackmathgame{{/str}}</legend>
+        <p class="small text-muted">{{#str}}flow_bulk_desc, local_stackmathgame{{/str}}</p>
+        <div class="form-inline">
+            <label for="smg-bulk-scenetype" class="mr-2">{{#str}}flow_scenetype, local_stackmathgame{{/str}}</label>
+            <select name="bulkscenetype" id="smg-bulk-scenetype" class="custom-select mr-2">
+                <option value="">{{#str}}flow_bulk_nochange, local_stackmathgame{{/str}}</option>
+                {{#scenetypes}}
+                <option value="{{value}}">{{label}}</option>
+                {{/scenetypes}}
+            </select>
+            <label for="smg-bulk-xp" class="mr-2">{{#str}}flow_reward_xp, local_stackmathgame{{/str}}</label>
+            <input type="text" name="bulkxp" id="smg-bulk-xp" size="5" class="form-control mr-2" value="">
+            <button type="submit" class="btn btn-primary">{{#str}}flow_bulk_apply, local_stackmathgame{{/str}}</button>
+        </div>
+    </fieldset>
+</form>
+{{/hasrows}}
+</div>

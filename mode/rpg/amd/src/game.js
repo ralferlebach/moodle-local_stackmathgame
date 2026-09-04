@@ -84,6 +84,24 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             /* HUD container */
             '.smg-rpg-hud {',
             '  background: linear-gradient(135deg, #1a1a2e, #16213e);',
+            '}',
+            '.smg-rpg-stage {',
+            '  position: relative;',
+            '  min-height: 160px;',
+            '  margin-bottom: .5rem;',
+            '  border-radius: .5rem;',
+            '  background-size: cover;',
+            '  background-position: center;',
+            '}',
+            '.smg-rpg-sprite {',
+            '  position: absolute;',
+            '  bottom: 0;',
+            '  max-height: 120px;',
+            '}',
+            '.smg-rpg-sprite-player { left: 8%; }',
+            '.smg-rpg-sprite-enemy { right: 8%; }',
+            '.smg-rpg-hud-spacer {',
+            '  background: linear-gradient(135deg, #1a1a2e, #16213e);',
             '  color: #e0e0ff;',
             '  padding: .75em 1em;',
             '  border-radius: .5em;',
@@ -147,6 +165,54 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             '}',
         ].join('\n');
         document.head.appendChild(style);
+    }
+
+    /**
+     * Build the scene stage from the design's own assets.
+     *
+     * The RPG package manifest declares bg_forest, player_idle and enemy_idle, and until now
+     * nothing requested any of them - the mode drew CSS gradients instead. That made the asset
+     * chain untestable: a resolver returning the wrong URL looked exactly like one returning the
+     * right URL.
+     *
+     * Every asset is optional. A design that omits one simply has no sprite there, rather than a
+     * broken image.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {Element} anchor The element to insert the stage before.
+     * @returns {Element|null} The stage element, or null when the design supplies no assets.
+     */
+    function buildStage(gameState, anchor) {
+        var background = GameCore.assetUrl(gameState, 'bg_forest');
+        var player = GameCore.assetUrl(gameState, 'player_idle');
+        var enemy = GameCore.assetUrl(gameState, 'enemy_idle');
+        if (!background && !player && !enemy) {
+            return null;
+        }
+
+        var stage = document.createElement('div');
+        stage.className = 'smg-rpg-stage';
+        if (background) {
+            stage.style.backgroundImage = 'url("' + background + '")';
+        }
+        [['player', player], ['enemy', enemy]].forEach(function(pair) {
+            if (!pair[1]) {
+                return;
+            }
+            var sprite = document.createElement('img');
+            sprite.className = 'smg-rpg-sprite smg-rpg-sprite-' + pair[0];
+            sprite.src = pair[1];
+            // Decorative: the mathematical content is the question, not the scenery, and a
+            // screen reader announcing "player idle" on every scene is noise.
+            sprite.alt = '';
+            sprite.setAttribute('role', 'presentation');
+            stage.appendChild(sprite);
+        });
+
+        if (anchor && anchor.parentNode) {
+            anchor.parentNode.insertBefore(stage, anchor);
+        }
+        return stage;
     }
 
     /**
@@ -231,28 +297,6 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         }
     }
 
-    /**
-     * Return the URL of a target slot from the Moodle quiz nav buttons.
-     *
-     * @param {number} targetSlot The target slot number.
-     * @returns {string|null} The page URL, or null.
-     */
-    function getSlotUrl(targetSlot) {
-        var btn = document.querySelector('#quiznavbutton' + targetSlot);
-        if (!btn || !btn.href || btn.href === '#') {
-            return null;
-        }
-        var href = btn.href;
-        var relPos = href.indexOf('&scrollpos');
-        if (relPos === -1) {
-            relPos = href.indexOf('&page');
-        }
-        if (relPos === -1) {
-            relPos = href.indexOf('#');
-        }
-        return relPos > -1 ? href.substring(0, relPos) + '&page=' + btn.dataset.page : href;
-    }
-
     // ── Public interface ───────────────────────────────────────────────────
 
     /**
@@ -264,16 +308,18 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
      * @param {Object} gameState.profile Player profile.
      * @param {Array}  gameState.questionmap Array of questionmap rows.
      * @param {Array}  gameState.narrative Initial narrative lines.
-     * @param {string} gameState.assetBaseUrl Base URL for design assets.
+     * @param {Object} gameState.assets Design assets by manifest key.
+     * @param {string} gameState.assetBaseUrl Shared fallback directory; do not append to it.
      * @returns {{onAnswer: Function}} Game module interface.
      */
     function init(gameState) {
         injectStyles();
 
-        var slotMap  = buildSlotMap(gameState.questionmap);
+        var slotMap = buildSlotMap(gameState.questionmap);
         var hudParts = buildHUD();
-        var bubble   = buildNarrativeBubble(hudParts.hud);
-        var nextBtn  = buildNextButton(bubble);
+        buildStage(gameState, hudParts.hud);
+        var bubble = buildNarrativeBubble(hudParts.hud);
+        var nextBtn = buildNextButton(bubble);
 
         var score = {mana: MANA_START, fairies: 0};
 
@@ -283,11 +329,13 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             if (stored) {
                 var parsed = JSON.parse(stored);
                 if (parsed && typeof parsed.mana === 'number') {
-                    score.mana    = parsed.mana;
+                    score.mana = parsed.mana;
                     score.fairies = parsed.fairies || 0;
                 }
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            // Ignore: a malformed stored score simply starts the run fresh.
+        }
 
         updateHUD(hudParts, score.mana, score.fairies);
 
@@ -320,9 +368,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
              * @returns {void}
              */
             onAnswer: function(response) {
-                var slot   = response.slot || currentSlot;
+                var slot = response.slot || currentSlot;
                 var solved = !!response.cannext;
-                var cfg    = slotMap[String(slot)] || GameCore.defaultConfig();
+                var cfg = slotMap[String(slot)] || GameCore.defaultConfig();
                 var sceneType = cfg.scene && cfg.scene.type ? cfg.scene.type : 'challenge';
 
                 // Update score on first solve only (prevent farming).
@@ -332,7 +380,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                     score.fairies++;
                     try {
                         sessionStorage.setItem('smg_rpg_score', JSON.stringify(score));
-                    } catch (e) { /* ignore */ }
+                    } catch (e) {
+            // Ignore: a malformed stored score simply starts the run fresh.
+        }
                 }
 
                 updateHUD(hudParts, score.mana, score.fairies);
@@ -343,27 +393,16 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                     ? cfg.narrative[narrativeKey]
                     : '';
                 if (narrativeText) {
-                    bubble.innerHTML = narrativeText;
+                    bubble.innerHTML = GameCore.escapeHtml(narrativeText);
                     bubble.style.display = 'block';
                 } else {
                     bubble.style.display = 'none';
                 }
 
-                // Update next-scene button.
-                if (solved) {
-                    var branching = cfg.branching || {};
-                    var rule = branching.gradedright || branching.default || {};
-                    var targetSlot = (rule.mode === 'slot' && rule.target) ? rule.target : null;
-                    var nextUrl = targetSlot ? getSlotUrl(targetSlot) : null;
-                    if (nextUrl) {
-                        nextBtn.href = nextUrl;
-                        nextBtn.style.display = 'inline-block';
-                    } else {
-                        nextBtn.style.display = 'none';
-                    }
-                } else {
-                    nextBtn.style.display = 'none';
-                }
+                // Render the navigation the server resolved. This mode no longer reads
+                // cfg.branching: the resolver is canonical, and re-deciding here is what left
+                // linear scenes - the default - without any way forward.
+                GameCore.applyNavigation(nextBtn, GameCore.navigationFrom(response));
             }
         };
     }

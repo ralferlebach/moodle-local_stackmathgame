@@ -35,17 +35,17 @@ require_once(__DIR__ . '/../../../../lib/externallib.php');
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class get_activity_profile_state extends \external_api {
+class get_activity_profile_state extends \core_external\external_api {
     /**
      * Describe input parameters.
      *
-     * @return \external_function_parameters
+     * @return \core_external\external_function_parameters
      */
-    public static function execute_parameters(): \external_function_parameters {
-        return new \external_function_parameters([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
+    public static function execute_parameters(): \core_external\external_function_parameters {
+        return new \core_external\external_function_parameters([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name', VALUE_DEFAULT, 'quiz'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id', VALUE_DEFAULT, 0),
         ]);
     }
 
@@ -71,16 +71,16 @@ class get_activity_profile_state extends \external_api {
     /**
      * Describe return values.
      *
-     * @return \external_single_structure
+     * @return \core_external\external_single_structure
      */
-    public static function execute_returns(): \external_single_structure {
-        return new \external_single_structure([
-            'cmid' => new \external_value(PARAM_INT, 'Course-module id'),
-            'modname' => new \external_value(PARAM_PLUGIN, 'Activity module name'),
-            'instanceid' => new \external_value(PARAM_INT, 'Activity instance id'),
-            'quizid' => new \external_value(PARAM_INT, 'Legacy quiz id when applicable'),
-            'labelid' => new \external_value(PARAM_INT, 'Label id'),
-            'designid' => new \external_value(PARAM_INT, 'Design id'),
+    public static function execute_returns(): \core_external\external_single_structure {
+        return new \core_external\external_single_structure([
+            'cmid' => new \core_external\external_value(PARAM_INT, 'Course-module id'),
+            'modname' => new \core_external\external_value(PARAM_PLUGIN, 'Activity module name'),
+            'instanceid' => new \core_external\external_value(PARAM_INT, 'Activity instance id'),
+            'quizid' => new \core_external\external_value(PARAM_INT, 'Legacy quiz id when applicable'),
+            'labelid' => new \core_external\external_value(PARAM_INT, 'Label id'),
+            'designid' => new \core_external\external_value(PARAM_INT, 'Design id'),
             'profile' => get_quiz_config::profile_structure(),
             'design' => get_quiz_config::design_structure(),
         ]);

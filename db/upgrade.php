@@ -29,7 +29,9 @@
  * @return bool
  */
 function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
-    global $DB;
+    global $CFG, $DB;
+
+    require_once($CFG->dirroot . '/local/stackmathgame/db/upgradelib.php');
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026032827) {
@@ -77,49 +79,7 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     }
 
     if ($oldversion < 2026032832) {
-        $table = new xmldb_table('local_stackmathgame_questionmap');
-        $cmidfield = new xmldb_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'id');
-        $quizidfield = new xmldb_field('quizid');
-        $cmidslotindex = new xmldb_index('lsmg_qmap_cmid_slot_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'slotnumber']);
-        $cmidnodeindex = new xmldb_index('lsmg_qmap_cmid_node_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'nodekey']);
-        $cmidtypeindex = new xmldb_index('lsmg_qmap_cmid_type_ix', XMLDB_INDEX_NOTUNIQUE, ['cmid', 'nodetype']);
-
-        if ($dbman->table_exists($table)) {
-            if (!$dbman->field_exists($table, $cmidfield)) {
-                $dbman->add_field($table, $cmidfield);
-            }
-
-            if ($dbman->field_exists($table, $cmidfield) && $dbman->field_exists($table, $quizidfield)) {
-                $rows = $DB->get_records_select(
-                    'local_stackmathgame_questionmap',
-                    'cmid IS NULL OR cmid = 0',
-                    [],
-                    '',
-                    'id, quizid, cmid'
-                );
-                foreach ($rows as $row) {
-                    if (empty($row->quizid)) {
-                        continue;
-                    }
-                    $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
-                    if ($cm) {
-                        $DB->set_field('local_stackmathgame_questionmap', 'cmid', (int)$cm->id, ['id' => $row->id]);
-                    }
-                }
-            }
-
-            if ($dbman->field_exists($table, $cmidfield)) {
-                if (!$dbman->index_exists($table, $cmidslotindex)) {
-                    $dbman->add_index($table, $cmidslotindex);
-                }
-                if (!$dbman->index_exists($table, $cmidnodeindex)) {
-                    $dbman->add_index($table, $cmidnodeindex);
-                }
-                if (!$dbman->index_exists($table, $cmidtypeindex)) {
-                    $dbman->add_index($table, $cmidtypeindex);
-                }
-            }
-        }
+        local_stackmathgame_upgrade_questionmap_cmid();
 
         upgrade_plugin_savepoint(true, 2026032832, 'local', 'stackmathgame');
     }
@@ -203,49 +163,7 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
     }
 
     if ($oldversion < 2026032840) {
-        $table = new xmldb_table('local_stackmathgame_questionmap');
-        $cmidfield = new xmldb_field('cmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'id');
-        $quizidfield = new xmldb_field('quizid');
-        $cmidslotindex = new xmldb_index('lsmg_qmap_cmid_slot_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'slotnumber']);
-        $cmidnodeindex = new xmldb_index('lsmg_qmap_cmid_node_uix', XMLDB_INDEX_UNIQUE, ['cmid', 'nodekey']);
-        $cmidtypeindex = new xmldb_index('lsmg_qmap_cmid_type_ix', XMLDB_INDEX_NOTUNIQUE, ['cmid', 'nodetype']);
-
-        if ($dbman->table_exists($table)) {
-            if (!$dbman->field_exists($table, $cmidfield)) {
-                $dbman->add_field($table, $cmidfield);
-            }
-
-            if ($dbman->field_exists($table, $cmidfield) && $dbman->field_exists($table, $quizidfield)) {
-                $rows = $DB->get_records_select(
-                    'local_stackmathgame_questionmap',
-                    'cmid IS NULL OR cmid = 0',
-                    [],
-                    '',
-                    'id, quizid, cmid'
-                );
-                foreach ($rows as $row) {
-                    if (empty($row->quizid)) {
-                        continue;
-                    }
-                    $cm = get_coursemodule_from_instance('quiz', (int)$row->quizid, 0, false, IGNORE_MISSING);
-                    if ($cm) {
-                        $DB->set_field('local_stackmathgame_questionmap', 'cmid', (int)$cm->id, ['id' => $row->id]);
-                    }
-                }
-            }
-
-            if ($dbman->field_exists($table, $cmidfield)) {
-                if (!$dbman->index_exists($table, $cmidslotindex)) {
-                    $dbman->add_index($table, $cmidslotindex);
-                }
-                if (!$dbman->index_exists($table, $cmidnodeindex)) {
-                    $dbman->add_index($table, $cmidnodeindex);
-                }
-                if (!$dbman->index_exists($table, $cmidtypeindex)) {
-                    $dbman->add_index($table, $cmidtypeindex);
-                }
-            }
-        }
+        local_stackmathgame_upgrade_questionmap_cmid();
 
         foreach ($DB->get_fieldset_select('local_stackmathgame', 'cmid', 'cmid > 0', []) as $cmid) {
             try {

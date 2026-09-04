@@ -115,7 +115,7 @@ fix: clear fix-phpdoc fix-lint-php build
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-js lint-react build test-react phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-js lint-react build test-react test-amd phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
@@ -302,6 +302,19 @@ playwright-setup:
 	@echo ""
 	@echo "=== Playwright setup (npm install + Chromium) ==="
 	cd $(PLAYWRIGHT_DIR) && $(NPM) install --no-audit --no-fund && $(NPM) run install-browsers
+
+test-amd:
+	@echo ""
+	@echo "=== Jest (Moodle AMD unit tests) ==="
+	@# Separate from test-react, which covers js/tests. These load the AMD sources exactly as
+	@# they ship, through tests/jest/amd_loader.js, rather than restructuring them for the
+	@# runner - a test that exercises a rewritten module proves nothing about the one the
+	@# browser actually gets.
+	@if [ -d $(PLUGIN_DIR)/tests/jest ]; then \
+		cd $(PLUGIN_DIR)/tests/jest && $(NPM) install --silent --no-audit --no-fund && npx jest; \
+	else \
+		echo "No tests/jest — Jest skipped."; \
+	fi
 
 playwright: clear
 	@echo ""

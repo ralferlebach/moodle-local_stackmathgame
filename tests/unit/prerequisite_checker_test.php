@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_stackmathgame\tests\unit;
+namespace local_stackmathgame\unit;
 
 use advanced_testcase;
 use local_stackmathgame\game\quiz_configurator;
@@ -167,6 +167,68 @@ final class prerequisite_checker_test extends advanced_testcase {
         foreach ($blockers as $blocker) {
             $this->assertSame(prerequisite_checker::STATUS_ERROR, $blocker['status']);
         }
+    }
+
+    /**
+     * A fully configured quiz is playable.
+     *
+     * The negative cases were always testable; this one needs qtype_stack, qbehaviour_stackmathgame
+     * and filter_shortcodes actually installed, which is why it was missing until the CI grew a
+     * Maxima installation. Without it, every assertion in this class was about a refusal, and a
+     * checker that refuses everything would have passed them all.
+     */
+    public function test_fully_configured_quiz_is_playable(): void {
+        if (!\core_component::get_component_directory('qtype_stack')) {
+            $this->markTestSkipped('qtype_stack is not installed in this tree.');
+        }
+
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $quiz = $generator->create_module('quiz', [
+            'course' => $course->id,
+            'preferredbehaviour' => 'stackmathgame',
+            'questionsperpage' => 1,
+        ]);
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $question = $questiongenerator->create_question('stack', 'test1', ['category' => $category->id]);
+        quiz_add_quiz_question($question->id, $quiz);
+
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id, $course->id, false, MUST_EXIST);
+        quiz_configurator::ensure_default((int)$cm->id);
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid((int)$cm->id);
+
+        $blockers = prerequisite_checker::get_blockers((int)$cm->id);
+        $this->assertSame(
+            [],
+            $blockers,
+            'Unexpected blockers: ' . implode(' | ', array_column($blockers, 'message'))
+        );
+        $this->assertTrue(prerequisite_checker::is_playable((int)$cm->id));
+    }
+
+    /**
+     * The question behaviour must be selectable as a quiz's preferred behaviour.
+     *
+     * This is the defect the first Behat run surfaced, four layers from its cause: a behaviour
+     * type that does not declare itself archetypal is left out of the quiz behaviour menu, and
+     * question_engine::make_archetypal_behaviour() throws when an attempt starts. Asserting it
+     * here turns a mid-attempt coding exception into a named failure.
+     */
+    public function test_behaviour_is_archetypal(): void {
+        if (!\core_component::get_component_directory('qbehaviour_stackmathgame')) {
+            $this->markTestSkipped('qbehaviour_stackmathgame is not installed in this tree.');
+        }
+
+        $this->assertArrayHasKey(
+            prerequisite_checker::REQUIRED_BEHAVIOUR,
+            \question_engine::get_archetypal_behaviours(),
+            'qbehaviour_stackmathgame is not archetypal, so no quiz can be set to it. '
+                . 'Its behaviourtype.php needs is_archetypal() returning true.'
+        );
     }
 
     /**

@@ -112,6 +112,11 @@ if ($action === 'edit') {
     }
 
     if ($formdata = $form->get_data()) {
+        // The three JSON columns are resolved here, not in the storage layer: the precedence
+        // between the structured fields and the raw fallback is a property of this form.
+        foreach (\local_stackmathgame\form\studio\design_edit_form::form_to_design($formdata) as $column => $json) {
+            $formdata->{$column} = $json;
+        }
         $savedid = \local_stackmathgame\studio\theme_manager_studio::save_from_form((array)$formdata);
         redirect(
             new moodle_url('/local/stackmathgame/studio.php', ['action' => 'edit', 'id' => $savedid]),
@@ -122,7 +127,7 @@ if ($action === 'edit') {
     }
 
     if ($existingdesign && !empty($existingdesign->id)) {
-        $form->set_data((array)$existingdesign);
+        $form->set_data(\local_stackmathgame\form\studio\design_edit_form::design_to_form($existingdesign));
     }
 
     echo $OUTPUT->header();

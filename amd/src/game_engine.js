@@ -42,6 +42,8 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             questionmap: [],
             narrative: [],
             nextnode: null,
+            navigation: null,
+            assets: {},
             lastsubmit: null
         },
         activeInput: null
@@ -212,6 +214,7 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                     current.parentNode.replaceChild(replacement, current);
                     bindInputs();
                 }
+                return true;
             })
             .catch(Notification.exception);
     }
@@ -272,6 +275,13 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                         profile: state.store.profile,
                         questionmap: state.store.questionmap,
                         narrative: state.store.narrative,
+                        // Assets are addressed by key, from the map the server resolved out of
+                        // the design's package manifest. A mode must not build a path: doing so
+                        // works only for bundled packages and breaks the moment a design is
+                        // imported, and it fails invisibly because a broken src renders empty.
+                        assets: state.store.assets,
+                        // Kept for the shared fallback directory only. Not a place to append
+                        // filenames to - use assets[key].
                         assetBaseUrl: state.config.themeAssetUrl || ''
                     });
                 }
@@ -294,52 +304,96 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
         if (!attemptid || !slot) {
             return;
         }
+        let response = null;
         call('local_stackmathgame_submit_answer', {
             attemptid: attemptid,
             slot: slot,
             answers: answers
-        }).then(function(response) {
+        }).then(function(submitresponse) {
+            if (submitresponse && submitresponse.requiresnativefallback) {
+                // The server could not process the answer through the pageless path. Reloading
+                // the ordinary quiz page is the honest outcome: continuing would show feedback
+                // for an answer that was never recorded.
+                window.location.reload();
+                return null;
+            }
+            // Held in the enclosing scope so the rest of the chain can stay flat. Nesting the
+            // follow-up calls inside this callback was the only reason they were nested at all.
+            response = submitresponse;
             state.store.lastsubmit = response;
             if (response.profile) {
                 state.store.profile = response.profile;
             }
-            return refreshQuestionFromFragment().then(function(ok) {
-                if (!ok) {
-                    return refreshQuestionFromPage();
-                }
-                return null;
-            }).then(function() {
-                return Promise.all([
-                    call('local_stackmathgame_get_narrative', {
-                        quizid: state.config.quizid,
-                        scene: response.cannext ? 'victory' : 'defeat'
-                    }),
-                    call('local_stackmathgame_prefetch_next_node', {
-                        quizid: state.config.quizid,
-                        currentslot: slot
-                    }),
-                    call('local_stackmathgame_get_profile_state', {
-                        quizid: state.config.quizid
-                    })
-                ]);
-            }).then(function(results) {
-                state.store.narrative =
-                    results[0] && results[0].lines ? results[0].lines : [];
-                state.store.nextnode =
-                    results[1] && results[1].nextnode ? results[1].nextnode : null;
-                if (results[2] && results[2].profile) {
-                    state.store.profile = results[2].profile;
-                    state.store.design = results[2].design || state.store.design;
-                }
-                // Dispatch to the active game module.
-                if (state.activeGame && typeof state.activeGame.onAnswer === 'function') {
-                    state.activeGame.onAnswer(response, state.store);
-                }
-            });
+            return refreshQuestionFromFragment();
+        }).then(function(ok) {
+            if (!ok) {
+                return refreshQuestionFromPage();
+            }
+            return null;
+        }).then(function() {
+            return Promise.all([
+                call('local_stackmathgame_get_narrative', {
+                    quizid: state.config.quizid,
+                    scene: response.cannext ? 'victory' : 'defeat'
+                }),
+                call('local_stackmathgame_prefetch_next_node', {
+                    quizid: state.config.quizid,
+                    currentslot: slot,
+                    // The outcome and the attempt are what let the server resolve the branch and
+                    // build a usable URL. Without them the endpoint fell back to "next unsolved
+                    // slot in map order" and ignored the branching entirely.
+                    outcome: response.cannext ? 'gradedright' : 'gradedwrong',
+                    attemptid: attemptid
+                }),
+                call('local_stackmathgame_get_profile_state', {
+                    quizid: state.config.quizid
+                })
+            ]);
+        }).then(function(results) {
+            state.store.narrative =
+                results[0] && results[0].lines ? results[0].lines : [];
+            state.store.nextnode =
+                results[1] && results[1].nextnode ? results[1].nextnode : null;
+            // The submit response is the authority on where the player goes next, because it
+            // saw the actual outcome. The prefetch only fills in when submit predates the
+            // navigation field.
+            state.store.navigation = response.navigation
+                || (results[1] && results[1].navigation)
+                || null;
+            if (results[2] && results[2].profile) {
+                state.store.profile = results[2].profile;
+                state.store.design = results[2].design || state.store.design;
+            }
+            // Dispatch to the active game module.
+            if (state.activeGame && typeof state.activeGame.onAnswer === 'function') {
+                state.activeGame.onAnswer(response, state.store);
+            }
+            return true;
         }).catch(Notification.exception);
     }
 
     // ── Bootstrap ──────────────────────────────────────────────────────────
+
+    /**
+     * Turn the server's resolved asset list into a lookup by key.
+     *
+     * The web service sends a list of key/url pairs rather than an object, because Moodle's
+     * external API cannot describe a structure with arbitrary keys - and the keys come from a
+     * package manifest, which a design author may extend.
+     *
+     * @param {Object} design The exported design record.
+     * @returns {Object} Map of asset key to URL.
+     */
+    function buildAssetMap(design) {
+        var map = {};
+        var list = (design && design.runtimeassets) || [];
+        list.forEach(function(entry) {
+            if (entry && entry.key) {
+                map[entry.key] = entry.url || '';
+            }
+        });
+        return map;
+    }
 
     /**
      * Ensure the minimal game shell element exists and wire the check button.
@@ -395,16 +449,27 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             }),
             call('local_stackmathgame_prefetch_next_node', {
                 quizid: state.config.quizid,
-                currentslot: getCurrentSlot() || 0
+                currentslot: getCurrentSlot() || 0,
+                attemptid: getAttemptId()
             })
         ]).then(function(results) {
             var quizconfig = results[0] || {};
             state.store.design = quizconfig.design || null;
+            state.store.assets = buildAssetMap(state.store.design);
             state.store.questionmap = quizconfig.questionmap || [];
-            state.runtime = parseJson(quizconfig.runtimejson || '{}', {});
+            // The runtimejson field lives on the design, not on the quiz config. Reading it one
+            // level too high is why the runtime was always an empty object and no design data
+            // ever reached the modes - and {} is a valid value, so nothing ever complained.
+            state.runtime = parseJson(
+                (state.store.design && state.store.design.runtimejson) || '{}',
+                {}
+            );
             state.store.profile = results[1] ? results[1].profile : null;
             state.store.narrative = results[2] && results[2].lines ? results[2].lines : [];
             state.store.nextnode = results[3] && results[3].nextnode ? results[3].nextnode : null;
+            state.store.navigation = results[3] && results[3].navigation
+                ? results[3].navigation
+                : null;
 
             ensureShell();
             bindInputs();

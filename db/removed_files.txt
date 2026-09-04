@@ -8,3 +8,21 @@
 # One path per line, relative to the plugin root.
 
 .github/workflows/moodle-ci.yml
+amd/src/fantasy_quiz.js
+amd/build/fantasy_quiz.min.js
+amd/build/fantasy_quiz.min.js.map
+
+# A Behat context copied in from local_stackmatheditor, a different plugin. Its class was
+# behat_local_stackmatheditor, it declared @package local_stackmatheditor, and its steps drove a
+# MathQuill editor this plugin does not ship - set_config() calls even targeted the other
+# component. No feature file in this plugin referenced any of its fifteen steps.
+tests/behat/behat_local_stackmatheditor.php
+
+# Per-subplugin ESLint configs that extended "../../../../.eslintrc" by relative path. The depth
+# is only correct while the plugin sits at moodle/local/...; from Moodle 5.1 the web root moved
+# into public/, so the path resolved to moodle/public/ where no config exists and grunt aborted
+# with "Failed to load config to extend from". Moodle's own Gruntfile supplies the ESLint
+# configuration for every component, so these files were not needed in the first place.
+mode/exitgames/.eslintrc
+mode/rpg/.eslintrc
+mode/wisewizzard/.eslintrc

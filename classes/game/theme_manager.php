@@ -144,12 +144,40 @@ class theme_manager {
     }
 
     /**
-     * Return the base URL for shared plugin assets.
+     * Return the base URL for a design's own package assets.
      *
-     * @param string $slug Unused; kept for API compatibility.
-     * @return string The asset base URL.
+     * The parameter was previously accepted and ignored, so every design - bundled or imported -
+     * resolved to the same generic shared directory. The manifests, package_registry and
+     * export_design were all correct; this one function quietly discarded the result, and a
+     * wrong asset path is invisible in the DOM because the element simply renders empty.
+     *
+     * Prefer the resolved asset map from export_design(): it addresses assets by key and works
+     * for imported packages too. This helper remains for the shared fallback directory, which is
+     * the only sensible answer when a design has no package of its own.
+     *
+     * @param string $slug The design slug.
+     * @return string The asset base URL, with a trailing slash.
      */
     public static function asset_base_url(string $slug): string {
+        global $CFG, $DB;
+
+        $slug = trim($slug);
+        if ($slug !== '' && $slug !== 'shared') {
+            $design = $DB->get_record(
+                'local_stackmathgame_design',
+                ['slug' => $slug],
+                'modecomponent',
+                IGNORE_MISSING
+            );
+            if ($design && !empty($design->modecomponent)) {
+                $modekey = preg_replace('/^stackmathgamemode_/', '', (string)$design->modecomponent);
+                $path = '/local/stackmathgame/mode/' . $modekey . '/packages/' . $slug . '/';
+                if (is_dir($CFG->dirroot . $path)) {
+                    return (string)new \moodle_url($path);
+                }
+            }
+        }
+
         return (string)new \moodle_url('/local/stackmathgame/pix/packages/shared/');
     }
 

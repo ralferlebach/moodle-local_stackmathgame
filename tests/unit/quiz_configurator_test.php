@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_stackmathgame\tests\unit;
+namespace local_stackmathgame\unit;
 
 use advanced_testcase;
 use local_stackmathgame\game\quiz_configurator;
@@ -22,7 +22,7 @@ use local_stackmathgame\game\quiz_configurator;
 /**
  * Unit tests for local_stackmathgame\game\quiz_configurator.
  *
- * DB-dependent tests are tagged with @group local_stackmathgame_db.
+ * DB-dependent tests carry the local_stackmathgame_db group tag.
  *
  * @package    local_stackmathgame
  * @covers     \local_stackmathgame\game\quiz_configurator

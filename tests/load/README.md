@@ -70,6 +70,28 @@ Prerequisites: an open attempt (`ATTEMPTID`) and a slot whose `configjson` carri
 `rewards.xp`. The seed leaves the schema default of `0`, so set a reward first — with `0` the
 gate passes trivially and proves nothing.
 
+## Was der Race-Plan zeigt - und was er nicht zuordnen kann
+
+Gemessen auf Apache mit mpm_prefork, also mit echten parallelen Prozessen: 30 gleichzeitige
+Absendungen derselben richtigen Antwort, sechs davon binnen zwei Sekunden abgeschlossen. Die XP
+stiegen um genau die konfigurierte Belohnung, nicht um ein Vielfaches.
+
+**Die Invariante haelt also unter echter Gleichzeitigkeit.** Was der Lauf *nicht* zeigt, ist, dass
+der Lock in submit_answer sie haelt: ein Kontrolllauf mit neutralisiertem Lock lieferte dasselbe
+Ergebnis.
+
+Der Grund steht in der Datenbank. Nach dreissig Absendungen hatte der Versuch **zwei**
+Antwortschritte, nicht dreissig: Moodles Question-Engine verwirft eine identische Wiederholung
+derselben Antwort, es entsteht kein neuer Schritt, die erreichte Wertung aendert sich nicht - und
+ohne Wertungsaenderung zahlt calculate_submit_deltas() nichts aus. Das ist eine zweite,
+unabhaengige Verteidigungslinie, und in diesem Szenario greift sie zuerst.
+
+Damit ist der Lock nicht widerlegt, aber auch nicht als tragend nachgewiesen. Um ihn gezielt zu
+pruefen, muessten die parallelen Anfragen *verschiedene* richtige Antworten auf dieselbe Frage
+schicken, sodass jede einen echten neuen Schritt erzeugt. Solange das nicht gemessen ist, gilt der
+Lock als Guertel neben den Hosentraegern: er kostet nichts und schadet nicht, und die Aussage
+"at most once" steht auf der Engine, nicht auf ihm.
+
 ## Thresholds
 
 The current values (`http_req_failed < 1%`, `p95 < 2s`) are an initial baseline, not a measured

@@ -47,12 +47,22 @@ const TOKEN = __ENV.TOKEN;
 const QUIZID = __ENV.QUIZID;
 const ATTEMPTID = __ENV.ATTEMPTID;
 const SLOT = Number(__ENV.SLOT || 1);
-const ANSWER = __ENV.ANSWER || '2';
+const ANSWER = __ENV.ANSWER || 'x^3';
 const EXPECTED_XP = Number(__ENV.EXPECTED_XP || 10);
 const VUS = Number(__ENV.VUS || 30);
 
+// The exact field names of this attempt, from seed_capacity.php. Rebuilding them here would mean
+// guessing the question usage id, and a wrong name is accepted silently: the request succeeds,
+// nothing is graded, and the race then "passes" without ever having raced.
+const ANSWERFIELD = __ENV.ANSWERFIELD;
+const VALFIELD = __ENV.VALFIELD;
+const SUBMITFIELD = __ENV.SUBMITFIELD;
+const SEQFIELD = __ENV.SEQFIELD;
+
 const WS = `${BASE_URL}/webservice/rest/server.php`;
 
+// Counted separately from the HTTP status: a refusal is a legitimate 200 carrying an exception,
+// so the status code alone cannot tell a win from a loss in this race.
 const accepted = new Counter('stackmathgame_accepted');
 const refused = new Counter('stackmathgame_refused');
 
@@ -114,8 +124,11 @@ function readXp() {
  * @returns {Object} The baseline XP, handed to the default function and teardown.
  */
 export function setup() {
-  if (!BASE_URL || !TOKEN || !QUIZID || !ATTEMPTID) {
-    throw new Error('BASE_URL, TOKEN, QUIZID und ATTEMPTID muessen gesetzt sein.');
+  if (!BASE_URL || !TOKEN || !QUIZID || !ATTEMPTID || !ANSWERFIELD || !SUBMITFIELD) {
+    throw new Error(
+      'BASE_URL, TOKEN, QUIZID, ATTEMPTID und die Feldnamen muessen gesetzt sein ' +
+        '(siehe tests/load/seed_capacity.php).'
+    );
   }
   const baseline = readXp();
   if (baseline < 0) {
@@ -128,8 +141,15 @@ export default function () {
   const response = ws('submit_answer', {
     attemptid: ATTEMPTID,
     slot: SLOT,
-    'answers[0][name]': `q${ATTEMPTID}:${SLOT}_ans1`,
+    'answers[0][name]': ANSWERFIELD,
     'answers[0][value]': ANSWER,
+    // STACK grades only once the input has been confirmed, so the validation field goes with it.
+    'answers[1][name]': VALFIELD,
+    'answers[1][value]': ANSWER,
+    'answers[2][name]': SUBMITFIELD,
+    'answers[2][value]': '1',
+    'answers[3][name]': SEQFIELD,
+    'answers[3][value]': '1',
   });
 
   check(response, { 'Submit wurde beantwortet': (r) => r.status === 200 }, { kind: 'answered' });

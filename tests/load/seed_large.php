@@ -39,9 +39,24 @@ require_once($CFG->dirroot . '/user/lib.php');
 require_once($CFG->dirroot . '/lib/externallib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/question/engine/bank.php');
+require_once($CFG->dirroot . '/question/format/xml/format.php');
+require_once($CFG->libdir . '/clilib.php');
+require_once(__DIR__ . '/../fixtures/seedlib.php');
 
 $slotcount = isset($argv[1]) ? max(1, (int)$argv[1]) : 8;
 $now = time();
+
+// The seed prints "export KEY='value'" lines that the caller evaluates, so anything else on
+// stdout is noise at best. Welcome messages to @example.invalid addresses produce a debugging
+// backtrace; the question importer prints a progress report.
+$CFG->noemailever = true;
+$CFG->debugdisplay = 0;
+$CFG->debug = 0;
+// Creating a module checks moodle/course:manageactivities in the course context, so this
+// script needs an identity. A CLI script has none by default, and the failure surfaces as
+// "Sorry, but you do not currently have permissions to do that" from four calls deep.
+\core\session\manager::set_user(get_admin());
+
 
 // Course.
 $coursecategory = \core_course_category::get_default();
@@ -55,24 +70,8 @@ $course = create_course((object) [
 // Quiz. preferredbehaviour must be stackmathgame: the runtime refuses to start with any
 // other behaviour (issue #3), so a load run against the wrong one would measure the refusal
 // path instead of the game.
-$module = $DB->get_record('modules', ['name' => 'quiz'], '*', MUST_EXIST);
-$cm = create_module((object) [
-    'course'             => $course->id,
-    'module'             => $module->id,
-    'modulename'         => 'quiz',
-    'section'            => 0,
-    'visible'            => 1,
-    'cmidnumber'         => '',
-    'name'               => 'Load quiz ' . $now,
-    'intro'              => '',
-    'introformat'        => FORMAT_HTML,
-    'preferredbehaviour' => 'stackmathgame',
-    'questionsperpage'   => 1,
-    'attempts'           => 0,
-    'grade'              => 100,
-    'sumgrades'          => 0,
-]);
-$cmid = (int)$cm->cmid;
+$cm = smg_seed_create_quiz($course, 'Load quiz ' . $now);
+$cmid = (int)($cm->coursemodule ?? $cm->cmid ?? 0);
 $quizid = (int)$cm->instance;
 $quizrecord = $DB->get_record('quiz', ['id' => $quizid], '*', MUST_EXIST);
 
@@ -80,28 +79,17 @@ $quizrecord = $DB->get_record('quiz', ['id' => $quizid], '*', MUST_EXIST);
 // not have. The endpoints measured here read configuration and profile state; they do not
 // evaluate answers, so plain questions are sufficient. See README.md for the STACK variant.
 $qcategory = question_make_default_categories([\context_module::instance($cmid)]);
-for ($i = 1; $i <= $slotcount; $i++) {
-    $questiondata = (object) [
-        'category'              => $qcategory->id,
-        'parent'                => 0,
-        'name'                  => 'Load question ' . $i,
-        'questiontext'          => 'What is ' . $i . ' + ' . $i . '?',
-        'questiontextformat'    => FORMAT_HTML,
-        'generalfeedback'       => '',
-        'generalfeedbackformat' => FORMAT_HTML,
-        'defaultmark'           => 1,
-        'penalty'               => 0.1,
-        'qtype'                 => 'shortanswer',
-        'length'                => 1,
-        'stamp'                 => make_unique_id_code(),
-        'timecreated'           => $now,
-        'timemodified'          => $now,
-        'createdby'             => 2,
-        'modifiedby'            => 2,
-    ];
-    $questiondata->id = $DB->insert_record('question', $questiondata);
-    quiz_add_quiz_question($questiondata->id, $quizrecord);
+$added = smg_seed_import_questions(
+    __DIR__ . '/../fixtures/fallback_questions.xml',
+    $qcategory,
+    $course,
+    $quizrecord,
+    \context_module::instance($cmid)
+);
+if ($added === 0) {
+    cli_error('No questions could be imported - check tests/fixtures/.');
 }
+\mod_quiz\quiz_settings::create($quizid)->get_grade_calculator()->recompute_quiz_sumgrades();
 
 // Game configuration and question map.
 \local_stackmathgame\game\theme_manager::seed_default_theme();
@@ -132,10 +120,26 @@ $protocols = (string)get_config('core', 'webserviceprotocols');
 if (strpos($protocols, 'rest') === false) {
     set_config('webserviceprotocols', trim($protocols . ',rest', ','));
 }
-$service = $DB->get_record('external_services', ['shortname' => MOODLE_OFFICIAL_MOBILE_SERVICE]);
-if (!$service) {
-    $service = $DB->get_record('external_services', ['enabled' => 1], '*', IGNORE_MULTIPLE);
+// The plugin's own service, not the mobile one: a token issued against a service that does not
+// contain these functions is refused on every call with an access exception, which in a load run
+// looks like the endpoints failing rather than the token being wrong.
+$service = $DB->get_record('external_services', ['shortname' => 'local_stackmathgame'], '*', MUST_EXIST);
+if (empty($service->enabled)) {
+    $DB->set_field('external_services', 'enabled', 1, ['id' => $service->id]);
+    $service->enabled = 1;
 }
+// Enabling the protocol is not enough: the user also needs webservice/rest:use, and without it
+// every call is refused with "Access control exception ... missing capability: webservice/rest:use"
+// - which in a load report looks like the endpoints failing rather than the fixture being
+// incomplete. Granted on the authenticated user role, as a site would for a service account.
+$authenticateduser = $DB->get_field('role', 'id', ['shortname' => 'user'], MUST_EXIST);
+role_change_permission(
+    $authenticateduser,
+    \context_system::instance(),
+    'webservice/rest:use',
+    CAP_ALLOW
+);
+
 $token = external_generate_token(
     EXTERNAL_TOKEN_PERMANENT,
     $service,

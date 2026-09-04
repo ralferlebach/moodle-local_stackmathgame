@@ -189,17 +189,23 @@ async function chooseCourse(page, courseId, courseName) {
  */
 async function startGameAttempt(page, cmid) {
   await open(page, `/mod/quiz/view.php?id=${cmid}`);
-  const start = page
-    .locator('button:has-text("Versuch"), input[value*="Versuch"], button:has-text("attempt"), input[value*="attempt"]')
-    .first();
-  if (await start.count()) {
-    await start.click();
+
+  // Addressed through the form that starts an attempt, not through button text. The label is
+  // translated and differs between Moodle versions ("Attempt quiz", "Re-attempt quiz", "Continue
+  // your attempt"), and a text locator silently matched nothing - the test then waited 60s for a
+  // question that was never going to appear.
+  const startForm = page.locator('form[action*="startattempt.php"]');
+  if (await startForm.count()) {
+    await startForm.first().locator('button[type="submit"], input[type="submit"]').first().click();
   }
-  // A confirmation dialog appears only when a previous attempt is still open.
-  const confirm = page.locator('#id_submitbutton, button:has-text("Start")').first();
+
+  // A confirmation dialog appears only when a previous attempt is still open, or when the quiz
+  // has preflight requirements.
+  const confirm = page.locator('#id_submitbutton, .modal button:has-text("Continue")').first();
   if (await confirm.count()) {
     await confirm.click().catch(() => {});
   }
+
   await page.locator('.que').first().waitFor({ state: 'visible' });
   await page.locator('.smg-runtime-shell').waitFor({ state: 'attached', timeout: 20000 });
 }
