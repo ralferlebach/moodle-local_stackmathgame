@@ -120,6 +120,15 @@ class submit_answer extends \core_external\external_api {
         if (!isset($flatpayload['sesskey'])) {
             $flatpayload['sesskey'] = sesskey();
         }
+        // A bare "-submit" is the quiz-wide button, not the per-question one. The question engine
+        // looks for the behaviour field of THIS question attempt - q{usageid}:{slot}_-submit -
+        // and without it the answer is saved but never graded: the attempt stays in "todo", no
+        // mark is produced, and the game therefore never rewards anything or opens the next
+        // scene. The response still said "processed", which is why it looked like a scoring bug
+        // rather than a missing field.
+        $qasubmit = $attemptobj->get_question_attempt($slot);
+        $submitfield = $qasubmit->get_behaviour_field_name('submit');
+        $flatpayload[$submitfield] = '1';
         $flatpayload['-submit'] = '1';
 
         $externaldata = [];
@@ -132,24 +141,26 @@ class submit_answer extends \core_external\external_api {
         $message   = get_string('submitansweraccepted', 'local_stackmathgame');
 
         try {
-            $quizexternalfile = $CFG->dirroot . '/mod/quiz/classes/external.php';
-            if (is_readable($quizexternalfile)) {
-                require_once($quizexternalfile);
+            // Processed directly rather than through mod_quiz_external::process_attempt().
+            // That route rebuilds $_POST and hands the question engine a request it never
+            // received: the answer was stored, but no behaviour action ever fired, so the
+            // attempt stayed in "todo" with no mark - while the endpoint still reported
+            // "processed". Nothing was graded, nothing was rewarded, and no scene unlocked.
+            //
+            // process_submitted_actions() takes the data per slot with unprefixed field names,
+            // which is also what makes the intent explicit: this call submits THIS slot.
+            $prefix = $qasubmit->get_field_prefix();
+            $slotdata = [];
+            foreach ($flatpayload as $name => $value) {
+                if (strpos((string)$name, $prefix) === 0) {
+                    $slotdata[substr((string)$name, strlen($prefix))] = $value;
+                }
             }
-            if (
-                class_exists('mod_quiz_external')
-                && method_exists('mod_quiz_external', 'process_attempt')
-            ) {
-                \mod_quiz_external::process_attempt(
-                    $attemptid,
-                    $externaldata,
-                    false, // Finish attempt flag.
-                    false, // Time up flag.
-                    []     // Preflight data.
-                );
-                $processed = true;
-                $message   = get_string('submitanswerprocessed', 'local_stackmathgame');
-            }
+            $slotdata['-submit'] = '1';
+
+            $attemptobj->process_submitted_actions(time(), false, [$slot => $slotdata]);
+            $processed = true;
+            $message   = get_string('submitanswerprocessed', 'local_stackmathgame');
         } catch (\Throwable $e) {
             // The player gets a stable, translatable sentence; the detail goes to the event log
             // and the developer debug channel. Concatenating an exception message into a
@@ -170,9 +181,8 @@ class submit_answer extends \core_external\external_api {
         $state = (string)$qa->get_state();
         // The mark, not the state name, says whether the scene was solved: under
         // adaptivemultipart a correct answer during an attempt sits in "complete", never in
-        // "gradedright".
-        $fraction = $qa->get_fraction();
-        $fraction = $fraction === null ? null : (float)$fraction;
+        // "gradedright". And it must be the UNPENALISED mark - see raw_fraction().
+        $fraction = self::raw_fraction($qa);
         $feedbackhtml  = '';
         $previousstate = \local_stackmathgame\local\service\profile_service::get_slot_state(
             $profile,
@@ -240,6 +250,14 @@ class submit_answer extends \core_external\external_api {
                 }
                 $slotpayload = [
                     'state'         => $state,
+                    // The best mark reached so far, which is what get_slot_fraction() reads back
+                    // on the next submission. Without it every repeat of a solved question looked
+                    // like a first solve and paid out again - the exact reward farming the lock
+                    // above is meant to prevent.
+                    'fraction'      => max(
+                        (float)($slots[$slotkey]['fraction'] ?? 0.0),
+                        $fraction === null ? 0.0 : (float)$fraction
+                    ),
                     'attempts'      => $previousattempts + 1,
                     'solved'        => $cannext ? 1 : 0,
                     'lastsubmitted' => time(),
@@ -340,13 +358,11 @@ class submit_answer extends \core_external\external_api {
                 },
                 $answers
             ),
-            'inputnames'    => (function () use ($qa): array {
-                try {
-                    return array_keys($qa->get_qt_data());
-                } catch (\Throwable $qterr) {
-                    return [];
-                }
-            })(),
+            // Deliberately get_last_qt_data(): get_qt_data() does not exist on question_attempt,
+            // and the catch that used to wrap this swallowed the resulting TypeError, so the client
+            // silently received an empty list on every submission - it could never rebind the
+            // inputs after a fragment refresh.
+            'inputnames'    => array_keys($qa->get_last_qt_data()),
             'previousstate' => $previousstate,
             'message'       => $message,
             'profile'       => api::export_profile($profile),
@@ -372,6 +388,35 @@ class submit_answer extends \core_external\external_api {
         ];
     }
 
+    /**
+     * Return the unpenalised mark of a question attempt, 0..1.
+     *
+     * get_fraction() is the mark after penalties. adaptivemultipart records the unpenalised
+     * result of each potential response tree as -_rawfraction_<prtname>, and that is the honest
+     * answer to "was this correct": STACK makes a student validate their input before it grades,
+     * that validation carries the question's penalty, and a first-time correct answer therefore
+     * never reaches the full mark. Judging correctness by the penalised figure would keep the
+     * next scene shut for a right answer.
+     *
+     * @param \question_attempt $qa The question attempt.
+     * @return float|null The mark, or null when the question has not been graded.
+     */
+    private static function raw_fraction(\question_attempt $qa): ?float {
+        $raw = null;
+        foreach ($qa->get_last_step()->get_all_data() as $name => $value) {
+            if (strpos((string)$name, '-_rawfraction_') === 0 && $value !== null && $value !== '') {
+                $raw = ($raw ?? 0.0) + (float)$value;
+            }
+        }
+        if ($raw !== null) {
+            // Several trees add up to the whole question, so the sum is already the 0..1 mark;
+            // clamping guards against a design whose trees total more than one.
+            return min(1.0, max(0.0, $raw));
+        }
+
+        $fraction = $qa->get_fraction();
+        return $fraction === null ? null : (float)$fraction;
+    }
     /**
      * Describe return values.
      *

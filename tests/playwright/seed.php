@@ -38,8 +38,22 @@ require_once($CFG->dirroot . '/course/lib.php');
 require_once($CFG->dirroot . '/user/lib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/question/format/xml/format.php');
+require_once($CFG->libdir . '/clilib.php');
+require_once(__DIR__ . '/../fixtures/seedlib.php');
 
 $now = time();
+
+// The seed prints "export KEY='value'" lines that the caller evaluates, so anything else on
+// stdout is noise at best. Welcome messages to @example.invalid addresses produce a debugging
+// backtrace; the question importer prints a progress report.
+$CFG->noemailever = true;
+$CFG->debugdisplay = 0;
+$CFG->debug = 0;
+// Creating a module checks moodle/course:manageactivities in the course context, so this
+// script needs an identity. A CLI script has none by default, and the failure surfaces as
+// "Sorry, but you do not currently have permissions to do that" from four calls deep.
+\core\session\manager::set_user(get_admin());
+
 
 // A presentable name: the screenshots of a green run are used as illustrations.
 $coursename = 'Algebra adventure';
@@ -55,83 +69,38 @@ $course = create_course((object) [
 
 // One question per page: the branch resolver navigates between pages, so several slots on one
 // page would make the journey assert against a navigation the plugin does not drive.
-$module = $DB->get_record('modules', ['name' => 'quiz'], '*', MUST_EXIST);
-$cm = create_module((object) [
-    'course'             => $course->id,
-    'module'             => $module->id,
-    'modulename'         => 'quiz',
-    'section'            => 0,
-    'visible'            => 1,
-    'cmidnumber'         => '',
-    'name'               => 'The forest of equations',
-    'intro'              => '',
-    'introformat'        => FORMAT_HTML,
-    'preferredbehaviour' => 'stackmathgame',
-    'questionsperpage'   => 1,
-    'attempts'           => 0,
-    'grade'              => 100,
-    'sumgrades'          => 0,
-]);
-$cmid = (int)$cm->cmid;
+$cm = smg_seed_create_quiz($course, 'The forest of equations');
+$cmid = (int)($cm->coursemodule ?? $cm->cmid ?? 0);
 $quizid = (int)$cm->instance;
 $quizrecord = $DB->get_record('quiz', ['id' => $quizid], '*', MUST_EXIST);
 
 $qcategory = question_make_default_categories([\context_module::instance($cmid)]);
-$fixture = __DIR__ . '/../fixtures/stack_playwright.xml';
+$context = \context_module::instance($cmid);
+$fixturedir = __DIR__ . '/../fixtures';
+$stackfixture = $fixturedir . '/stack_playwright.xml';
+
+// Real STACK questions when a fixture is present, plain ones otherwise. The navigation,
+// settings, asset and accessibility journeys are meaningful either way; only the
+// STACK-specific feedback assertions need the real thing.
 $usedstack = 0;
-
-if (is_readable($fixture)) {
-    // Real STACK questions. The import needs qtype_stack installed and a reachable Maxima;
-    // when either is missing the import throws, and falling back is better than a seed that
-    // aborts the whole browser run.
-    try {
-        $qformat = new qformat_xml();
-        $qformat->setCategory($qcategory);
-        $qformat->setContexts([\context_module::instance($cmid)]);
-        $qformat->setCourse($course);
-        $qformat->setFilename($fixture);
-        $qformat->setRealfilename('stack_playwright.xml');
-        $qformat->setMatchgrades('error');
-        $qformat->setCatfromfile(false);
-        $qformat->setContextfromfile(false);
-        $qformat->setStoponerror(true);
-        if ($qformat->importpreprocess() && $qformat->importprocess() && $qformat->importpostprocess()) {
-            $usedstack = 1;
-        }
-    } catch (\Throwable $e) {
-        echo "# STACK-Fixture konnte nicht importiert werden: " . $e->getMessage() . "\n";
-        $usedstack = 0;
-    }
+$added = 0;
+if (is_readable($stackfixture)) {
+    $added = smg_seed_import_questions($stackfixture, $qcategory, $course, $quizrecord, $context);
+    $usedstack = $added > 0 ? 1 : 0;
 }
-
-if (!$usedstack) {
-    for ($i = 1; $i <= 3; $i++) {
-        $questiondata = (object) [
-            'category'              => $qcategory->id,
-            'parent'                => 0,
-            'name'                  => 'Scene ' . $i,
-            'questiontext'          => 'What is ' . $i . ' + ' . $i . '?',
-            'questiontextformat'    => FORMAT_HTML,
-            'generalfeedback'       => '',
-            'generalfeedbackformat' => FORMAT_HTML,
-            'defaultmark'           => 1,
-            'penalty'               => 0.1,
-            'qtype'                 => 'shortanswer',
-            'length'                => 1,
-            'stamp'                 => make_unique_id_code(),
-            'timecreated'           => $now,
-            'timemodified'          => $now,
-            'createdby'             => 2,
-            'modifiedby'            => 2,
-        ];
-        $questiondata->id = $DB->insert_record('question', $questiondata);
-        quiz_add_quiz_question($questiondata->id, $quizrecord);
-    }
-} else {
-    foreach ($DB->get_records('question', ['category' => $qcategory->id], 'id ASC') as $question) {
-        quiz_add_quiz_question($question->id, $quizrecord);
-    }
+if ($added === 0) {
+    $added = smg_seed_import_questions(
+        $fixturedir . '/fallback_questions.xml',
+        $qcategory,
+        $course,
+        $quizrecord,
+        $context
+    );
 }
+if ($added === 0) {
+    cli_error('No questions could be imported - check tests/fixtures/.');
+}
+\mod_quiz\quiz_settings::create($quizid)->get_grade_calculator()->recompute_quiz_sumgrades();
 
 // Game configuration. The specs assert against the RPG design because it is the one with the
 // richest asset manifest, so a missing asset shows up as a visible failure rather than a
@@ -168,6 +137,8 @@ function smg_seed_user(string $username, string $password, string $rolename): \s
             'mnethostid' => $CFG->mnet_localhost_id,
         ], true, false));
     }
+    // ENROL_SEND_EMAIL_FROM_NOREPLY would still queue a message; passing no welcome at all
+    // keeps the seed's stdout clean, which the caller parses.
     enrol_try_internal_enrol(
         $course->id,
         $existing->id,

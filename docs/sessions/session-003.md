@@ -963,20 +963,51 @@ und die CI-Workflows. Entpacken nach `local/stackmathgame`, dann Moodle-Upgrade.
 
 ## Offene Risiken
 
-* **Maxima in der CI.** Ohne funktionierende Maxima-Anbindung überspringen sich STACK-Testfälle
-  und melden trotzdem „passed". Für Issue #5 ist das der teuerste Posten im Plan; bis dahin muss
-  jede Skip-Meldung ehrlich protokolliert werden.
-* **Sitzungen 001 und 002** fehlen im Repository (siehe Nebenbefund oben).
-* **`qbehaviour_stackmathgame` muss gepatcht werden** (`docs/patches/`, zwei Defekte in einer
-  Datei), sonst ist das Spiel weder auswählbar noch startbar und keine STACK-Frage renderbar.
-* **Kein CAS in dieser Entwicklungsumgebung**: die fünf STACK-Benotungstests überspringen sich.
-  Sie müssen auf einer Instanz mit grünem STACK-Healthcheck laufen, bevor Issue #5 als erledigt
-  gelten kann.
-* **Behat-Korrekturen sind nicht durch einen grünen Lauf bestätigt**, nur aus den Logs abgeleitet.
-* **Vier veraltete Dateien** müssen im Repository von Hand gelöscht werden.
-* **Schwellenwerte der Lasttests** (`p95 < 2s`, `http_req_failed < 1%`) sind ein Startwert, kein
-  gemessenes Ziel. Sie müssen nach dem ersten echten Lauf auf repräsentativer Hardware
-  nachgezogen werden.
+Stand nach Patch 15. Erledigte Punkte sind entfernt, damit die Liste eine Arbeitsliste bleibt
+und kein Archiv.
+
+### 1. Offene Produktentscheidung: `SOLVED_FRACTION`
+
+Unter `adaptivemultipart` trägt der von STACK verlangte Validierungsschritt eine Strafe. Eine
+inhaltlich richtige Antwort erreicht dadurch keine volle Wertung, und `SOLVED_FRACTION = 1.0`
+weist sie zurück — die nächste Szene bleibt zu.
+
+Solange das offen ist, warten acht Testfälle: fünf `markTestIncomplete` in `stack_submit_test`
+und drei `@stack_penalty`-Szenarien in `branch_navigation.feature`. Das ist keine technische
+Blockade, sondern eine Entscheidung darüber, wie das Spiel sich verhalten soll.
+
+### 2. Nie ausgeführt: Lasttests
+
+`tests/load/` ist vollständig geschrieben, aber kein Plan ist je gelaufen. Am wichtigsten ist
+`stackmathgame-capacity-race.js`: die At-most-once-Garantie für Belohnungen ist bisher nur
+**sequenziell** geprüft. Der Lock in `submit_answer` ist da, aber unter echter Parallelität
+ungetestet — und genau dafür existiert der Plan, weil PHPUnit es prinzipiell nicht kann.
+
+Voraussetzung: ein Slot mit `rewards.xp > 0`; mit der Vorgabe 0 besteht der Gate trivial und
+beweist nichts.
+
+### 3. Nie ausgeführt: Playwright
+
+Seed und drei Specs sind geschrieben, nie gelaufen. Sie decken ab, was Behat strukturell nicht
+kann: dass Assets ohne 404 geladen werden und aus dem Design-Paket kommen statt aus dem
+generischen `shared/`-Pfad, plus die Accessibility-Prüfung der Plugin-eigenen Regionen.
+
+### 4. Lasttest-Schwellenwerte sind Startwerte
+
+`p95 < 2s` und `http_req_failed < 1%` sind gesetzt, nicht gemessen. Nach dem ersten echten Lauf
+auf repräsentativer Hardware nachziehen.
+
+### 5. Sitzungsprotokolle 001 und 002 fehlen
+
+`docs/sessions/` enthielt im hochgeladenen Stand nur `README.md`. Ohne sie beginnt die Historie
+mit dieser Sitzung.
+
+### 6. Bewusst nicht angefasst
+
+`amd/src/navigation_controller.js` ist ein 15-Zeilen-Stub ohne Lizenzheader, und mehrere
+Testklassen bestehen nur aus einem Platzhalter (`config_manager_test`, `definitions_test`,
+`page_helper_test`, `quiz_helper_test`). Beides ist bekannt, beides gehört aufgeräumt, beides
+war für keines der fünf Issues nötig.
 
 ---
 

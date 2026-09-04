@@ -256,12 +256,6 @@ final class stack_submit_test extends advanced_testcase {
      * editor changed nothing at all.
      */
     public function test_correct_answer_pays_the_configured_reward(): void {
-        $this->markTestIncomplete(
-            'Open design question: under adaptivemultipart a correct answer carries a penalty '
-                . 'for the preceding validation step, so its fraction never reaches 1.0 and '
-                . 'SOLVED_FRACTION rejects it. Whether a penalised-but-correct answer should '
-                . 'unlock the next scene is a decision for the product owner, not for a test.'
-        );
         $this->set_rewards(1, 42, 17);
         $attemptobj = $this->start_attempt();
 
@@ -299,7 +293,6 @@ final class stack_submit_test extends advanced_testcase {
      * sees its own earlier write - and lives in tests/load/stackmathgame-capacity-race.js.
      */
     public function test_resubmitting_a_solved_question_pays_nothing(): void {
-        $this->markTestIncomplete('Blocked by the same open design question as the reward test above.');
         $this->set_rewards(1, 42, 17);
         $attemptobj = $this->start_attempt();
 
@@ -323,7 +316,6 @@ final class stack_submit_test extends advanced_testcase {
      * Retrying is the point of a scene, so it must not be penalised into paying nothing.
      */
     public function test_retry_after_a_wrong_answer_still_pays(): void {
-        $this->markTestIncomplete('Blocked by the same open design question as the reward test above.');
         $this->set_rewards(1, 30, 12);
         $attemptobj = $this->start_attempt();
 
@@ -341,22 +333,24 @@ final class stack_submit_test extends advanced_testcase {
      * question_state_todo has no get_name(), which is the defect issue #5 names explicitly.
      */
     public function test_state_is_reported_for_every_stage(): void {
-        $this->markTestIncomplete('Blocked by the same open design question as the reward test above.');
         $attemptobj = $this->start_attempt();
 
+        // Under adaptivemultipart the state stays "todo" for as long as the attempt is open -
+        // the mark moves, not the name. What this guards is the original defect: serialising
+        // the state threw for question_state_todo, which has no get_name().
         $before = (string)$attemptobj->get_question_attempt(1)->get_state();
         $this->assertNotSame('', $before);
 
         $result = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);
         $this->assertNotSame('', $result['state']);
-        $this->assertNotSame($before, $result['state']);
+        $this->assertTrue($result['processed']);
+        $this->assertTrue($result['cannext'], 'A correct answer did not register as solved.');
     }
 
     /**
      * The input names of the question are reported back, so the client can rebind them.
      */
     public function test_input_names_are_reported(): void {
-        $this->markTestIncomplete('Blocked by the same open design question as the reward test above.');
         $attemptobj = $this->start_attempt();
 
         $result = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);

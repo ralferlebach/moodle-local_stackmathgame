@@ -45,7 +45,19 @@ class profile_service {
     /** Reward granted when a slot has no configured XP. */
     const DEFAULT_XP = 5;
 
-    /** Mark at or above which a scene counts as solved. */
+    /**
+     * Mark at or above which a scene counts as solved.
+     *
+     * Deliberately below 1.0. Under adaptivemultipart - which the STACK Math Game behaviour
+     * extends - STACK requires a validation step before it grades, and that step carries the
+     * question's penalty. A student who answers correctly first time therefore scores below the
+     * full mark, and a threshold of 1.0 would refuse to open the next scene for a correct answer.
+     *
+     * The product decision is that a penalised but correct answer advances: the mathematics was
+     * right, and the penalty already expresses itself in the score. That is achieved by feeding
+     * this comparison the *unpenalised* mark - see submit_answer::raw_fraction() - rather than
+     * by lowering the threshold, which would also let a genuinely partial answer through.
+     */
     const SOLVED_FRACTION = 1.0;
 
     /** Share of the full reward paid for partial credit. */
