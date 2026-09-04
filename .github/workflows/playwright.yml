@@ -157,15 +157,10 @@ jobs:
             --fullname="CI" --shortname="CI" \
             --adminpass="Admin!23" --adminemail=ci@example.invalid
 
-          # A fresh qtype_stack install times the CAS out after 10 seconds; a cold Maxima on a
-          # runner needs longer, and STACK then renders "CAS failed to return any data due to
-          # timeout" instead of the question. The first call is also the slowest because Maxima
-          # compiles STACK's library on it, so warm it here rather than mid-run.
-          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
-          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
-          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
-          php question/type/stack/cli/stacklibrarycheck.php || true
-          php question/type/stack/cli/maximalibcheck.php || true
+          # The CAS settings and maximalocal.mac, via the same helper the CI pipelines use.
+          # admin/cli/cfg.php was the old approach and it also ran STACK's sample-library checks,
+          # which scan 4267 questions, take minutes and prove nothing about this plugin.
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
 
       # PHP's built-in server is single-threaded unless PHP_CLI_SERVER_WORKERS is
       # set. A Moodle page pulls many subresources in parallel, so one worker

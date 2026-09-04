@@ -84,6 +84,25 @@ class behat_local_stackmathgame extends behat_base {
     }
 
     /**
+     * Wait until the game's navigation control has been written by the mode module.
+     *
+     * The control appears only after the submit round-trip finishes and the mode module renders
+     * the navigation the server resolved. Asserting on it immediately is a race the scenario
+     * loses on a slow runner - and it looked like a missing button rather than a timing problem.
+     *
+     * @Then I should eventually see the game navigation :label
+     * @param string $label The expected control label.
+     */
+    public function i_should_eventually_see_the_game_navigation(string $label): void {
+        $this->execute('behat_general::wait_until_the_page_is_ready');
+        $this->execute('behat_general::should_exist', [
+            '//*[contains(@class,"smg-nav") or self::a][contains(normalize-space(.), "'
+                . $label . '")]',
+            'xpath_element',
+        ]);
+    }
+
+    /**
      * Configure STACK and confirm it can reach Maxima, from inside the Behat run.
      *
      * The CI step that does this before Behat starts is not enough on its own: starting the

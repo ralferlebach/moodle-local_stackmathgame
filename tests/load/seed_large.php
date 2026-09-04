@@ -120,10 +120,26 @@ $protocols = (string)get_config('core', 'webserviceprotocols');
 if (strpos($protocols, 'rest') === false) {
     set_config('webserviceprotocols', trim($protocols . ',rest', ','));
 }
-$service = $DB->get_record('external_services', ['shortname' => MOODLE_OFFICIAL_MOBILE_SERVICE]);
-if (!$service) {
-    $service = $DB->get_record('external_services', ['enabled' => 1], '*', IGNORE_MULTIPLE);
+// The plugin's own service, not the mobile one: a token issued against a service that does not
+// contain these functions is refused on every call with an access exception, which in a load run
+// looks like the endpoints failing rather than the token being wrong.
+$service = $DB->get_record('external_services', ['shortname' => 'local_stackmathgame'], '*', MUST_EXIST);
+if (empty($service->enabled)) {
+    $DB->set_field('external_services', 'enabled', 1, ['id' => $service->id]);
+    $service->enabled = 1;
 }
+// Enabling the protocol is not enough: the user also needs webservice/rest:use, and without it
+// every call is refused with "Access control exception ... missing capability: webservice/rest:use"
+// - which in a load report looks like the endpoints failing rather than the fixture being
+// incomplete. Granted on the authenticated user role, as a site would for a service account.
+$authenticateduser = $DB->get_field('role', 'id', ['shortname' => 'user'], MUST_EXIST);
+role_change_permission(
+    $authenticateduser,
+    \context_system::instance(),
+    'webservice/rest:use',
+    CAP_ALLOW
+);
+
 $token = external_generate_token(
     EXTERNAL_TOKEN_PERMANENT,
     $service,

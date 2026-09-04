@@ -15,20 +15,30 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information for stackmathgamemode_exitgames.
+ * CI helper: initialise the STACK CAS for an installed site.
  *
- * @package    stackmathgamemode_exitgames
+ * The counterpart of stack-behat-init.php and stack-phpunit-init.php for the load and browser
+ * workflows, which install a real site rather than a test environment.
+ *
+ * Run from the workspace root, above the Moodle directory:
+ *   php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
+ *
+ * @package    local_stackmathgame
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+define('CLI_SCRIPT', true);
 
-$plugin->component  = 'stackmathgamemode_exitgames';
-$plugin->version    = 2026090219;
-$plugin->requires   = 2024100700; // Moodle 4.5.
-$plugin->maturity   = MATURITY_ALPHA;
-$plugin->release    = '0.9.0';
-$plugin->dependencies = [
-    'local_stackmathgame' => ANY_VERSION,
-];
+require_once(__DIR__ . '/stack-cas-lib.php');
+$moodleroot = local_stackmathgame_moodle_root();
+require_once($moodleroot . '/config.php');
+
+global $CFG, $DB;
+
+if (!$DB->get_manager()->table_exists('config')) {
+    fwrite(STDERR, "ERROR: {config} not found - run this after the site has been installed.\n");
+    exit(1);
+}
+
+exit(local_stackmathgame_init_stack_cas($CFG, 'site'));

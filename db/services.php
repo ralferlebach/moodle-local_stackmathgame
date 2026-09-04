@@ -122,3 +122,32 @@ $functions = [
         'capabilities' => 'local/stackmathgame:play',
     ],
 ];
+
+// A service of its own, so a token can actually reach these functions. Without it the only way
+// to call them over REST is to add every function to another service by hand - and the load
+// plans, which mint a token in a throwaway site, then get an access exception on every request.
+// Disabled by default: it is switched on deliberately, in Site administration, not by installing
+// the plugin.
+$services = [
+    'local_stackmathgame' => [
+        'functions' => [
+            'local_stackmathgame_get_activity_config',
+            'local_stackmathgame_get_activity_profile_state',
+            'local_stackmathgame_save_activity_progress',
+            'local_stackmathgame_get_activity_narrative',
+            'local_stackmathgame_prefetch_next_activity_node',
+            'local_stackmathgame_get_quiz_config',
+            'local_stackmathgame_get_profile_state',
+            'local_stackmathgame_submit_answer',
+            'local_stackmathgame_save_progress',
+            'local_stackmathgame_get_narrative',
+            'local_stackmathgame_get_question_fragment',
+            'local_stackmathgame_prefetch_next_node',
+        ],
+        'restrictedusers' => 0,
+        'enabled' => 0,
+        'shortname' => 'local_stackmathgame',
+        'downloadfiles' => 0,
+        'uploadfiles' => 0,
+    ],
+];

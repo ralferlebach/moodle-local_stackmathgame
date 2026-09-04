@@ -89,7 +89,13 @@ class save_activity_progress extends \core_external\external_api {
         string $statsjson = '{}',
         string $eventtype = 'progress_saved'
     ): array {
-        require_sesskey();
+        // The session key protects browser-originated POSTs against cross-site request forgery.
+        // A web-service call authenticates with a token and carries no cookie session, so there
+        // is nothing to forge against - and requiring it there makes the endpoint unusable over
+        // REST, which is how the load plans found this.
+        if (!defined('WS_SERVER') || !WS_SERVER) {
+            require_sesskey();
+        }
 
         [, , $config, $profile, $design, $activity] = api::validate_activity_access($cmid, $modname, $instanceid);
 

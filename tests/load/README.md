@@ -70,6 +70,21 @@ Prerequisites: an open attempt (`ATTEMPTID`) and a slot whose `configjson` carri
 `rewards.xp`. The seed leaves the schema default of `0`, so set a reward first — with `0` the
 gate passes trivially and proves nothing.
 
+## Was der Race-Plan beweisen kann - und was nicht
+
+Der Plan lauft und die Invariante hielt: 30 gleichzeitige Absendungen derselben richtigen Antwort
+erhoehten die XP um genau die konfigurierte Belohnung, nicht um ein Vielfaches.
+
+**Das allein ist aber noch kein Beweis fuer den Lock.** In einem Kontrolllauf mit neutralisiertem
+Lock war das Ergebnis identisch - weil PHPs eingebauter Entwicklungsserver die Anfragen weitgehend
+nacheinander abarbeitet und die CAS-Auswertung jede Anfrage ohnehin ungefaehr eine Sekunde kostet.
+Bei rund 1,06 Iterationen pro Sekunde ueberlappen sich zwei Anfragen praktisch nie.
+
+Fuer einen belastbaren Nachweis braucht es einen echten Webserver mit parallelen Workern
+(php-fpm hinter nginx oder Apache mit mpm_event) und idealerweise eine Frage ohne CAS-Aufruf, damit
+die Anfragen kurz genug sind, um sich tatsaechlich zu ueberschneiden. Bis dahin gilt: der Gate
+laeuft, meldet korrekt, und hat die Ueberzahlung noch nicht ausgeschlossen.
+
 ## Thresholds
 
 The current values (`http_req_failed < 1%`, `p95 < 2s`) are an initial baseline, not a measured

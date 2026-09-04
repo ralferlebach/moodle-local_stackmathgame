@@ -8,3 +8,4 @@
 .github/stack-behat-init.php
 .github/stack-phpunit-init.php
 .github/stack-cas-lib.php
+.github/stack-site-init.php

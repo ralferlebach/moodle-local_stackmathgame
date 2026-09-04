@@ -106,25 +106,24 @@ jobs:
             --fullname="CI" --shortname="CI" \
             --adminpass="Admin!23" --adminemail=ci@example.invalid
 
-          # A fresh qtype_stack install times the CAS out after 10 seconds; a cold Maxima on a
-          # runner needs longer, and STACK then renders "CAS failed to return any data due to
-          # timeout" instead of the question. The first call is also the slowest because Maxima
-          # compiles STACK's library on it, so warm it here rather than mid-run.
-          php admin/cli/cfg.php --component=qtype_stack --name=platform --set=linux
-          php admin/cli/cfg.php --component=qtype_stack --name=maximacommand --set="$(command -v maxima)"
-          php admin/cli/cfg.php --component=qtype_stack --name=castimeout --set=60
-          php question/type/stack/cli/stacklibrarycheck.php || true
-          php question/type/stack/cli/maximalibcheck.php || true
+          # The CAS settings and maximalocal.mac, via the same helper the CI pipelines use.
+          # admin/cli/cfg.php was the old approach and it also ran STACK's sample-library checks,
+          # which scan 4267 questions, take minutes and prove nothing about this plugin.
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
           # No web server is started here: seeding below is a CLI script and does not need one,
           # and a background server does not reliably survive beyond the step that started it.
           # Every step that needs HTTP starts and awaits its own server.
-          # seed_large.php prints "export KEY='value'" lines (BASE_URL, COURSEID, INSTANCEID);
-          # expose the ones the load plan needs as step outputs.
+          # seed_large.php prints "export KEY='value'" lines. The load plans address the web
+          # services, so they need QUIZID and the token as well as the base URL - passing only
+          # base_url and courseid left the plan with nothing to call and it aborted in setup().
           php local/stackmathgame/tests/load/seed_large.php > /tmp/seed.env
           get() { sed -n "s/^export $1='\(.*\)'$/\1/p" /tmp/seed.env; }
           {
             echo "base_url=$(get BASE_URL)"
             echo "courseid=$(get COURSEID)"
+            echo "cmid=$(get CMID)"
+            echo "quizid=$(get QUIZID)"
+            echo "token=$(get TOKEN)"
           } >> "$GITHUB_OUTPUT"
       - name: Resolve run parameters
         id: params
@@ -132,9 +131,15 @@ jobs:
           if [ "${{ github.event.inputs.mode }}" = "external" ]; then
             echo "base_url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
             echo "courseid=${{ github.event.inputs.courseid }}" >> "$GITHUB_OUTPUT"
+            echo "cmid=" >> "$GITHUB_OUTPUT"
+            echo "quizid=" >> "$GITHUB_OUTPUT"
+            echo "token=" >> "$GITHUB_OUTPUT"
           else
             echo "base_url=${{ steps.selfcontained.outputs.base_url }}" >> "$GITHUB_OUTPUT"
             echo "courseid=${{ steps.selfcontained.outputs.courseid }}" >> "$GITHUB_OUTPUT"
+            echo "cmid=${{ steps.selfcontained.outputs.cmid }}" >> "$GITHUB_OUTPUT"
+            echo "quizid=${{ steps.selfcontained.outputs.quizid }}" >> "$GITHUB_OUTPUT"
+            echo "token=${{ steps.selfcontained.outputs.token }}" >> "$GITHUB_OUTPUT"
           fi
       - name: Set up k6
         uses: grafana/setup-k6-action@v1
@@ -171,17 +176,21 @@ jobs:
           k6 run \
             -e BASE_URL='${{ steps.params.outputs.base_url }}' \
             -e COURSEID='${{ steps.params.outputs.courseid }}' \
+            -e QUIZID='${{ steps.params.outputs.quizid }}' \
+            -e CMID='${{ steps.params.outputs.cmid }}' \
+            -e TOKEN='${{ steps.params.outputs.token }}' \
             -e VUS='${{ github.event.inputs.vus }}' \
             -e DURATION='${{ github.event.inputs.duration }}s' \
             --summary-export=k6-summary.json \
             plugin/tests/load/stackmathgame-read-endpoints.js
       - name: Seed a capacity fixture and run the capacity race
         run: |
-          # A read-load run cannot show whether the capacity limit actually holds under real
-          # concurrency; only genuinely parallel writes can. The fixture leaves exactly FREE_SEATS
-          # open, so the expected outcome is unambiguous.
+          # A read-load run cannot show whether the at-most-once reward guarantee holds; only
+          # genuinely parallel writes can. The fixture configures a non-zero reward on one slot
+          # and opens an attempt, so the expected outcome is unambiguous: the XP may grow by that
+          # reward once, never by a multiple of it.
           cd moodle
-          FREE_SEATS=1 CAPACITY=20 php local/stackmathgame/tests/load/seed_capacity.php > /tmp/cap.env
+          php local/stackmathgame/tests/load/seed_capacity.php > /tmp/cap.env
           cd ..
           get() { sed -n "s/^export $1='\(.*\)'$/\1/p" /tmp/cap.env; }
           PHP_CLI_SERVER_WORKERS=8 php -S 127.0.0.1:8000 -t moodle >/tmp/moodle-server.log 2>&1 &
@@ -199,8 +208,16 @@ jobs:
           fi
           k6 run \
             -e BASE_URL="$(get BASE_URL)" \
-            -e COURSEID="$(get COURSEID)" \
-            -e FREE_SEATS="$(get FREE_SEATS)" \
+            -e TOKEN="$(get TOKEN)" \
+            -e QUIZID="$(get QUIZID)" \
+            -e ATTEMPTID="$(get ATTEMPTID)" \
+            -e SLOT="$(get SLOT)" \
+            -e ANSWERFIELD="$(get ANSWERFIELD)" \
+            -e VALFIELD="$(get VALFIELD)" \
+            -e SUBMITFIELD="$(get SUBMITFIELD)" \
+            -e SEQFIELD="$(get SEQFIELD)" \
+            -e EXPECTED_XP="$(get EXPECTED_XP)" \
+            -e ANSWER='x^3' \
             -e VUS=30 \
             --summary-export=k6-capacity-summary.json \
             plugin/tests/load/stackmathgame-capacity-race.js
