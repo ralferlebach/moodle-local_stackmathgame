@@ -72,6 +72,7 @@ final class prerequisite_checker {
         $checks = [];
         $checks[] = self::check_plugin('qbehaviour_stackmathgame', 'prereq_plugin_behaviour');
         $checks[] = self::check_behaviour_archetypal();
+        $checks[] = self::check_one_question_per_page($cmid);
         $checks[] = self::check_plugin('qtype_stack', 'prereq_plugin_stack');
         $checks[] = self::check_plugin('filter_shortcodes', 'prereq_plugin_shortcodes');
         $checks[] = self::check_behaviour($cm, $config);
@@ -125,6 +126,46 @@ final class prerequisite_checker {
             $labelkey,
             $installed ? 'prereq_plugin_present' : 'prereq_plugin_missing',
             $component
+        );
+    }
+
+    /**
+     * Warn when a quiz page holds more than one question.
+     *
+     * The branch resolver navigates between pages, so a page with several questions plays its
+     * first one and silently skips the others - the teacher sees their questions in the quiz and
+     * never in the game, with nothing anywhere saying why.
+     *
+     * A warning rather than an error: the quiz still works, and the remaining questions are
+     * reachable through the ordinary quiz navigation. Issue #9 will give such pages a meaning
+     * (alternatives, or the stages of one quest); until then, saying so is the honest option.
+     *
+     * @param int $cmid The course-module ID.
+     * @return array The check result.
+     */
+    private static function check_one_question_per_page(int $cmid): array {
+        try {
+            $crowded = \local_stackmathgame\local\service\flow_service::get_crowded_pages($cmid);
+        } catch (\Throwable $e) {
+            return self::result(
+                'questionsperpage',
+                self::STATUS_OK,
+                'prereq_perpage',
+                'prereq_perpage_unknown'
+            );
+        }
+
+        if (!$crowded) {
+            return self::result('questionsperpage', self::STATUS_OK, 'prereq_perpage', 'prereq_perpage_ok');
+        }
+
+        $pages = implode(', ', array_keys($crowded));
+        return self::result(
+            'questionsperpage',
+            self::STATUS_WARNING,
+            'prereq_perpage',
+            'prereq_perpage_crowded',
+            $pages
         );
     }
 

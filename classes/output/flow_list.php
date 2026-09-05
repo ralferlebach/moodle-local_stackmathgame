@@ -62,11 +62,40 @@ class flow_list implements \renderable, \templatable {
         $slots = flow_service::get_slots($this->cmid);
         $analysis = flow_service::analyse_reachability($this->cmid);
 
+        // The quiz's own structure, so the author sees the shape they built in Moodle rather than
+        // a flat list: a section heading starts a level, and questions sharing a page belong
+        // together. The game does not yet act on either - see issue #9 - but hiding them made the
+        // editor disagree with the quiz it edits.
+        $levelofslot = [];
+        $pageofslot = [];
+        foreach (flow_service::get_structure($this->cmid) as $level) {
+            foreach ($level['pages'] as $page => $pageslots) {
+                foreach ($pageslots as $slotnumber) {
+                    $levelofslot[$slotnumber] = $level;
+                    $pageofslot[$slotnumber] = ['page' => $page, 'shared' => count($pageslots)];
+                }
+            }
+        }
+        $crowded = flow_service::get_crowded_pages($this->cmid);
+        $seenlevel = null;
+
         $rows = [];
         foreach ($slots as $slotnumber => $slot) {
             $config = $slot['config'];
+            // A level marker is emitted on the first slot of each level, so the template can
+            // draw the boundary without knowing how levels are computed.
+            $level = $levelofslot[$slotnumber] ?? null;
+            $startslevel = $level !== null && $level['firstslot'] !== $seenlevel;
+            if ($startslevel) {
+                $seenlevel = $level['firstslot'];
+            }
+
             $rows[] = [
                 'slotnumber' => $slotnumber,
+                'startslevel' => $startslevel && !empty($level['heading']),
+                'levelheading' => $level['heading'] ?? '',
+                'page' => $pageofslot[$slotnumber]['page'] ?? 0,
+                'sharespage' => ($pageofslot[$slotnumber]['shared'] ?? 1) > 1,
                 'questionname' => $slot['questionname'],
                 'questionid' => $slot['questionid'],
                 'qtype' => $slot['qtype'],
@@ -98,7 +127,10 @@ class flow_list implements \renderable, \templatable {
             'rows' => $rows,
             'hasrows' => !empty($rows),
             'actionurl' => (new \moodle_url('/local/stackmathgame/flow.php'))->out(false),
-            'hasproblems' => !empty($analysis['unreachable']) || !empty($analysis['deadends']),
+            'hasproblems' => !empty($analysis['unreachable']) || !empty($analysis['deadends'])
+                || !empty($crowded),
+            'hascrowded' => !empty($crowded),
+            'crowded' => implode(', ', array_keys($crowded)),
             'unreachable' => implode(', ', $analysis['unreachable']),
             'hasunreachable' => !empty($analysis['unreachable']),
             'deadends' => implode(', ', $analysis['deadends']),
