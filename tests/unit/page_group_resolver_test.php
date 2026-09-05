@@ -17,7 +17,9 @@
 namespace local_stackmathgame\unit;
 
 use local_stackmathgame\local\service\flow_service;
+use local_stackmathgame\local\service\navigation_resolver;
 use local_stackmathgame\local\service\page_group_resolver;
+use local_stackmathgame\local\service\profile_service;
 use local_stackmathgame\local\service\slot_config_schema;
 use local_stackmathgame\tests\game_quiz_testcase;
 
@@ -222,5 +224,81 @@ final class page_group_resolver_test extends game_quiz_testcase {
 
         $this->assertSame([1], $result['playable']);
         $this->assertSame(1, $result['active']);
+    }
+    /**
+     * A quest reports a substep, not a move to the next node.
+     *
+     * The distinction is the whole point of the mode: with one word for both, finishing stage one
+     * of three would look exactly like finishing the quest, and the run would move on with two
+     * stages unplayed.
+     */
+    public function test_a_quest_stage_resolves_to_a_substep(): void {
+        $this->set_group(slot_config_schema::GROUP_MODE_QUEST);
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+
+        $decision = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            1,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+
+        $this->assertSame('substep', $decision['action']);
+        $this->assertSame(2, $decision['nextslot']);
+    }
+
+    /**
+     * The last stage of a quest hands over to the ordinary branching.
+     */
+    public function test_the_last_quest_stage_leaves_the_group(): void {
+        $this->set_group(slot_config_schema::GROUP_MODE_QUEST);
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+        profile_service::apply_progress((int)$profile->id, [
+            'progress' => ['slots' => ['1' => ['solved' => 1], '2' => ['solved' => 1]]],
+        ]);
+        $profile = profile_service::get_or_create_for_quiz((int)$profile->userid, $this->fixturequizid);
+
+        $decision = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            3,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+
+        $this->assertNotSame('substep', $decision['action']);
+    }
+
+    /**
+     * Separate scenes never produce a substep.
+     *
+     * The default must keep behaving exactly as it did, or installing this release would change
+     * how every existing quiz plays.
+     */
+    public function test_separate_scenes_do_not_substep(): void {
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+
+        $decision = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            1,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+
+        $this->assertNotSame('substep', $decision['action']);
     }
 }

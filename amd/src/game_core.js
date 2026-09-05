@@ -81,7 +81,7 @@ define([], function() {
         var action = nav.action || 'stay';
         return {
             action: action,
-            hasNext: action === 'continue' || action === 'finish',
+            hasNext: action === 'continue' || action === 'substep' || action === 'finish',
             isEnd: action === 'finish',
             url: nav.url || '',
             label: nav.label || '',

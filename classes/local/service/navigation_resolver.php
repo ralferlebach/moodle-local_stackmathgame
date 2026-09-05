@@ -48,6 +48,9 @@ final class navigation_resolver {
     /** The player stays where they are, typically after a wrong answer. */
     const ACTION_STAY = 'stay';
 
+    /** Another stage of the same page group follows; the run has not moved on. */
+    const ACTION_SUBSTEP = 'substep';
+
     /**
      * Resolve the navigation step following an outcome on a slot.
      *
@@ -74,6 +77,22 @@ final class navigation_resolver {
             return self::payload(self::ACTION_STAY, 0, 0, $attemptid);
         }
 
+        // A quiz page that is a group is finished before the run moves on. Stepping to the next
+        // node while a quest still has stages left would skip them silently, and a page of
+        // alternatives would move on after the first of several the player was given.
+        //
+        // The distinction is deliberate: advancing within a group is a different fact from
+        // advancing between nodes, and the two used to be the same word.
+        $subslot = self::next_subslot($cmid, $quizid, $currentslot, $profile, $attemptid);
+        if ($subslot > 0) {
+            return self::payload(
+                self::ACTION_SUBSTEP,
+                $subslot,
+                self::page_for_slot($quizid, $subslot),
+                $attemptid
+            );
+        }
+
         $nextslot = branch_resolver::resolve_next_slot(
             $cmid,
             $quizid,
@@ -92,6 +111,43 @@ final class navigation_resolver {
             self::page_for_slot($quizid, $nextslot),
             $attemptid
         );
+    }
+
+    /**
+     * Return the next unfinished stage of the current slot's page group, if any.
+     *
+     * Zero when the page is not a group, or when the group is done - the caller then resolves an
+     * ordinary branch. Keeping "another stage here" and "another node there" apart is what lets a
+     * staged quest exist at all: with one answer for both, finishing stage one of three would
+     * look exactly like finishing the whole quest.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $currentslot The slot just answered.
+     * @param \stdClass $profile The player's profile.
+     * @param int $attemptid The attempt, which fixes the choice of alternatives.
+     * @return int The next slot within the group, or 0.
+     */
+    private static function next_subslot(
+        int $cmid,
+        int $quizid,
+        int $currentslot,
+        \stdClass $profile,
+        int $attemptid
+    ): int {
+        $page = self::page_for_slot($quizid, $currentslot);
+        $solved = profile_service::solved_slots($profile);
+        // The slot just answered counts as solved: the profile is written after navigation is
+        // resolved, so reading it alone would offer the same stage again.
+        $solved[$currentslot] = true;
+
+        $group = page_group_resolver::resolve($cmid, $page, $attemptid, $solved);
+        if ($group['mode'] === slot_config_schema::GROUP_MODE_SCENES) {
+            // Separate scenes are separate nodes: branching decides, not the group.
+            return 0;
+        }
+
+        return (int)$group['active'];
     }
 
     /**
@@ -127,7 +183,7 @@ final class navigation_resolver {
     private static function payload(string $action, int $nextslot, int $nextpage, int $attemptid): array {
         $url = '';
         if ($attemptid > 0) {
-            if ($action === self::ACTION_CONTINUE) {
+            if ($action === self::ACTION_CONTINUE || $action === self::ACTION_SUBSTEP) {
                 $url = (new \moodle_url('/mod/quiz/attempt.php', [
                     'attempt' => $attemptid,
                     'page' => $nextpage,
@@ -156,7 +212,11 @@ final class navigation_resolver {
      */
     public static function external_structure(): \core_external\external_single_structure {
         return new \core_external\external_single_structure([
-            'action' => new \core_external\external_value(PARAM_ALPHA, 'continue, finish or stay'),
+            'action' => new \core_external\external_value(
+                PARAM_ALPHA,
+                'continue, substep, finish or stay. "substep" means another stage of the same '
+                    . 'page group follows - the run itself has not advanced.'
+            ),
             'nextslot' => new \core_external\external_value(PARAM_INT, 'Resolved next slot number, 0 when none'),
             'nextpage' => new \core_external\external_value(PARAM_INT, 'Zero-based attempt page of the next slot'),
             'url' => new \core_external\external_value(PARAM_URL, 'Where to navigate, empty when staying'),

@@ -174,6 +174,7 @@ $string['managethemes'] = 'Manage STACK Math Game themes';
 $string['nav_continue'] = 'Next scene';
 $string['nav_finish'] = 'Finish the run';
 $string['nav_stay'] = 'Try again';
+$string['nav_substep'] = 'Next stage';
 $string['newlabel'] = 'Or create a new label';
 $string['newlabel_help'] = 'Type a name to create a brand-new label. Leave blank if you selected an existing label above.';
 $string['newlabel_restricted'] = 'Only a site administrator or manager can create a new label, because a label groups progress across every quiz that uses it. Pick an existing one, or ask for a new one to be created.';

@@ -174,6 +174,7 @@ $string['managethemes'] = 'Themes für STACK-Mathe-Spiel verwalten';
 $string['nav_continue'] = 'Nächste Szene';
 $string['nav_finish'] = 'Abenteuer abschließen';
 $string['nav_stay'] = 'Erneut versuchen';
+$string['nav_substep'] = 'Nächste Stufe';
 $string['newlabel'] = 'Oder neues Label anlegen';
 $string['newlabel_help'] = 'Geben Sie einen Namen ein, um ein neues Label zu erstellen. Leer lassen, wenn Sie oben ein bestehendes Label ausgewählt haben.';
 $string['newlabel_restricted'] = 'Ein neues Label kann nur die Administration oder eine Manager-Rolle anlegen, weil ein Label den Fortschritt über alle Tests hinweg zusammenfasst, die es verwenden. Bitte ein vorhandenes wählen oder ein neues anfordern.';
