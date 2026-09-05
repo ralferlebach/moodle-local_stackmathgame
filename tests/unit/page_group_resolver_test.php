@@ -301,4 +301,80 @@ final class page_group_resolver_test extends game_quiz_testcase {
 
         $this->assertNotSame('substep', $decision['action']);
     }
+    /**
+     * Entering a named level is announced once, on its first slot.
+     *
+     * Once, not on every question of the level: an intro that replays at each question stops
+     * being an intro.
+     */
+    public function test_entering_a_level_is_announced(): void {
+        global $DB;
+
+        // Put the slots back on separate pages so the branching moves between them.
+        foreach ([1, 2, 3] as $slot) {
+            $DB->set_field('quiz_slots', 'page', $slot, ['quizid' => $this->fixturequizid, 'slot' => $slot]);
+        }
+        $DB->insert_record('quiz_sections', (object)[
+            'quizid' => $this->fixturequizid,
+            'firstslot' => 2,
+            'heading' => 'The forest',
+            'shufflequestions' => 0,
+        ]);
+
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+
+        $entering = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            1,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+        $this->assertTrue($entering['enterslevel'], 'Moving into slot 2 did not announce the level.');
+        $this->assertSame('The forest', $entering['levelheading']);
+
+        $within = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            2,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+        $this->assertFalse($within['enterslevel'], 'The level was announced again inside it.');
+    }
+
+    /**
+     * An unnamed section is not announced.
+     *
+     * Moodle always creates a section at slot 1, usually with no heading. Announcing it would put
+     * an empty chapter title in front of every quiz.
+     */
+    public function test_an_unnamed_level_is_not_announced(): void {
+        global $DB;
+
+        foreach ([1, 2, 3] as $slot) {
+            $DB->set_field('quiz_slots', 'page', $slot, ['quizid' => $this->fixturequizid, 'slot' => $slot]);
+        }
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+
+        $decision = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            1,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            0
+        );
+
+        $this->assertFalse($decision['enterslevel']);
+        $this->assertSame('', $decision['levelheading']);
+    }
 }

@@ -258,6 +258,34 @@ final class flow_service {
     }
 
     /**
+     * Return the level a slot belongs to, and whether that slot opens it.
+     *
+     * The runtime needs both halves: which level the player is in, so it can name it, and whether
+     * they have just entered it, so the intro plays once rather than on every question of the
+     * level.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $slot The slot number.
+     * @return array{heading: string, firstslot: int, isfirst: bool, index: int}|null
+     *         The level, or null when the slot is unknown.
+     */
+    public static function level_for_slot(int $cmid, int $slot): ?array {
+        foreach (self::get_structure($cmid) as $index => $level) {
+            foreach ($level['pages'] as $slots) {
+                if (in_array($slot, $slots, true)) {
+                    return [
+                        'heading' => (string)$level['heading'],
+                        'firstslot' => (int)$level['firstslot'],
+                        'isfirst' => (int)$level['firstslot'] === $slot,
+                        'index' => (int)$index,
+                    ];
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Report pages that hold more than one question.
      *
      * The branch resolver navigates between pages, so today a page with several questions plays

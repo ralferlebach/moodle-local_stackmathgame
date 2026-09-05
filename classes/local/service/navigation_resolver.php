@@ -74,7 +74,7 @@ final class navigation_resolver {
         // client offer a way forward the moment an answer is graded wrong, which is the opposite
         // of what a game wants: the retry is the point.
         if ($outcome === slot_config_schema::OUTCOME_GRADEDWRONG) {
-            return self::payload(self::ACTION_STAY, 0, 0, $attemptid);
+            return self::payload(self::ACTION_STAY, 0, 0, $attemptid, $cmid);
         }
 
         // A quiz page that is a group is finished before the run moves on. Stepping to the next
@@ -89,7 +89,8 @@ final class navigation_resolver {
                 self::ACTION_SUBSTEP,
                 $subslot,
                 self::page_for_slot($quizid, $subslot),
-                $attemptid
+                $attemptid,
+                $cmid
             );
         }
 
@@ -102,14 +103,15 @@ final class navigation_resolver {
         );
 
         if ($nextslot <= 0) {
-            return self::payload(self::ACTION_FINISH, 0, 0, $attemptid);
+            return self::payload(self::ACTION_FINISH, 0, 0, $attemptid, $cmid);
         }
 
         return self::payload(
             self::ACTION_CONTINUE,
             $nextslot,
             self::page_for_slot($quizid, $nextslot),
-            $attemptid
+            $attemptid,
+            $cmid
         );
     }
 
@@ -178,9 +180,16 @@ final class navigation_resolver {
      * @param int $nextslot The resolved slot, or 0.
      * @param int $nextpage The zero-based page index, or 0.
      * @param int $attemptid The attempt ID, or 0 when not known.
+     * @param int $cmid The course-module ID, needed to resolve the level. 0 skips that.
      * @return array The navigation payload.
      */
-    private static function payload(string $action, int $nextslot, int $nextpage, int $attemptid): array {
+    private static function payload(
+        string $action,
+        int $nextslot,
+        int $nextpage,
+        int $attemptid,
+        int $cmid = 0
+    ): array {
         $url = '';
         if ($attemptid > 0) {
             if ($action === self::ACTION_CONTINUE || $action === self::ACTION_SUBSTEP) {
@@ -193,11 +202,21 @@ final class navigation_resolver {
             }
         }
 
+        // Whether the next slot opens a new level, and what that level is called. Resolved here
+        // because the level structure is the quiz's, not the game mode's - a mode that worked it
+        // out itself would be reading quiz_sections, which is exactly the kind of second
+        // interpretation this resolver exists to prevent.
+        $level = ($cmid > 0 && $nextslot > 0)
+            ? flow_service::level_for_slot($cmid, $nextslot)
+            : null;
+
         return [
             'action' => $action,
             'nextslot' => $nextslot,
             'nextpage' => $nextpage,
             'url' => $url,
+            'enterslevel' => (bool)($level['isfirst'] ?? false) && ($level['heading'] ?? '') !== '',
+            'levelheading' => (string)($level['heading'] ?? ''),
             // The label is resolved server-side too. A mode that invented its own wording would
             // be making a decision about a state it does not own - and the three modes disagreed
             // about what "no next slot" even meant.
@@ -221,6 +240,15 @@ final class navigation_resolver {
             'nextpage' => new \core_external\external_value(PARAM_INT, 'Zero-based attempt page of the next slot'),
             'url' => new \core_external\external_value(PARAM_URL, 'Where to navigate, empty when staying'),
             'label' => new \core_external\external_value(PARAM_TEXT, 'Label for the navigation control'),
+            'enterslevel' => new \core_external\external_value(
+                PARAM_BOOL,
+                'True when the next slot opens a new, named level - play the chapter_start '
+                    . 'narrative once here rather than on every question of the level.'
+            ),
+            'levelheading' => new \core_external\external_value(
+                PARAM_TEXT,
+                'The level name, from the quiz section heading. Empty when there is none.'
+            ),
         ]);
     }
 }

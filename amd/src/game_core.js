@@ -83,6 +83,11 @@ define([], function() {
             action: action,
             hasNext: action === 'continue' || action === 'substep' || action === 'finish',
             isEnd: action === 'finish',
+            // The server decides whether a new level begins: the level structure is the quiz's,
+            // and a mode that worked it out itself would be reading quiz sections it has no
+            // business knowing about.
+            entersLevel: !!nav.enterslevel,
+            levelHeading: nav.levelheading || '',
             url: nav.url || '',
             label: nav.label || '',
             nextslot: parseInt(nav.nextslot, 10) || 0
