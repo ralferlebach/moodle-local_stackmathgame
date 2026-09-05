@@ -50,6 +50,31 @@ final class slot_config_schema {
     /** Scene type: final scene of the quiz campaign. */
     const SCENE_TYPE_OUTRO = 'outro';
 
+    /** Each question on the page is its own scene, as before. */
+    const GROUP_MODE_SCENES = 'scenes';
+
+    /** The questions on the page are interchangeable; a subset is played. */
+    const GROUP_MODE_ALTERNATIVES = 'alternatives';
+
+    /** The questions on the page are the stages of one quest, played in order. */
+    const GROUP_MODE_QUEST = 'quest';
+
+    /** Every group mode a page may use. */
+    const GROUP_MODES = [
+        self::GROUP_MODE_SCENES,
+        self::GROUP_MODE_ALTERNATIVES,
+        self::GROUP_MODE_QUEST,
+    ];
+
+    /** Pick the alternatives at random, once per attempt. */
+    const PICK_RANDOM = 'random';
+
+    /** Pick the alternatives in slot order. */
+    const PICK_FIRST = 'first';
+
+    /** Every selection strategy for alternatives. */
+    const PICK_STRATEGIES = [self::PICK_RANDOM, self::PICK_FIRST];
+
     /** All valid scene type values. */
     const SCENE_TYPES = [
         self::SCENE_TYPE_INSTRUCTION,
@@ -127,6 +152,18 @@ final class slot_config_schema {
                 // stash reward looks like.
                 'stash'           => ['itemid' => 0, 'quantity' => 1],
             ],
+            // How the questions sharing this slot's quiz page relate to each other. Only the
+            // first slot of a page is consulted: a group is a property of the page, and storing
+            // it on every member would let the members disagree about what they are.
+            //
+            // "scenes" is the default and is what the game did before groups existed, so an
+            // untouched quiz keeps playing exactly as it did.
+            'group'     => [
+                'mode'     => self::GROUP_MODE_SCENES,
+                // Alternatives only: how many of the page's questions are played.
+                'pick'     => 1,
+                'strategy' => self::PICK_RANDOM,
+            ],
             'narrative' => ['intro' => '', 'success' => '', 'fail' => ''],
             'display'   => ['showxp' => true, 'showinventory' => false, 'showavatar' => false],
         ];
@@ -188,6 +225,14 @@ final class slot_config_schema {
         );
         $data['rewards']['stash']['itemid'] = max(0, (int)$data['rewards']['stash']['itemid']);
         $data['rewards']['stash']['quantity'] = max(1, (int)$data['rewards']['stash']['quantity']);
+        $data['group'] = array_merge($defaults['group'], (array)($data['group'] ?? []));
+        if (!in_array($data['group']['mode'], self::GROUP_MODES, true)) {
+            $data['group']['mode'] = self::GROUP_MODE_SCENES;
+        }
+        if (!in_array($data['group']['strategy'], self::PICK_STRATEGIES, true)) {
+            $data['group']['strategy'] = self::PICK_RANDOM;
+        }
+        $data['group']['pick'] = max(1, (int)$data['group']['pick']);
         $data['narrative'] = array_merge($defaults['narrative'], (array)($data['narrative'] ?? []));
         $data['display'] = array_merge($defaults['display'], (array)($data['display'] ?? []));
         return $data;

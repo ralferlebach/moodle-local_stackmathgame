@@ -147,8 +147,17 @@ if ($action === 'editslot' && $slotnumber > 0) {
     ]);
     $PAGE->set_url($editurl);
 
+    // The group controls belong to the page, so they are offered on its first slot only.
+    $pagegroupslots = '';
+    foreach (\local_stackmathgame\local\service\flow_service::get_crowded_pages($cmid) as $pageslots) {
+        if ((int)reset($pageslots) === $slotnumber) {
+            $pagegroupslots = implode(', ', $pageslots);
+        }
+    }
+
     $form = new slot_config_form($editurl, [
         'slotoptions' => $slotoptions,
+        'pagegroupslots' => $pagegroupslots,
         'stashitems' => \local_stackmathgame\local\service\stash_mapping_service::get_stash_items_for_course(
             (int)$course->id
         ),

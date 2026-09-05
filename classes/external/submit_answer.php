@@ -101,6 +101,33 @@ class submit_answer extends \core_external\external_api {
         }
 
         $quizid  = (int)$attemptobj->get_quizid();
+
+        // Belonging to the attempt is not the same as being on offer. Where a quiz page holds
+        // alternatives, the player is given a subset - and the question engine would accept an
+        // answer to any of them, because as far as it is concerned every slot of the attempt is
+        // legitimate. Without this check a player could answer a question they were never shown
+        // by posting its slot number, and collect the reward for it.
+        $groupcmid = (int)$cm->id;
+        $grouppage = \local_stackmathgame\local\service\navigation_resolver::page_for_slot(
+            (int)$cm->instance,
+            (int)$slot
+        );
+        $groupprofile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
+            (int)$USER->id,
+            $quizid
+        );
+        $solvedslots = \local_stackmathgame\local\service\profile_service::solved_slots($groupprofile);
+        if (
+            !\local_stackmathgame\local\service\page_group_resolver::is_slot_playable(
+                $groupcmid,
+                $grouppage,
+                (int)$slot,
+                (int)$attemptid,
+                $solvedslots
+            )
+        ) {
+            throw new \moodle_exception('err_slotnotoffered', 'local_stackmathgame', '', $slot);
+        }
         // Use cmid as source of truth for config lookup (patch 2026032827).
         $config  = \local_stackmathgame\game\quiz_configurator::ensure_default((int)$cm->id);
         $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(

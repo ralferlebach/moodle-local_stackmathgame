@@ -104,6 +104,23 @@ class profile_service {
     }
 
     /**
+     * Return the slots this profile has already solved, as slot => true.
+     *
+     * @param \stdClass $profile The profile record.
+     * @return array Map of slot number to true.
+     */
+    public static function solved_slots(\stdClass $profile): array {
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $solved = [];
+        foreach ((array)($progress['slots'] ?? []) as $slot => $data) {
+            if (!empty($data['solved'])) {
+                $solved[(int)$slot] = true;
+            }
+        }
+        return $solved;
+    }
+
+    /**
      * Report whether a slot has already been solved.
      *
      * @param \stdClass $profile The profile record.
