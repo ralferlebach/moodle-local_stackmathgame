@@ -149,4 +149,40 @@ final class capability_test extends advanced_testcase {
         global $DB;
         return (int)$DB->get_field('role', 'id', ['shortname' => $shortname], MUST_EXIST);
     }
+    /**
+     * A site-wide label namespace is not handed to editing teachers.
+     *
+     * The README and db/access.php used to disagree about this: the text said teachers do not get
+     * it, the definition granted it. Since a label groups progress across every quiz that uses
+     * it, creating one reaches beyond the course it is created in.
+     */
+    public function test_managelabels_is_not_a_teacher_capability(): void {
+        global $CFG;
+
+        $capabilities = [];
+        require($CFG->dirroot . '/local/stackmathgame/db/access.php');
+
+        $archetypes = $capabilities['local/stackmathgame:managelabels']['archetypes'] ?? [];
+
+        $this->assertArrayNotHasKey('editingteacher', $archetypes);
+        $this->assertSame(CAP_ALLOW, $archetypes['manager'] ?? null);
+    }
+
+    /**
+     * Configuring a quiz stays available to editing teachers.
+     *
+     * The counterpart of the check above: restricting label creation must not lock a teacher out
+     * of setting up their own quiz.
+     */
+    public function test_configurequiz_remains_a_teacher_capability(): void {
+        global $CFG;
+
+        $capabilities = [];
+        require($CFG->dirroot . '/local/stackmathgame/db/access.php');
+
+        $this->assertSame(
+            CAP_ALLOW,
+            $capabilities['local/stackmathgame:configurequiz']['archetypes']['editingteacher'] ?? null
+        );
+    }
 }

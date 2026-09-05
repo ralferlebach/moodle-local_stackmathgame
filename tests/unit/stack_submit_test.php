@@ -405,4 +405,37 @@ final class stack_submit_test extends advanced_testcase {
 
         $this->assertContains($result['navigation']['action'], ['finish', 'stay']);
     }
+    /**
+     * firstsolve fires once and only once.
+     *
+     * cannext stays true for every later correct answer to a solved scene, which is right for
+     * navigation and wrong for a reward. The RPG HUD used cannext and grew its mana bar on every
+     * resubmission, while the server correctly granted no score at all.
+     */
+    public function test_firstsolve_fires_only_once(): void {
+        $this->set_rewards(1, 42, 17);
+        $attemptobj = $this->start_attempt();
+
+        $first = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);
+        $this->assertTrue($first['firstsolve'], 'The solving submission did not report firstsolve.');
+        $this->assertTrue($first['cannext']);
+
+        $attemptobj = \mod_quiz\quiz_attempt::create((int)$attemptobj->get_attemptid());
+        $second = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);
+
+        $this->assertFalse($second['firstsolve'], 'A repeat submission reported firstsolve again.');
+        $this->assertTrue($second['cannext'], 'Navigation must stay available on a solved scene.');
+        $this->assertSame(0, $second['scoredelta']);
+    }
+
+    /**
+     * A wrong answer never reports a first solve.
+     */
+    public function test_wrong_answer_is_not_a_first_solve(): void {
+        $attemptobj = $this->start_attempt();
+
+        $result = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::WRONG_ANSWER]);
+
+        $this->assertFalse($result['firstsolve']);
+    }
 }

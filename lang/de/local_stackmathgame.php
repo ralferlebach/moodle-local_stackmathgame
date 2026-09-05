@@ -160,6 +160,7 @@ $string['nav_finish'] = 'Abenteuer abschließen';
 $string['nav_stay'] = 'Erneut versuchen';
 $string['newlabel'] = 'Oder neues Label anlegen';
 $string['newlabel_help'] = 'Geben Sie einen Namen ein, um ein neues Label zu erstellen. Leer lassen, wenn Sie oben ein bestehendes Label ausgewählt haben.';
+$string['newlabel_restricted'] = 'Ein neues Label kann nur die Administration oder eine Manager-Rolle anlegen, weil ein Label den Fortschritt über alle Tests hinweg zusammenfasst, die es verwenden. Bitte ein vorhandenes wählen oder ein neues anfordern.';
 $string['newlabelplaceholder'] = 'z. B. Algebra Semester 1';
 $string['nextquestion'] = 'Nächste Frage';
 $string['nodesignsavailable'] = 'Keine aktiven Spieldesigns gefunden. Bitten Sie einen Game Designer, im Game-Design-Studio ein Design zu erstellen oder zu aktivieren.';

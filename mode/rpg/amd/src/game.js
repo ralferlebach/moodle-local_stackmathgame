@@ -44,6 +44,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
     };
 
     /** Starting mana value (mirrors alquiz-fantasy default). */
+    var MANA_MAX = 100;
     var MANA_START = 20;
 
     /**
@@ -165,6 +166,84 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             '}',
         ].join('\n');
         document.head.appendChild(style);
+    }
+
+    /**
+     * Rebuild the HUD state from the profile the server keeps.
+     *
+     * Recomputed from the set of solved slots rather than accumulated, so a reload, a second tab
+     * or a duplicate submission all arrive at the same number - there is nothing to double-count.
+     *
+     * @param {Object} gameState The state handed to init().
+     * @param {Object} slotMap The slot configuration by slot number.
+     * @returns {{mana: number, fairies: number}} The derived HUD state.
+     */
+    function computeScore(gameState, slotMap) {
+        var score = {mana: MANA_START, fairies: 0};
+        var profile = gameState.profile || {};
+        // The web service exports the progress as a JSON string, not as a structure - Moodle's
+        // external API cannot describe an object with arbitrary slot numbers as keys.
+        var progress = {};
+        try {
+            progress = JSON.parse(profile.progressjson || '{}') || {};
+        } catch (e) {
+            progress = {};
+        }
+        var slots = progress.slots || {};
+
+        Object.keys(slots).forEach(function(slot) {
+            if (!slots[slot] || !slots[slot].solved) {
+                return;
+            }
+            var cfg = slotMap[String(slot)] || {};
+            var type = (cfg.scene && cfg.scene.type) ? cfg.scene.type : 'challenge';
+            var gain = MANA_GAIN[type] !== undefined ? MANA_GAIN[type] : 10;
+            score.mana = Math.min(MANA_MAX, score.mana + gain);
+            score.fairies++;
+        });
+
+        return score;
+    }
+
+    /**
+     * Read the cached HUD state for this campaign.
+     *
+     * @param {string} key The campaign-scoped storage key.
+     * @returns {Object|null} The cached state, or null when there is none or it is unreadable.
+     */
+    function readCachedScore(key) {
+        try {
+            var stored = sessionStorage.getItem(key);
+            if (!stored) {
+                return null;
+            }
+            var parsed = JSON.parse(stored);
+            if (parsed && typeof parsed.mana === 'number') {
+                return {mana: parsed.mana, fairies: parsed.fairies || 0};
+            }
+        } catch (e) {
+            // A malformed or unavailable cache simply means recomputing from the profile, which
+            // is the source of truth anyway.
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Cache the HUD state for this campaign.
+     *
+     * @param {string} key The campaign-scoped storage key.
+     * @param {Object} score The state to cache.
+     * @returns {void}
+     */
+    function writeCachedScore(key, score) {
+        try {
+            sessionStorage.setItem(key, JSON.stringify(score));
+        } catch (e) {
+            // Private browsing or a full quota: the HUD still works, it just recomputes from the
+            // profile on the next page load.
+            return;
+        }
     }
 
     /**
@@ -321,20 +400,24 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         var bubble = buildNarrativeBubble(hudParts.hud);
         var nextBtn = buildNextButton(bubble);
 
-        var score = {mana: MANA_START, fairies: 0};
+        // The HUD is derived from the server's own record of which scenes are solved, not
+        // accumulated locally. That makes it survive a reload, keeps it in step with the rewards
+        // the server actually granted, and makes double submissions harmless by construction:
+        // recomputing from a set of solved slots cannot double-count.
+        var score = computeScore(gameState, slotMap);
 
-        // Restore score from sessionStorage if available.
-        try {
-            var stored = sessionStorage.getItem('smg_rpg_score');
-            if (stored) {
-                var parsed = JSON.parse(stored);
-                if (parsed && typeof parsed.mana === 'number') {
-                    score.mana = parsed.mana;
-                    score.fairies = parsed.fairies || 0;
-                }
-            }
-        } catch (e) {
-            // Ignore: a malformed stored score simply starts the run fresh.
+        // Session storage is a cache for the moment between a submit and the next page load,
+        // not the source of truth. The key carries the campaign so two RPG quizzes open in one
+        // browser session cannot bleed into each other - the old key was a bare
+        // "smg_rpg_score" shared by every quiz.
+        var cacheKey = 'smg_rpg_score:' + (
+            (gameState.config && (gameState.config.labelid || gameState.config.quizid)) || 'unknown'
+        );
+        var cached = readCachedScore(cacheKey);
+        if (cached && cached.fairies > score.fairies) {
+            // Only ever ahead of the server, never behind: the cache exists to bridge the gap
+            // before the profile is re-read, so a stale cache must not undo real progress.
+            score = cached;
         }
 
         updateHUD(hudParts, score.mana, score.fairies);
@@ -373,16 +456,16 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 var cfg = slotMap[String(slot)] || GameCore.defaultConfig();
                 var sceneType = cfg.scene && cfg.scene.type ? cfg.scene.type : 'challenge';
 
-                // Update score on first solve only (prevent farming).
-                if (solved) {
+                // Deliberately firstsolve, not cannext: cannext means "you may move on" and stays
+                // true for every later correct answer to a solved scene, so awarding on it let
+                // a player farm mana and fairies by resubmitting - while the server correctly
+                // granted no score or XP at all. The comment here used to claim this was
+                // prevented; nothing checked it.
+                if (response.firstsolve) {
                     var gain = MANA_GAIN[sceneType] !== undefined ? MANA_GAIN[sceneType] : 10;
-                    score.mana = Math.min(100, score.mana + gain);
+                    score.mana = Math.min(MANA_MAX, score.mana + gain);
                     score.fairies++;
-                    try {
-                        sessionStorage.setItem('smg_rpg_score', JSON.stringify(score));
-                    } catch (e) {
-            // Ignore: a malformed stored score simply starts the run fresh.
-        }
+                    writeCachedScore(cacheKey, score);
                 }
 
                 updateHUD(hudParts, score.mana, score.fairies);

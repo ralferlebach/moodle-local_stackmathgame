@@ -144,6 +144,8 @@ class submit_answer extends \core_external\external_api {
 
         $processed = false;
         $failurereason = '';
+        $firstsolve = false;
+        $wassolved = false;
         $message   = get_string('submitansweraccepted', 'local_stackmathgame');
 
         try {
@@ -234,6 +236,13 @@ class submit_answer extends \core_external\external_api {
                     $profile,
                     $slot
                 );
+                // Read from the profile rather than from a local variable built later in this
+                // function: the flag has to reflect the state before this submission, and tying
+                // it to the order of statements is how it would quietly stop doing that.
+                $wassolved = \local_stackmathgame\local\service\profile_service::is_slot_solved(
+                    $profile,
+                    $slot
+                );
                 $deltas     = \local_stackmathgame\local\service\profile_service::calculate_submit_deltas(
                     $previousstate,
                     $state,
@@ -244,6 +253,11 @@ class submit_answer extends \core_external\external_api {
                 $scoredelta = (int)$deltas['score'];
                 $xpdelta    = (int)$deltas['xp'];
                 $cannext    = (bool)$deltas['solved'];
+                // A separate, unambiguous event. cannext means "navigation is allowed" and stays
+                // true for every later correct submission of an already solved scene - so a
+                // client that treats it as a reward event grants the reward again each time.
+                // firstsolve is true exactly once per scene: on the submission that solved it.
+                $firstsolve = $cannext && !$wassolved;
 
                 $progress         = \local_stackmathgame\local\service\profile_service::decode_json_field(
                     $profile->progressjson ?? '{}'
@@ -378,6 +392,7 @@ class submit_answer extends \core_external\external_api {
             'xpdelta'       => $xpdelta,
             'canretry'      => true,
             'cannext'       => $cannext,
+            'firstsolve'    => $firstsolve,
             // Resolved here, once, from the same branch_resolver the rest of the server uses.
             // The client used to re-read configjson and reach its own conclusion, which is how
             // `linear` - the default every auto-created slot gets - ended up with no way forward.
@@ -460,6 +475,11 @@ class submit_answer extends \core_external\external_api {
             'xpdelta'       => new \core_external\external_value(PARAM_INT, 'XP delta'),
             'canretry'      => new \core_external\external_value(PARAM_BOOL, 'Whether retry remains possible'),
             'cannext'       => new \core_external\external_value(PARAM_BOOL, 'Whether frontend may advance immediately'),
+            'firstsolve'    => new \core_external\external_value(
+                PARAM_BOOL,
+                'True only on the submission that solved this scene for the first time. Use this '
+                    . 'for one-off rewards; cannext stays true on every later correct answer.'
+            ),
             'navigation'    => navigation_resolver::external_structure(),
         ]);
     }

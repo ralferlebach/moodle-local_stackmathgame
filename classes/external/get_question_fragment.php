@@ -52,7 +52,7 @@ class get_question_fragment extends \core_external\external_api {
      * @return array The question fragment array.
      */
     public static function execute(int $attemptid, int $slot): array {
-        global $CFG, $PAGE;
+        global $CFG, $PAGE, $USER;
 
         require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
@@ -69,6 +69,17 @@ class get_question_fragment extends \core_external\external_api {
         $context    = \context_module::instance((int)$cm->id);
         self::validate_context($context);
         require_capability('local/stackmathgame:play', $context);
+
+        // The same ownership checks the write endpoint makes. Reading is not harmless here: the
+        // fragment is the rendered question attempt, including the responses given and any
+        // feedback already earned. Without this, anyone who may play in the activity could read
+        // a classmate's attempt by guessing an id - and ids are sequential.
+        if ((int)$attemptobj->get_userid() !== (int)$USER->id || !$attemptobj->is_own_attempt()) {
+            throw new \moodle_exception('notyourattempt', 'quiz');
+        }
+        if (!in_array((int)$slot, array_map('intval', $attemptobj->get_slots()), true)) {
+            throw new \moodle_exception('err_unknownslot', 'local_stackmathgame', '', $slot);
+        }
 
         $qa           = $attemptobj->get_question_attempt($slot);
         $url          = new \moodle_url('/mod/quiz/attempt.php', [

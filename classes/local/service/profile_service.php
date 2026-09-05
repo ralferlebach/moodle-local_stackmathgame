@@ -104,6 +104,19 @@ class profile_service {
     }
 
     /**
+     * Report whether a slot has already been solved.
+     *
+     * @param \stdClass $profile The profile record.
+     * @param int $slot The slot number.
+     * @return bool True when the stored progress marks it solved.
+     */
+    public static function is_slot_solved(\stdClass $profile, int $slot): bool {
+        $progress = self::decode_json_field($profile->progressjson ?? '{}');
+        $slots = (array)($progress['slots'] ?? []);
+        return !empty($slots[(string)$slot]['solved']);
+    }
+
+    /**
      * Return the best mark already recorded for a slot.
      *
      * @param \stdClass $profile The profile record.

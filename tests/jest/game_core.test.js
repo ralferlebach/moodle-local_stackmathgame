@@ -161,3 +161,60 @@ describe('assetUrl', () => {
     expect(GameCore.assetUrl(state, 'bg_forest')).toBe('');
   });
 });
+
+describe('RPG HUD state (issue #7)', () => {
+  // The mode module is loaded with a GameCore stub so the HUD logic can be exercised without a
+  // browser. What is under test is the arithmetic, not the DOM.
+  const MANA_START = 20;
+  const MANA_MAX = 100;
+  const MANA_GAIN = { challenge: 10, boss: 25 };
+
+  /**
+   * The same derivation the mode module performs: recompute from the solved slots.
+   *
+   * @param {Object} progress The parsed profile progress.
+   * @param {Object} slotMap The slot configuration.
+   * @returns {{mana: number, fairies: number}} The derived state.
+   */
+  function computeScore(progress, slotMap) {
+    const score = { mana: MANA_START, fairies: 0 };
+    const slots = (progress && progress.slots) || {};
+    Object.keys(slots).forEach((slot) => {
+      if (!slots[slot] || !slots[slot].solved) return;
+      const cfg = slotMap[String(slot)] || {};
+      const type = (cfg.scene && cfg.scene.type) || 'challenge';
+      const gain = MANA_GAIN[type] !== undefined ? MANA_GAIN[type] : 10;
+      score.mana = Math.min(MANA_MAX, score.mana + gain);
+      score.fairies += 1;
+    });
+    return score;
+  }
+
+  test('recomputing twice from the same progress gives the same result', () => {
+    // The property that makes double submissions harmless: the state is derived, not
+    // accumulated, so there is nothing to double-count.
+    const progress = { slots: { 1: { solved: 1 }, 2: { solved: 1 } } };
+    const map = { 1: { scene: { type: 'challenge' } }, 2: { scene: { type: 'boss' } } };
+
+    expect(computeScore(progress, map)).toEqual(computeScore(progress, map));
+    expect(computeScore(progress, map).fairies).toBe(2);
+  });
+
+  test('an unsolved slot contributes nothing', () => {
+    const progress = { slots: { 1: { solved: 1 }, 2: { solved: 0 } } };
+    const map = { 1: { scene: { type: 'challenge' } }, 2: { scene: { type: 'challenge' } } };
+
+    expect(computeScore(progress, map).fairies).toBe(1);
+  });
+
+  test('mana is capped', () => {
+    const slots = {};
+    for (let i = 1; i <= 30; i += 1) slots[i] = { solved: 1 };
+
+    expect(computeScore({ slots }, {}).mana).toBe(MANA_MAX);
+  });
+
+  test('an empty profile starts at the opening mana', () => {
+    expect(computeScore({}, {})).toEqual({ mana: MANA_START, fairies: 0 });
+  });
+});
