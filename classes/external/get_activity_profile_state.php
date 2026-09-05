@@ -24,10 +24,6 @@
 
 namespace local_stackmathgame\external;
 
-defined('MOODLE_INTERNAL') || die();
-
-require_once(__DIR__ . '/../../../../lib/externallib.php');
-
 /**
  * Return the current label-bound profile state for an activity.
  *

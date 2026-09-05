@@ -46,8 +46,17 @@ export const options = {
     },
   },
   thresholds: {
+    // Measured on a GitHub runner: 5750 requests, 0 failures, p95 363 ms, max 1600 ms at 63
+    // requests per second. The failure threshold stays at 1% because the observed rate is zero -
+    // anything above noise is a real regression.
     http_req_failed: ['rate<0.01'],
-    http_req_duration: ['p(95)<2000'],
+    // 1000 ms is roughly three times the measured p95, which leaves room for a slower runner
+    // without letting a genuine slowdown through. The old 2000 ms was a guess and would have
+    // absorbed a fivefold regression silently.
+    http_req_duration: ['p(95)<1000'],
+    // The bootstrap fires four calls at once, so the iteration is what a player actually waits
+    // for. Measured at about 570 ms.
+    iteration_duration: ['p(95)<2500'],
   },
 };
 
