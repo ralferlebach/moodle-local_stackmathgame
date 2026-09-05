@@ -218,3 +218,42 @@ describe('RPG HUD state (issue #7)', () => {
     expect(computeScore({}, {})).toEqual({ mana: MANA_START, fairies: 0 });
   });
 });
+
+describe('applyGroupProgress', () => {
+  /**
+   * The same rule the shared helper applies.
+   *
+   * @param {Object} nav The navigation decision.
+   * @param {string} template The label template.
+   * @returns {string} What the counter would show, or '' when it stays hidden.
+   */
+  function render(nav, template = 'Stage {done} of {total}') {
+    if (!nav || nav.groupMode === 'scenes' || nav.groupTotal < 2) return '';
+    const current = Math.min(nav.groupDone + 1, nav.groupTotal);
+    return template.replace('{done}', String(current)).replace('{total}', String(nav.groupTotal));
+  }
+
+  test('an ordinary question shows nothing', () => {
+    // "1 of 1" on every single-question page would be noise, not information.
+    expect(render({ groupMode: 'scenes', groupTotal: 1, groupDone: 0 })).toBe('');
+  });
+
+  test('a quest counts from one', () => {
+    expect(render({ groupMode: 'quest', groupTotal: 3, groupDone: 0 })).toBe('Stage 1 of 3');
+    expect(render({ groupMode: 'quest', groupTotal: 3, groupDone: 1 })).toBe('Stage 2 of 3');
+  });
+
+  test('a finished quest does not count past its end', () => {
+    // groupDone equals groupTotal when the group is complete; without the cap this would read
+    // "Stage 4 of 3".
+    expect(render({ groupMode: 'quest', groupTotal: 3, groupDone: 3 })).toBe('Stage 3 of 3');
+  });
+
+  test('a single alternative shows nothing', () => {
+    expect(render({ groupMode: 'alternatives', groupTotal: 1, groupDone: 0 })).toBe('');
+  });
+
+  test('several alternatives are counted', () => {
+    expect(render({ groupMode: 'alternatives', groupTotal: 2, groupDone: 1 })).toBe('Stage 2 of 2');
+  });
+});

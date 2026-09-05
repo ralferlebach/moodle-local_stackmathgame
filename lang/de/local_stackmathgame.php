@@ -284,6 +284,7 @@ $string['stackmathgame:managethemes'] = 'Designs anlegen und bearbeiten';
 $string['stackmathgame:play'] = 'Spiel in einer Aktivität spielen';
 $string['stackmathgame:selectdesign'] = 'Design für eine Aktivität auswählen';
 $string['stackmathgame:viewstudio'] = 'GameDesign Studio ansehen';
+$string['stageprogress'] = 'Stufe {done} von {total}';
 $string['stashmapping_desc'] = 'Weisen Sie jedem Frageplatz einen block_stash-Gegenstand zu. Löst eine Person diesen Platz zum ersten Mal, wird der Gegenstand ihrem Inventar hinzugefügt. Setzt voraus, dass block_stash installiert und im Kurs aktiviert ist.';
 $string['stashmapping_enabled'] = 'Zuordnung aktiv';
 $string['stashmapping_header'] = 'Stash-Belohnungen (Integration mit block_stash)';

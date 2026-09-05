@@ -88,6 +88,9 @@ define([], function() {
             // business knowing about.
             entersLevel: !!nav.enterslevel,
             levelHeading: nav.levelheading || '',
+            groupMode: nav.groupmode || 'scenes',
+            groupTotal: Number(nav.grouptotal || 0),
+            groupDone: Number(nav.groupdone || 0),
             url: nav.url || '',
             label: nav.label || '',
             nextslot: parseInt(nav.nextslot, 10) || 0
@@ -158,9 +161,42 @@ define([], function() {
         return fallback || '';
     }
 
+    /**
+     * Render "stage 2 of 3" into an element, or hide it when there is nothing to say.
+     *
+     * Shared rather than written three times: the three modes would otherwise each decide when a
+     * group is worth mentioning, and would disagree - one showing "1 of 1" for an ordinary
+     * question, another counting a finished quest as still in progress.
+     *
+     * @param {Element} element The element to write into.
+     * @param {Object} navigation The decision from navigationFrom().
+     * @param {string} template A label with {done} and {total} placeholders.
+     * @returns {void}
+     */
+    function applyGroupProgress(element, navigation, template) {
+        if (!element) {
+            return;
+        }
+        // Only a real group with more than one stage is worth showing. A single-question page is
+        // the ordinary case and "1 of 1" is noise.
+        if (!navigation || navigation.groupMode === 'scenes' || navigation.groupTotal < 2) {
+            element.classList.add('d-none');
+            element.textContent = '';
+            return;
+        }
+        element.classList.remove('d-none');
+        // The stage the player is on is the one after those already done, capped at the total so
+        // a finished group reads "3 of 3" rather than "4 of 3".
+        var current = Math.min(navigation.groupDone + 1, navigation.groupTotal);
+        element.textContent = String(template || '{done} / {total}')
+            .replace('{done}', String(current))
+            .replace('{total}', String(navigation.groupTotal));
+    }
+
     return {
         defaultConfig: defaultConfig,
         navigationFrom: navigationFrom,
+        applyGroupProgress: applyGroupProgress,
         applyNavigation: applyNavigation,
         escapeHtml: escapeHtml,
         assetUrl: assetUrl

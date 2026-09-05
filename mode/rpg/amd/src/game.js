@@ -32,6 +32,32 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
 
     'use strict';
 
+    /**
+     * Return the element that shows the stage counter, creating it on first use.
+     *
+     * Created lazily: a quiz whose pages hold one question each never has a group, and an empty
+     * element in every HUD would be markup nobody asked for.
+     *
+     * @param {Element} parent The container to attach it to.
+     * @returns {Element|null} The element, or null when there is no container.
+     */
+    function stageElement(parent) {
+        if (!parent) {
+            return null;
+        }
+        var existing = parent.querySelector('.smg-rpg-stage');
+        if (existing) {
+            return existing;
+        }
+        var element = document.createElement('div');
+        element.className = 'smg-rpg-stage small text-muted d-none';
+        // Announced politely: the counter changes as a side effect of answering, and an assertive
+        // region would interrupt what the screen reader is saying about the answer itself.
+        element.setAttribute('aria-live', 'polite');
+        parent.appendChild(element);
+        return element;
+    }
+
     /** Mana gained per scene type on first solve. */
     var MANA_GAIN = {
         boss:        30,
@@ -485,7 +511,15 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 // Render the navigation the server resolved. This mode no longer reads
                 // cfg.branching: the resolver is canonical, and re-deciding here is what left
                 // linear scenes - the default - without any way forward.
-                GameCore.applyNavigation(nextBtn, GameCore.navigationFrom(response));
+                var decision = GameCore.navigationFrom(response);
+                GameCore.applyNavigation(nextBtn, decision);
+                // Where the player stands inside a quest or a set of alternatives. Rendered by the
+                // shared helper so all three modes agree on when a group is worth mentioning.
+                GameCore.applyGroupProgress(
+                    stageElement(hudParts.hud),
+                    decision,
+                    M.util.get_string('stageprogress', 'local_stackmathgame')
+                );
             }
         };
     }

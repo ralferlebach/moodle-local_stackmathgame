@@ -83,14 +83,18 @@ final class navigation_resolver {
         //
         // The distinction is deliberate: advancing within a group is a different fact from
         // advancing between nodes, and the two used to be the same word.
-        $subslot = self::next_subslot($cmid, $quizid, $currentslot, $profile, $attemptid);
+        $group = self::group_for($cmid, $quizid, $currentslot, $profile, $attemptid);
+        $subslot = ($group !== null && $group['mode'] !== slot_config_schema::GROUP_MODE_SCENES)
+            ? (int)$group['active']
+            : 0;
         if ($subslot > 0) {
             return self::payload(
                 self::ACTION_SUBSTEP,
                 $subslot,
                 self::page_for_slot($quizid, $subslot),
                 $attemptid,
-                $cmid
+                $cmid,
+                $group
             );
         }
 
@@ -111,12 +115,13 @@ final class navigation_resolver {
             $nextslot,
             self::page_for_slot($quizid, $nextslot),
             $attemptid,
-            $cmid
+            $cmid,
+            null
         );
     }
 
     /**
-     * Return the next unfinished stage of the current slot's page group, if any.
+     * Resolve the page group the current slot belongs to.
      *
      * Zero when the page is not a group, or when the group is done - the caller then resolves an
      * ordinary branch. Keeping "another stage here" and "another node there" apart is what lets a
@@ -128,28 +133,22 @@ final class navigation_resolver {
      * @param int $currentslot The slot just answered.
      * @param \stdClass $profile The player's profile.
      * @param int $attemptid The attempt, which fixes the choice of alternatives.
-     * @return int The next slot within the group, or 0.
+     * @return array|null The group resolution, or null when the page is not a group.
      */
-    private static function next_subslot(
+    private static function group_for(
         int $cmid,
         int $quizid,
         int $currentslot,
         \stdClass $profile,
         int $attemptid
-    ): int {
+    ): ?array {
         $page = self::page_for_slot($quizid, $currentslot);
         $solved = profile_service::solved_slots($profile);
         // The slot just answered counts as solved: the profile is written after navigation is
         // resolved, so reading it alone would offer the same stage again.
         $solved[$currentslot] = true;
 
-        $group = page_group_resolver::resolve($cmid, $page, $attemptid, $solved);
-        if ($group['mode'] === slot_config_schema::GROUP_MODE_SCENES) {
-            // Separate scenes are separate nodes: branching decides, not the group.
-            return 0;
-        }
-
-        return (int)$group['active'];
+        return page_group_resolver::resolve($cmid, $page, $attemptid, $solved);
     }
 
     /**
@@ -181,6 +180,7 @@ final class navigation_resolver {
      * @param int $nextpage The zero-based page index, or 0.
      * @param int $attemptid The attempt ID, or 0 when not known.
      * @param int $cmid The course-module ID, needed to resolve the level. 0 skips that.
+     * @param array|null $group The resolved page group, when the next slot belongs to one.
      * @return array The navigation payload.
      */
     private static function payload(
@@ -188,7 +188,8 @@ final class navigation_resolver {
         int $nextslot,
         int $nextpage,
         int $attemptid,
-        int $cmid = 0
+        int $cmid = 0,
+        ?array $group = null
     ): array {
         $url = '';
         if ($attemptid > 0) {
@@ -217,6 +218,12 @@ final class navigation_resolver {
             'url' => $url,
             'enterslevel' => (bool)($level['isfirst'] ?? false) && ($level['heading'] ?? '') !== '',
             'levelheading' => (string)($level['heading'] ?? ''),
+            // Where the player stands in the group, for a mode that wants to show it.
+            // Resolved here so every mode shows the same thing, and so no mode has to know
+            // what a group is.
+            'groupmode' => (string)($group['mode'] ?? slot_config_schema::GROUP_MODE_SCENES),
+            'grouptotal' => (int)($group['total'] ?? 0),
+            'groupdone' => (int)($group['done'] ?? 0),
             // The label is resolved server-side too. A mode that invented its own wording would
             // be making a decision about a state it does not own - and the three modes disagreed
             // about what "no next slot" even meant.
@@ -248,6 +255,18 @@ final class navigation_resolver {
             'levelheading' => new \core_external\external_value(
                 PARAM_TEXT,
                 'The level name, from the quiz section heading. Empty when there is none.'
+            ),
+            'groupmode' => new \core_external\external_value(
+                PARAM_ALPHA,
+                'scenes, alternatives or quest - how the questions of this page relate'
+            ),
+            'grouptotal' => new \core_external\external_value(
+                PARAM_INT,
+                'How many stages this page group has, 0 when it is not a group'
+            ),
+            'groupdone' => new \core_external\external_value(
+                PARAM_INT,
+                'How many stages of the group the player has completed'
             ),
         ]);
     }
