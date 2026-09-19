@@ -115,36 +115,44 @@ async function importQuestions(page, courseid, fixture) {
  *        autocomplete renders outside the scope it belongs to.
  */
 async function selectCategory(scope, fragment, page) {
-  // Moodle 4.5 filters the question bank through a filter row, not a category dropdown: pick the
-  // filter type "Category", choose the category in its autocomplete, then apply. The old
-  // select[name=category] does not exist, so the previous version of this helper found nothing
-  // and returned quietly - and the questions looked as though they had never been imported.
-  const plainSelect = scope.locator('select[name="category"], #id_selectacategory').first();
-  if (await plainSelect.count()) {
-    const option = plainSelect.locator(`option:has-text("${fragment}")`).first();
-    if (await option.count()) {
-      await plainSelect.selectOption({ value: await option.getAttribute('value') });
-    }
+  // Three renderings, because Moodle has changed this twice and the differences are not cosmetic.
+  //
+  //  * up to 4.3    a plain <select name="category"> above the list;
+  //  * 4.4 and 4.5  a filter row, whose category value is still a <select>, but named
+  //                 #filter-value-category and only applied when "Apply filters" is pressed;
+  //  * 5.1 onwards  the bank was reworked again and the control is an autocomplete.
+  //
+  // Guessing between them cost several runs: the helper looked for the 4.3 markup, found nothing
+  // and returned quietly, so the questions appeared never to have been imported when they were
+  // simply on another page.
+  // Visibility decides, not existence. From 4.4 the category filter keeps a <select> in the DOM
+  // purely as the backing store for an autocomplete - it carries class="hidden" and
+  // aria-hidden="true" - so a branch that only asked "is there a select?" always took the wrong
+  // path and timed out trying to choose an option in an element no one can see.
+  const legacy = scope.locator('select[name="category"], #id_selectacategory').first();
+  if (await legacy.count() && await legacy.isVisible()) {
+    await selectByText(legacy, fragment);
     return;
   }
 
-  const filterType = scope.getByRole('combobox', { name: /Filter type/i }).first();
-  if (!(await filterType.count())) {
+  const filterValue = scope.locator('#filter-value-category, select[id^="filter-value-category"]')
+    .first();
+  if (await filterValue.count() && await filterValue.isVisible()) {
+    await selectByText(filterValue, fragment);
+    await applyFilters(scope, page);
     return;
   }
-  await filterType.selectOption({ label: 'Category' }).catch(() => {});
 
-  // The value control appears only once a filter type is chosen, and it is an autocomplete.
-  const value = scope.locator('input.form-autocomplete-input, input[role="combobox"]').last();
-  await expect(
-    value,
-    'The category filter offers no value field'
-  ).toBeVisible({ timeout: 30000 });
-  await value.click();
-  await value.fill(fragment);
-
-  // The suggestion list is attached to the document, not inside the filter row, so it is looked
-  // for on the page - a Locator has no .page() and scoping here found nothing.
+  // 5.1+ autocomplete. The suggestion list is attached to the document rather than to the filter
+  // row, so it is looked for on the page.
+  // The visible half of the autocomplete. Moodle gives it a generated id
+  // (form_autocomplete_input-<timestamp>), so it is found by role instead.
+  const auto = scope.locator('input[role="combobox"], input[id^="form_autocomplete_input"]').last();
+  if (!(await auto.count())) {
+    return;
+  }
+  await auto.click();
+  await auto.fill(fragment);
   const suggestion = page
     .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
     .filter({ hasText: fragment })
@@ -154,16 +162,36 @@ async function selectCategory(scope, fragment, page) {
     `The category filter found nothing called "${fragment}"`
   ).toBeVisible({ timeout: 30000 });
   await suggestion.click();
+  await applyFilters(scope, page);
+}
 
-  // Subcategories included: the fixture's category sits beside the course default under "top",
-  // and the filter otherwise shows only the one category it was given.
-  const subcats = scope.getByRole('checkbox', { name: /subcategories/i }).first();
-  if (await subcats.count() && !(await subcats.isChecked())) {
-    await subcats.check().catch(() => {});
+/**
+ * Choose the option of a select whose text contains a fragment.
+ *
+ * @param {import('@playwright/test').Locator} select The select.
+ * @param {string} fragment Part of the option's text.
+ */
+async function selectByText(select, fragment) {
+  const option = select.locator(`option:has-text("${fragment}")`).first();
+  if (!(await option.count())) {
+    return;
   }
+  await select.selectOption({ value: await option.getAttribute('value') });
+}
 
-  await scope.getByRole('button', { name: /Apply filters/i }).first().click();
-  await page.waitForLoadState('networkidle').catch(() => {});
+/**
+ * Apply the question bank filters and wait for the list to be rebuilt.
+ *
+ * @param {import('@playwright/test').Locator|import('@playwright/test').Page} scope Page or dialog.
+ * @param {import('@playwright/test').Page} page The page.
+ */
+async function applyFilters(scope, page) {
+  const apply = scope.getByRole('button', { name: /Apply filters/i }).first();
+  if (await apply.count()) {
+    await apply.click();
+    // The list is rebuilt over AJAX, so waiting for navigation would wait forever.
+    await page.waitForLoadState('networkidle').catch(() => {});
+  }
 }
 
 /**
