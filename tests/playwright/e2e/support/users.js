@@ -29,19 +29,30 @@ async function createUser(page, user) {
 
   await page.fill('#id_username', user.username);
 
-  // Moodle hides the password field while "Generate password and notify user" is ticked, which
-  // it is by default on some versions. The field is in the DOM the whole time, just carrying
-  // d-none - so a fill() waits sixty seconds for something that was never going to appear and
-  // reports a timeout rather than the checkbox that caused it.
+  // Moodle wraps the password in its "passwordunmask" widget: the real input carries d-none and
+  // stays hidden until the "Click to enter text" link beside it is used. The input is in the DOM
+  // the whole time, which is why a fill() reports a timeout on an element it can plainly see -
+  // and why unticking "Generate password and notify user", the obvious suspect, changed nothing.
   const generate = page.locator('#id_createpassword');
-  if (await generate.count()) {
-    await generate.uncheck().catch(() => {});
+  if (await generate.count() && await generate.isChecked()) {
+    await generate.uncheck();
   }
 
   const password = page.locator('#id_newpassword');
+  if (!(await password.isVisible())) {
+    const reveal = page
+      .locator('a:has-text("Click to enter text"), [data-passwordunmask="edit"]')
+      .first();
+    await expect(
+      reveal,
+      'Neither the password field nor its "Click to enter text" link is available'
+    ).toBeVisible({ timeout: 30000 });
+    await reveal.click();
+  }
+
   await expect(
     password,
-    'The password field stayed hidden - is "Generate password and notify user" still ticked?'
+    'The password field stayed hidden even after opening the passwordunmask widget'
   ).toBeVisible({ timeout: 30000 });
   await password.fill(user.password);
   await page.fill('#id_firstname', user.firstname);
@@ -69,15 +80,33 @@ async function enrol(page, courseid, fullname, role) {
   await page.locator('button:has-text("Enrol users"), a:has-text("Enrol users")').first().click();
 
   const dialog = page.locator('.modal-dialog').last();
-  const search = dialog.locator('input[type="text"], input[role="combobox"]').first();
+  await expect(dialog, 'The enrolment dialog did not open').toBeVisible({ timeout: 30000 });
+
+  // Moodle's autocomplete, by its own markup rather than by "the first text input": the dialog
+  // also contains the role selector and the enrolment options, and which of them counts as first
+  // depends on the version.
+  const search = dialog.locator('.form-autocomplete-input, input[role="combobox"]').first();
+  await expect(search, 'The participant search box is not in the dialog').toBeVisible({ timeout: 30000 });
+  await search.click();
   await search.fill(fullname);
-  await dialog.locator(`[role="option"]:has-text("${fullname}"), li:has-text("${fullname}")`)
-    .first().click();
+
+  // The suggestion list is rendered outside the input, and typing alone does not select anybody -
+  // a dialog submitted without a selection enrols nobody and reports success.
+  const suggestion = page
+    .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
+    .filter({ hasText: fullname })
+    .first();
+  await expect(
+    suggestion,
+    `The participant search found nobody called ${fullname}`
+  ).toBeVisible({ timeout: 30000 });
+  await suggestion.click();
 
   const roleSelect = dialog.locator('select').first();
   if (await roleSelect.count()) {
     await roleSelect.selectOption({ label: role }).catch(() => {});
   }
+
   await dialog.locator('button:has-text("Enrol")').last().click();
 
   await expect(
