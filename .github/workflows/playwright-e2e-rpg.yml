@@ -1,0 +1,225 @@
+name: Playwright E2E RPG (UI only)
+
+# The full authoring and playing workflow, through the Moodle interface and nothing else: an
+# empty site, a course, three STACK questions written in the question bank form, a quiz, the game
+# configuration, a participant, and a play-through to the end of the RPG.
+#
+# The seeded Playwright suite proves the runtime works. This one proves a person can get there:
+# after the first login nothing is created by seed.php, CLI, web service or SQL. Several defects
+# in this plugin were settings that worked when written to the database and could not be reached
+# through any form - that class of defect is invisible to a seeded test.
+#
+# Manual only. It installs a site and plays an attempt, so it takes minutes and has no business
+# running on every push. Its output is a video and an HTML report, produced on success as well as
+# on failure, because the green run is the documentation.
+#
+# NOTE: workflow_dispatch only appears in the Actions UI once this file exists on the
+# repository's DEFAULT branch.
+on:
+  workflow_dispatch:
+    inputs:
+      moodle_branch:
+        description: 'Moodle branch to install'
+        required: false
+        default: 'MOODLE_405_STABLE'
+
+jobs:
+  e2e-rpg:
+    name: 'RPG, built and played through the UI'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB: moodle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+
+    env:
+      MOODLE_BRANCH: ${{ github.event.inputs.moodle_branch || 'MOODLE_405_STABLE' }}
+      DB: pgsql
+      MOODLE_WWWROOT: http://127.0.0.1:8000
+
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pgsql, gd, intl, zip, soap, mbstring, curl, xml, exif
+          ini-values: max_input_vars=5000
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check out Moodle
+        run: git clone --depth 1 --branch "$MOODLE_BRANCH" https://github.com/moodle/moodle.git moodle
+
+      - name: Install Maxima and gnuplot
+        run: |
+          # qtype_stack runs a live CAS healthcheck from its install.php. Without a maxima binary
+          # install_database.php aborts and the whole environment fails to come up.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends maxima maxima-share gnuplot-nox
+
+      - name: Install the plugin ecosystem into Moodle
+        run: |
+          # ONE installation routine, one ref. Installing the siblings twice (once from a branch,
+          # once from SIBLING_REF) left `cp -a` copying a repository INTO the existing plugin
+          # directory, which produced nested sibling repositories and meant the browser test ran
+          # against whichever copy landed first - the tested ecosystem was not reproducible.
+          #
+          # SIBLING_REF pins the ref the siblings are taken from; it defaults to the branch this
+          # workflow runs on, so a run always tests one coherent state.
+          SIBLING_REF="${SIBLING_REF:-$GITHUB_REF_NAME}"
+          echo "Geschwister-Plugins von Ref: $SIBLING_REF"
+
+          install_plugin () {
+            local repo="$1" dest="$2" defbranch="$3" src="/tmp/src_$(basename "$1")"
+            rm -rf "$src" "moodle/$dest"
+            git clone --depth 1 --branch "$SIBLING_REF" \
+              "https://github.com/${repo}.git" "$src" \
+              || git clone --depth 1 --branch "$defbranch" \
+                 "https://github.com/${repo}.git" "$src"
+            mkdir -p "$(dirname "moodle/$dest")"
+            cp -a "$src" "moodle/$dest"
+            rm -rf "moodle/$dest/.git"
+          }
+
+          # The plugin under test comes from this checkout, never from a clone.
+          rm -rf "moodle/local/stackmathgame"
+          mkdir -p "$(dirname "moodle/local/stackmathgame")"
+          cp -a plugin "moodle/local/stackmathgame"
+          rm -rf "moodle/local/stackmathgame/.git"
+
+          # Hard dependencies from version.php. qbehaviour_adaptivemultipart is required BY
+          # qtype_stack, so Moodle cannot be installed without it either. The three game-mode
+          # subplugins are bundled inside this repository and need no separate clone.
+          install_plugin maths/moodle-qtype_stack                     question/type/stack                  master
+          install_plugin maths/moodle-qbehaviour_adaptivemultipart    question/behaviour/adaptivemultipart master
+          install_plugin maths/moodle-qbehaviour_dfexplicitvaildate    question/behaviour/dfexplicitvaildate     master
+          install_plugin maths/moodle-qbehaviour_dfcbmexplicitvaildate question/behaviour/dfcbmexplicitvaildate master
+          install_plugin maths/moodle-qbank_importasversion            question/bank/importasversion            main
+          install_plugin ralferlebach/moodle-qbehaviour_stackmathgame question/behaviour/stackmathgame     main
+          install_plugin branchup/moodle-filter_shortcodes            filter/shortcodes                    master
+          # Soft integrations: installed so the XP / Stash bridges are exercised, not skipped.
+          install_plugin FMCorz/moodle-block_xp                       blocks/xp                            master
+          install_plugin FMCorz/moodle-block_stash                    blocks/stash                         master
+
+      - name: Verify a clean plugin layout
+        run: |
+          # A version.php outside the plugin root or a declared subplugin directory means a
+          # repository was copied into an existing plugin directory, in which case the tested
+          # ecosystem is not the one this workflow claims to test.
+          #
+          # local_stackmathgame legitimately bundles three game-mode subplugins under mode/, each
+          # with its own version.php. The expected set is therefore derived from
+          # db/subplugins.json instead of being hardcoded: a check that demanded exactly one
+          # version.php failed on a perfectly correct tree, and relaxing it to make the job pass
+          # would have thrown away the only thing it was watching for.
+          plugin=moodle/local/stackmathgame
+          {
+            echo "$plugin/version.php"
+            if [ -f "$plugin/db/subplugins.json" ]; then
+              dirs=$(tr -d ' \t"' < "$plugin/db/subplugins.json" \
+                | sed -n '/subplugintypes/,/}/p' | sed -n 's/^[^:]*:\([^,}]*\).*/\1/p')
+              for dir in $dirs; do
+                [ -n "$dir" ] || continue
+                for sub in "$plugin/$dir"/*/version.php; do
+                  [ -e "$sub" ] && echo "$sub"
+                done
+              done
+            fi
+          } | sort > /tmp/expected.txt
+          find "$plugin" -name version.php | sort > /tmp/found.txt
+          if ! diff -u /tmp/expected.txt /tmp/found.txt; then
+            echo "Unerwartete version.php gefunden - verschachtelte Plugin-Kopie?"
+            echo "Erwartet: Plugin-Root plus je ein Subplugin unter den in db/subplugins.json"
+            echo "deklarierten Verzeichnissen."
+            exit 1
+          fi
+          echo "Plugin-Layout ist sauber: $(wc -l < /tmp/expected.txt) erwartete Komponenten."
+
+      # install.php WRITES config.php itself and aborts when one already exists
+      # ("The configuration file config.php already exists"), so we must not
+      # pre-create one from config-dist.php.
+      - name: Install Moodle site
+        run: |
+          cd moodle
+          # install.php requires an existing, writable dataroot — it will not
+          # create it ("$CFG->dataroot is not configured properly, directory
+          # does not exist"). It must also live OUTSIDE the Moodle tree.
+          mkdir -p /tmp/moodledata
+          php admin/cli/install.php \
+            --non-interactive --agree-license \
+            --dbtype=pgsql --dbhost=127.0.0.1 --dbport=5432 --dbname=moodle \
+            --dbuser=moodle --dbpass=moodle \
+            --wwwroot="$MOODLE_WWWROOT" --dataroot=/tmp/moodledata \
+            --fullname="CI" --shortname="CI" \
+            --adminpass="Admin!23" --adminemail=ci@example.invalid
+
+          # The CAS settings and maximalocal.mac, via the same helper the CI pipelines use.
+          # admin/cli/cfg.php was the old approach and it also ran STACK's sample-library checks,
+          # which scan 4267 questions, take minutes and prove nothing about this plugin.
+          php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
+
+      - name: Start the Moodle web server
+        run: |
+          # PHP's built-in server is single-threaded unless PHP_CLI_SERVER_WORKERS is set. A
+          # Moodle page pulls many subresources in parallel, so one worker stalls as soon as a
+          # browser reaches it.
+          cd moodle
+          PHP_CLI_SERVER_WORKERS=8 php -S 127.0.0.1:8000 -t . > /tmp/moodle-server.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -sf -o /dev/null "$MOODLE_WWWROOT/login/index.php" && break
+            sleep 2
+          done
+          curl -sf -o /dev/null "$MOODLE_WWWROOT/login/index.php"
+
+      - name: Install Playwright
+        working-directory: plugin/tests/playwright
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Build the RPG through the interface and play it
+        working-directory: plugin/tests/playwright
+        env:
+          SMG_BASE_URL: http://127.0.0.1:8000
+          SMG_ADMIN_USER: admin
+          SMG_ADMIN_PASS: 'Admin!23'
+          SMG_PLAYER_USER: smgplayer
+          SMG_PLAYER_PASS: 'Smg-Play-Pass!1'
+        run: npm run e2e:rpg
+
+      - name: Upload the report and the recording
+        # always(), not failure(): the green run's video is the deliverable. It shows the finished
+        # game being played, which is what you hand to somebody who will never read a report.
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-rpg-journey
+          path: |
+            plugin/tests/playwright/e2e-report/**
+            plugin/tests/playwright/e2e-artifacts/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Show the Moodle server log on failure
+        if: ${{ failure() }}
+        run: |
+          # The browser sees Moodle's rendered error page; this is the other half - the PHP notice
+          # or fatal behind it, which the page often does not show.
+          tail -n 300 /tmp/moodle-server.log || true
