@@ -82,8 +82,29 @@ It installs its own Moodle, so nothing needs preparing.
 
 ### Output
 
-Video, screenshots, a trace, an HTML report and a JSON result - on success as well as on failure,
-and a step-by-step summary in the GitHub Actions run summary naming the last step that succeeded.
+Two artefacts, on success as well as on failure, plus a step-by-step summary in the GitHub Actions
+run summary naming the last step that succeeded.
+
+* **`e2e-rpg-recording`** - the video, the screenshots and `results.json`. This is the one to
+  download normally.
+* **`e2e-rpg-trace`** - the Playwright trace and the full HTML report, for investigating a
+  failure.
+
+They are separate because of the second one. A Playwright HTML report bundles the trace viewer -
+a 600 kB minified JavaScript application - and the trace itself is a zip inside the artefact zip.
+Heuristic virus scanners flag that combination: obfuscated-looking script inside a nested archive
+is also what real malware looks like, so the shape alone is enough to trigger a warning without
+anything being wrong.
+
+Nothing in either artefact is executed by downloading it, and the trace's contents are just the
+pages the browser visited: in a typical run, 155 screenshots plus Moodle's own CSS and JavaScript,
+captured from the site the test drove. If your scanner objects, it will be to `e2e-rpg-trace`, and
+you can ignore that artefact unless you are diagnosing a failure.
+
+If you want to check rather than take this on trust: look at which file the scanner actually names
+(it will be `trace/assets/*.js` from the report, or the nested `trace.zip`), and run that single
+file through VirusTotal. A single heuristic engine objecting to a minified bundle is a false
+positive; several engines naming a specific family is not, and then it is worth telling me.
 
 ### Adding another game mode
 

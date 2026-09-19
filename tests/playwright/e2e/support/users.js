@@ -28,9 +28,22 @@ async function createUser(page, user) {
   await page.goto('/user/editadvanced.php?id=-1');
 
   await page.fill('#id_username', user.username);
-  // The password field is behind "Choose an authentication method"; on a fresh site manual
-  // authentication is the default and the field is present.
-  await page.fill('#id_newpassword', user.password);
+
+  // Moodle hides the password field while "Generate password and notify user" is ticked, which
+  // it is by default on some versions. The field is in the DOM the whole time, just carrying
+  // d-none - so a fill() waits sixty seconds for something that was never going to appear and
+  // reports a timeout rather than the checkbox that caused it.
+  const generate = page.locator('#id_createpassword');
+  if (await generate.count()) {
+    await generate.uncheck().catch(() => {});
+  }
+
+  const password = page.locator('#id_newpassword');
+  await expect(
+    password,
+    'The password field stayed hidden - is "Generate password and notify user" still ticked?'
+  ).toBeVisible({ timeout: 30000 });
+  await password.fill(user.password);
   await page.fill('#id_firstname', user.firstname);
   await page.fill('#id_lastname', user.lastname);
   await page.fill('#id_email', user.email);

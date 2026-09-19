@@ -257,3 +257,40 @@ describe('applyGroupProgress', () => {
     expect(render({ groupMode: 'alternatives', groupTotal: 2, groupDone: 1 })).toBe('Stage 2 of 2');
   });
 });
+
+describe('tertiary navigation injection (Moodle 5.1 dropdown)', () => {
+  /**
+   * The rule the module follows: a select if there is one, otherwise the listbox.
+   *
+   * Moodle 5.1 replaced the tertiary navigation select with a div-based combobox. Appending an
+   * <option> there does nothing at all - no error, no entry - and the only symptom is that the
+   * link a teacher is told to use is simply not present.
+   *
+   * @param {Document} doc The document to inject into.
+   * @returns {string} 'select', 'dropdown' or 'none'.
+   */
+  function targetFor(doc) {
+    if (doc.querySelector('.tertiary-navigation .urlselect select')) return 'select';
+    if (doc.querySelector('.tertiary-navigation .select-menu [role="listbox"]')) return 'dropdown';
+    return 'none';
+  }
+
+  test('the classic select is preferred when present', () => {
+    document.body.innerHTML =
+      '<div class="tertiary-navigation"><div class="urlselect"><select></select></div></div>';
+    expect(targetFor(document)).toBe('select');
+  });
+
+  test('the 5.1 dropdown is used when there is no select', () => {
+    document.body.innerHTML =
+      '<div class="tertiary-navigation"><div class="select-menu">' +
+      '<ul role="listbox"><li><a class="dropdown-item" href="#">Questions</a></li></ul>' +
+      '</div></div>';
+    expect(targetFor(document)).toBe('dropdown');
+  });
+
+  test('neither present is reported rather than guessed at', () => {
+    document.body.innerHTML = '<div class="tertiary-navigation"></div>';
+    expect(targetFor(document)).toBe('none');
+  });
+});

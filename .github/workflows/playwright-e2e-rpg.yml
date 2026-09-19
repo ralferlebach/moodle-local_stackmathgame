@@ -204,16 +204,39 @@ jobs:
           SMG_PLAYER_PASS: 'Smg-Play-Pass!1'
         run: npm run e2e:rpg
 
-      - name: Upload the report and the recording
+      - name: Upload the recording and the result
         # always(), not failure(): the green run's video is the deliverable. It shows the finished
         # game being played, which is what you hand to somebody who will never read a report.
+        #
+        # Split from the trace and the HTML report on purpose. Those two contain a zip inside a
+        # zip and Playwright's own 600 kB minified trace-viewer bundle, and heuristic virus
+        # scanners flag that combination - it looks like obfuscated script in a nested archive,
+        # which is also what real malware looks like. Nothing here is actually unsafe, but a
+        # warning on the artefact everybody downloads is a warning everybody learns to ignore.
+        # This half is video, screenshots and JSON: no nested archive, no bundled application.
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-rpg-journey
+          name: e2e-rpg-recording
+          path: |
+            plugin/tests/playwright/e2e-artifacts/**/*.webm
+            plugin/tests/playwright/e2e-artifacts/**/*.png
+            plugin/tests/playwright/e2e-artifacts/**/*.md
+            plugin/tests/playwright/e2e-report/results.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload the trace and the HTML report
+        # The diagnostic half, downloaded when something needs investigating rather than as a
+        # matter of course. If a scanner objects to an artefact, it will be this one - see the
+        # note on the step above for why, and tests/playwright/README.md for what to do about it.
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-rpg-trace
           path: |
             plugin/tests/playwright/e2e-report/**
-            plugin/tests/playwright/e2e-artifacts/**
+            plugin/tests/playwright/e2e-artifacts/**/trace.zip
           if-no-files-found: warn
           retention-days: 30
 

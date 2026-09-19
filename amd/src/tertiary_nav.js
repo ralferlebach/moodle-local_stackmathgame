@@ -39,6 +39,15 @@ define([], function() {
     var SELECT_SELECTOR = '.tertiary-navigation .urlselect select';
 
     /**
+     * Selector for the Bootstrap dropdown navigation introduced in Moodle 5.1.
+     *
+     * The listbox inside .tertiary-navigation .select-menu. There is no select element in this
+     * markup at all, which is why the select-based injection silently did nothing on 5.2.
+     */
+    var DROPDOWN_SELECTOR = '.tertiary-navigation .select-menu [role="listbox"], '
+        + '.tertiary-navigation .select-menu .dropdown-menu';
+
+    /**
      * Attribute used to mark our injected option (prevents duplicates).
      *
      * @type {string}
@@ -56,11 +65,24 @@ define([], function() {
      * @returns {boolean} True when the option was injected successfully.
      */
     function tryInject(url, label) {
+        return injectIntoSelect(url, label) || injectIntoDropdown(url, label);
+    }
+
+    /**
+     * Add the entry to the classic <select> navigation.
+     *
+     * Moodle up to and including 5.0 renders the tertiary navigation as a real select inside
+     * .urlselect, which POSTs to course/jumpto.php.
+     *
+     * @param {string} url Absolute URL to navigate to.
+     * @param {string} label Display label.
+     * @returns {boolean} True when the entry is in place.
+     */
+    function injectIntoSelect(url, label) {
         var select = document.querySelector(SELECT_SELECTOR);
         if (!select) {
             return false;
         }
-        // Guard: do not add the option twice.
         if (select.querySelector('option[' + DATA_ATTR + '="quiz"]')) {
             return true;
         }
@@ -69,6 +91,48 @@ define([], function() {
         option.textContent = label;
         option.setAttribute(DATA_ATTR, 'quiz');
         select.appendChild(option);
+        return true;
+    }
+
+    /**
+     * Add the entry to the Bootstrap dropdown navigation.
+     *
+     * Moodle 5.1 replaced the select with a div-based combobox: a .dropdown.select-menu holding a
+     * listbox of anchors, with no select element anywhere. Appending an <option> there does
+     * nothing at all - no error, no entry, and the only symptom is that the link a teacher is
+     * told to use simply is not there.
+     *
+     * A plain anchor is added rather than a copy of Moodle's own item markup: the classes differ
+     * between themes, and an entry that navigates correctly and looks slightly plain is a better
+     * failure mode than one that looks right and does nothing.
+     *
+     * @param {string} url Absolute URL to navigate to.
+     * @param {string} label Display label.
+     * @returns {boolean} True when the entry is in place.
+     */
+    function injectIntoDropdown(url, label) {
+        var menu = document.querySelector(DROPDOWN_SELECTOR);
+        if (!menu) {
+            return false;
+        }
+        if (menu.querySelector('[' + DATA_ATTR + '="quiz"]')) {
+            return true;
+        }
+
+        var item = document.createElement('a');
+        item.href = url;
+        item.textContent = label;
+        item.setAttribute(DATA_ATTR, 'quiz');
+        item.setAttribute('role', 'option');
+        // Copied from a sibling so the entry inherits whatever the theme uses, without this
+        // module having to know the theme's class names.
+        var sibling = menu.querySelector('a, [role="option"]');
+        if (sibling && sibling.className) {
+            item.className = sibling.className;
+        } else {
+            item.className = 'dropdown-item';
+        }
+        menu.appendChild(item);
         return true;
     }
 

@@ -322,40 +322,45 @@ class behat_local_stackmathgame extends behat_base {
      */
     public function the_quiz_navigation_select_should_contain(string $label): void {
         $page = $this->getSession()->getPage();
-        // The markup of the tertiary navigation is core's and it has changed: Moodle 5.2 no
-        // longer wraps the control in .urlselect. Several selectors are tried rather than one,
-        // so a core redesign shows up as "the entry is missing" - which is what this step is
-        // about - instead of as "the container is missing", which it is not.
-        $select = null;
-        foreach (
-            [
-            '.tertiary-navigation .urlselect select',
-            '.tertiary-navigation select',
-            '[data-region="tertiary-navigation"] select',
-            '#region-main select.custom-select',
-            ] as $selector
-        ) {
-            $select = $page->find('css', $selector);
-            if ($select) {
-                break;
+
+        // Two renderings, because Moodle changed one. Up to 5.0 the tertiary navigation is a real
+        // <select> inside .urlselect; from 5.1 it is a div-based combobox with a listbox of
+        // anchors and no select anywhere. Checking only the first reported "the container is
+        // missing" on 5.2, when what had actually happened was that the plugin's entry was never
+        // added - the injection appended an <option> to an element that does not exist.
+        $select = $page->find('css', '.tertiary-navigation .urlselect select');
+        if ($select) {
+            foreach ($select->findAll('css', 'option') as $option) {
+                if (strpos($option->getText(), $label) !== false) {
+                    return;
+                }
             }
-        }
-        if (!$select) {
             throw new \Behat\Mink\Exception\ExpectationException(
-                'Tertiary navigation select not found',
-                $this->getSession()
+                'The quiz navigation select does not offer "' . $label . '"',
+                $this->getSession()->getDriver()
             );
         }
-        $options = $select->findAll('css', 'option');
-        foreach ($options as $option) {
-            if (trim($option->getText()) === $label) {
+
+        $menu = $page->find('css', '.tertiary-navigation .select-menu');
+        if (!$menu) {
+            throw new \Behat\Mink\Exception\ExpectationException(
+                'No quiz tertiary navigation found in either rendering',
+                $this->getSession()->getDriver()
+            );
+        }
+        if (strpos($menu->getText(), $label) !== false) {
+            return;
+        }
+        // The listbox is collapsed until opened, so its items may not be in the rendered text.
+        foreach ($menu->findAll('css', 'a, [role="option"]') as $item) {
+            if (strpos($item->getText(), $label) !== false) {
                 return;
             }
         }
+
         throw new \Behat\Mink\Exception\ExpectationException(
-            "Option '$label' not found in quiz navigation select. "
-            . "Found: " . implode(', ', array_map(fn($o) => trim($o->getText()), $options)),
-            $this->getSession()
+            'The quiz navigation dropdown does not offer "' . $label . '"',
+            $this->getSession()->getDriver()
         );
     }
     /**
