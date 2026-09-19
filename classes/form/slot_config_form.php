@@ -73,6 +73,42 @@ class slot_config_form extends \moodleform {
             $mform->setType('narrative_' . $key, PARAM_TEXT);
         }
 
+        // Offered only on the first slot of a shared page: the group describes the page, and a
+        // control on every member would let the members disagree about what they collectively
+        // are. flow.php decides and passes the flag in.
+        if (!empty($this->_customdata['pagegroupslots'])) {
+            $mform->addElement('header', 'groupheader', get_string('flow_group', 'local_stackmathgame'));
+            $mform->addElement(
+                'static',
+                'grouphint',
+                '',
+                get_string('flow_group_hint', 'local_stackmathgame', $this->_customdata['pagegroupslots'])
+            );
+            $modes = [];
+            foreach (slot_config_schema::GROUP_MODES as $mode) {
+                $modes[$mode] = get_string('flow_groupmode_' . $mode, 'local_stackmathgame');
+            }
+            $mform->addElement('select', 'group_mode', get_string('flow_groupmode', 'local_stackmathgame'), $modes);
+            $mform->addHelpButton('group_mode', 'flow_groupmode', 'local_stackmathgame');
+
+            $mform->addElement('text', 'group_pick', get_string('flow_grouppick', 'local_stackmathgame'), ['size' => 4]);
+            $mform->setType('group_pick', PARAM_INT);
+            $mform->setDefault('group_pick', 1);
+            $mform->hideIf('group_pick', 'group_mode', 'neq', slot_config_schema::GROUP_MODE_ALTERNATIVES);
+
+            $strategies = [];
+            foreach (slot_config_schema::PICK_STRATEGIES as $strategy) {
+                $strategies[$strategy] = get_string('flow_pick_' . $strategy, 'local_stackmathgame');
+            }
+            $mform->addElement(
+                'select',
+                'group_strategy',
+                get_string('flow_groupstrategy', 'local_stackmathgame'),
+                $strategies
+            );
+            $mform->hideIf('group_strategy', 'group_mode', 'neq', slot_config_schema::GROUP_MODE_ALTERNATIVES);
+        }
+
         $mform->addElement('header', 'branchingheader', get_string('flow_branching', 'local_stackmathgame'));
         $modes = [];
         foreach (slot_config_schema::BRANCH_MODES as $mode) {
@@ -214,6 +250,9 @@ class slot_config_form extends \moodleform {
             'reward_score' => (int)($config['rewards']['score'] ?? 0),
             'reward_xp' => (int)($config['rewards']['xp'] ?? 0),
             'reward_achievements' => implode(', ', (array)($config['rewards']['achievementkeys'] ?? [])),
+            'group_mode' => (string)($config['group']['mode'] ?? slot_config_schema::GROUP_MODE_SCENES),
+            'group_pick' => max(1, (int)($config['group']['pick'] ?? 1)),
+            'group_strategy' => (string)($config['group']['strategy'] ?? slot_config_schema::PICK_RANDOM),
             'reward_stashitem' => (int)($config['rewards']['stash']['itemid'] ?? 0),
             'reward_stashqty' => max(1, (int)($config['rewards']['stash']['quantity'] ?? 1)),
         ];
@@ -270,6 +309,16 @@ class slot_config_form extends \moodleform {
         // Written unconditionally: when block_stash is absent the form has no control, and
         // reading the absent field as 0 would silently drop a mapping a colleague configured on
         // a site where the block was installed.
+        // Only written when the form actually offered the controls, so editing a slot in the
+        // middle of a page cannot silently reset the group its page belongs to.
+        if (property_exists($data, 'group_mode')) {
+            $config['group'] = [
+                'mode' => (string)$data->group_mode,
+                'pick' => max(1, (int)($data->group_pick ?? 1)),
+                'strategy' => (string)($data->group_strategy ?? slot_config_schema::PICK_RANDOM),
+            ];
+        }
+
         if (property_exists($data, 'reward_stashitem')) {
             $config['rewards']['stash'] = [
                 'itemid' => max(0, (int)$data->reward_stashitem),

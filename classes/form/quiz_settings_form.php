@@ -89,9 +89,9 @@ class quiz_settings_form extends \moodleform {
         if (!empty($config->labelid)) {
             $mform->setDefault('labelid', (int)$config->labelid);
         }
-        if (!$canmanagelabels) {
-            $mform->freeze('labelid');
-        }
+        // Selecting an existing label stays available to anyone who may configure the quiz.
+        // Freezing this too would leave a teacher unable to save at all, because a label is
+        // required - the game would become unusable for exactly the role that runs it.
 
         $mform->addElement(
             'text',
@@ -104,8 +104,16 @@ class quiz_settings_form extends \moodleform {
         );
         $mform->setType('newlabel', PARAM_TEXT);
         $mform->addHelpButton('newlabel', 'newlabel', 'local_stackmathgame');
+        // Creating one is the restricted half: a new label adds to a site-wide namespace that
+        // other courses share, which is a governance decision rather than a course setting.
         if (!$canmanagelabels) {
             $mform->freeze('newlabel');
+            $mform->addElement(
+                'static',
+                'newlabelnotice',
+                '',
+                get_string('newlabel_restricted', 'local_stackmathgame')
+            );
         }
 
         $mform->addElement(

@@ -95,8 +95,11 @@ This plugin introduces these additional capabilities:
 * **local/stackmathgame:viewstudio** — open the Game Design Studio read-only.
 * **local/stackmathgame:managethemes** — create, edit, import and export designs. Intended for
   the dedicated Game Designer role and for administrators.
-* **local/stackmathgame:managelabels** — create and assign the labels that group progress across
-  quizzes. Because a label is site-wide, this is deliberately not given to teachers by default.
+* **local/stackmathgame:managelabels** — create new labels. A label groups progress across every
+  quiz that uses it, so creating one adds to a site-wide namespace other courses share. That is a
+  governance decision rather than a course setting, and editing teachers do not get it by default.
+  *Selecting* an existing label needs only `configurequiz`, so a teacher can still set a quiz up
+  without it.
 
 
 Subplugins
@@ -265,5 +268,10 @@ Ralf Erlebach
 
 The RPG mode is derived from `alquiz-fantasy-bg-ver3.js`, © 2022 Malte Neugebauer,
 Hochschule Bochum, used under the MIT Licence.
+
+The artwork of that prototype was **not** carried over. It used sprites from craftpix.net and UI
+elements from freepik, neither of which may be redistributed inside a published Moodle plugin.
+Every graphic shipped here is a placeholder created for this plugin and licensed GPL v3 with the
+rest of it — see `mode/*/packages/*/LICENSE.txt`.
 
 Individual copyrights of individual developers are tracked in PHPDoc comments and Git commits.

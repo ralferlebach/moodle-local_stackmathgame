@@ -322,7 +322,24 @@ class behat_local_stackmathgame extends behat_base {
      */
     public function the_quiz_navigation_select_should_contain(string $label): void {
         $page = $this->getSession()->getPage();
-        $select = $page->find('css', '.tertiary-navigation .urlselect select');
+        // The markup of the tertiary navigation is core's and it has changed: Moodle 5.2 no
+        // longer wraps the control in .urlselect. Several selectors are tried rather than one,
+        // so a core redesign shows up as "the entry is missing" - which is what this step is
+        // about - instead of as "the container is missing", which it is not.
+        $select = null;
+        foreach (
+            [
+            '.tertiary-navigation .urlselect select',
+            '.tertiary-navigation select',
+            '[data-region="tertiary-navigation"] select',
+            '#region-main select.custom-select',
+            ] as $selector
+        ) {
+            $select = $page->find('css', $selector);
+            if ($select) {
+                break;
+            }
+        }
         if (!$select) {
             throw new \Behat\Mink\Exception\ExpectationException(
                 'Tertiary navigation select not found',

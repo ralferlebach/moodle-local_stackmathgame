@@ -32,6 +32,10 @@
     * hasrows bool Whether the quiz has any slots.
     * rows array One entry per slot.
       * slotnumber int The slot number.
+      * startslevel bool Whether this row begins a new level.
+      * levelheading string The level name from the section heading.
+      * page int The zero-based attempt page.
+      * sharespage bool Whether other questions sit on the same page.
       * questionname string The question title.
       * questionid int The question id.
       * qtype string The question type.
@@ -49,6 +53,8 @@
     * hasunreachable bool Whether unreachable slots exist.
     * unreachable string Comma-separated slot numbers.
     * hasdeadends bool Whether dead ends exist.
+    * hascrowded bool Whether any page holds several questions.
+    * crowded string Comma-separated page numbers.
     * deadends string Comma-separated slot numbers.
     * scenetypes array Options for the bulk scene-type control.
       * value string The stored value.
@@ -63,6 +69,10 @@
         "rows": [
             {
                 "slotnumber": 1,
+                "startslevel": true,
+                "levelheading": "Level 1",
+                "page": 0,
+                "sharespage": false,
                 "questionname": "Differentiate a polynomial",
                 "questionid": 77,
                 "qtype": "stack",
@@ -82,6 +92,8 @@
         "hasunreachable": false,
         "unreachable": "",
         "hasdeadends": false,
+        "hascrowded": false,
+        "crowded": "",
         "deadends": "",
         "scenetypes": [
             {"value": "challenge", "label": "Challenge"}
@@ -94,6 +106,7 @@
         <p>{{#str}}flow_problems, local_stackmathgame{{/str}}</p>
         {{#hasunreachable}}<p>{{#str}}flow_unreachable, local_stackmathgame{{/str}}: {{unreachable}}</p>{{/hasunreachable}}
         {{#hasdeadends}}<p>{{#str}}flow_deadends, local_stackmathgame{{/str}}: {{deadends}}</p>{{/hasdeadends}}
+        {{#hascrowded}}<p>{{#str}}flow_crowdedpages, local_stackmathgame{{/str}}: {{crowded}}</p>{{/hascrowded}}
     </div>
 {{/hasproblems}}
 
@@ -121,6 +134,11 @@
         </thead>
         <tbody>
         {{#rows}}
+            {{#startslevel}}
+            <tr class="table-active">
+                <th colspan="7" scope="colgroup">{{#str}}flow_level, local_stackmathgame{{/str}}: {{levelheading}}</th>
+            </tr>
+            {{/startslevel}}
             <tr data-slot="{{slotnumber}}">
                 <td>
                     <input type="checkbox" name="slots[]" value="{{slotnumber}}"
@@ -129,7 +147,11 @@
                         {{#str}}flow_col_slot, local_stackmathgame{{/str}} {{slotnumber}}
                     </label>
                 </td>
-                <th scope="row" class="font-weight-normal">{{slotnumber}}</th>
+                <th scope="row" class="font-weight-normal">
+                    {{slotnumber}}
+                    <div class="small text-muted">{{#str}}flow_page, local_stackmathgame{{/str}} {{page}}</div>
+                    {{#sharespage}}<span class="badge badge-warning">{{#str}}flow_sharespage, local_stackmathgame{{/str}}</span>{{/sharespage}}
+                </th>
                 <td>
                     {{questionname}}
                     <div class="small text-muted">

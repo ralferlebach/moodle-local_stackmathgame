@@ -70,30 +70,69 @@ Prerequisites: an open attempt (`ATTEMPTID`) and a slot whose `configjson` carri
 `rewards.xp`. The seed leaves the schema default of `0`, so set a reward first — with `0` the
 gate passes trivially and proves nothing.
 
-## Was der Race-Plan zeigt - und was er nicht zuordnen kann
+## Gemessene Ergebnisse
 
-Gemessen auf Apache mit mpm_prefork, also mit echten parallelen Prozessen: 30 gleichzeitige
-Absendungen derselben richtigen Antwort, sechs davon binnen zwei Sekunden abgeschlossen. Die XP
-stiegen um genau die konfigurierte Belohnung, nicht um ein Vielfaches.
+Auf einem GitHub-Runner, September 2026.
 
-**Die Invariante haelt also unter echter Gleichzeitigkeit.** Was der Lauf *nicht* zeigt, ist, dass
-der Lock in submit_answer sie haelt: ein Kontrolllauf mit neutralisiertem Lock lieferte dasselbe
-Ergebnis.
+### Leseplan (k6)
 
-Der Grund steht in der Datenbank. Nach dreissig Absendungen hatte der Versuch **zwei**
-Antwortschritte, nicht dreissig: Moodles Question-Engine verwirft eine identische Wiederholung
-derselben Antwort, es entsteht kein neuer Schritt, die erreichte Wertung aendert sich nicht - und
-ohne Wertungsaenderung zahlt calculate_submit_deltas() nichts aus. Das ist eine zweite,
-unabhaengige Verteidigungslinie, und in diesem Szenario greift sie zuerst.
+```
+5750 Anfragen, 0 Fehler, 5748 von 5748 Checks bestanden
+p95 363 ms, Median 105 ms, Maximum 1600 ms, 62,8 Anfragen/s
+```
 
-Damit ist der Lock nicht widerlegt, aber auch nicht als tragend nachgewiesen. Um ihn gezielt zu
+### Leseplan (JMeter)
+
+```
+6014 Samples, 0 Fehler
+get_quiz_config      p95 577 ms
+get_profile_state    p95 555 ms
+prefetch_next_node   p95 583 ms
+Quiz-Ansicht         p95 1007 ms  (enthaelt den Asset-Injection-Hook)
+```
+
+Die drei Webservices liegen dicht beieinander - kein Endpunkt faellt aus dem Rahmen, auch nicht
+`prefetch_next_node`, das bei jedem Aufruf `question_map_service::ensure_for_cmid()` ausfuehrt.
+Die 303er der Quiz-Ansicht sind Weiterleitungen, keine Fehler.
+
+### Race-Plan: diesmal mit echter Gleichzeitigkeit
+
+```
+30 Iterationen, alle angenommen, 0 Fehler
+mittlere Dauer 4,02 s, 5,81 Iterationen/s, Gesamtdauer 5,2 s
+```
+
+Aus Durchsatz mal Bearbeitungszeit folgt eine **mittlere Gleichzeitigkeit von rund 23 Anfragen**:
+praktisch alle 30 waren zur selben Zeit in Bearbeitung. Das ist die Kontention, die lokal nie
+zustande kam - und die XP stiegen trotzdem nur um die einfache Belohnung.
+
+Damit ist die At-most-once-Garantie unter echter Last belegt. Welcher der beiden Schutzmechanismen
+sie traegt - der Lock in `submit_answer` oder die Deduplizierung identischer Antworten durch die
+Question-Engine - trennt auch dieser Lauf nicht; siehe den Abschnitt unten.
+
+## Was der Race-Plan nicht zuordnet
+
+Ein Kontrolllauf mit neutralisiertem Lock lieferte dasselbe Ergebnis. Der Grund steht in der
+Datenbank: nach dreissig Absendungen hatte der Versuch **zwei** Antwortschritte, nicht dreissig.
+Moodles Question-Engine verwirft eine identische Wiederholung derselben Antwort, es entsteht kein
+neuer Schritt, die erreichte Wertung aendert sich nicht - und ohne Wertungsaenderung zahlt
+`calculate_submit_deltas()` nichts aus.
+
+Der Lock ist damit nicht widerlegt, aber auch nicht als tragend nachgewiesen. Um ihn gezielt zu
 pruefen, muessten die parallelen Anfragen *verschiedene* richtige Antworten auf dieselbe Frage
-schicken, sodass jede einen echten neuen Schritt erzeugt. Solange das nicht gemessen ist, gilt der
-Lock als Guertel neben den Hosentraegern: er kostet nichts und schadet nicht, und die Aussage
-"at most once" steht auf der Engine, nicht auf ihm.
+schicken, sodass jede einen echten neuen Schritt erzeugt.
 
 ## Thresholds
 
-The current values (`http_req_failed < 1%`, `p95 < 2s`) are an initial baseline, not a measured
-target. Tune them after the first real run on representative hardware, exactly like the JMeter
-assertions.
+Nicht mehr geraten, sondern aus den Messungen oben abgeleitet:
+
+| Schwellwert | Wert | Begruendung |
+|---|---|---|
+| `http_req_failed` | < 1 % | gemessen 0 %; alles darueber ist eine echte Regression |
+| `http_req_duration` p95 | < 1000 ms | rund das Dreifache der gemessenen 363 ms |
+| `iteration_duration` p95 | < 2500 ms | der Bootstrap feuert vier Aufrufe gleichzeitig |
+| JMeter-Dauerassertion | < 2000 ms | gemessen p95 583 ms |
+
+Der alte Wert von 2000 ms fuer `http_req_duration` haette eine Verfuenffachung der Latenz
+stillschweigend durchgelassen. Wer auf deutlich schwaecherer Hardware misst, sollte die Werte neu
+bestimmen statt sie anzuheben - ein Schwellwert, der jede Messung besteht, ist keiner.

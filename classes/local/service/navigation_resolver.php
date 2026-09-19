@@ -48,6 +48,9 @@ final class navigation_resolver {
     /** The player stays where they are, typically after a wrong answer. */
     const ACTION_STAY = 'stay';
 
+    /** Another stage of the same page group follows; the run has not moved on. */
+    const ACTION_SUBSTEP = 'substep';
+
     /**
      * Resolve the navigation step following an outcome on a slot.
      *
@@ -71,7 +74,28 @@ final class navigation_resolver {
         // client offer a way forward the moment an answer is graded wrong, which is the opposite
         // of what a game wants: the retry is the point.
         if ($outcome === slot_config_schema::OUTCOME_GRADEDWRONG) {
-            return self::payload(self::ACTION_STAY, 0, 0, $attemptid);
+            return self::payload(self::ACTION_STAY, 0, 0, $attemptid, $cmid);
+        }
+
+        // A quiz page that is a group is finished before the run moves on. Stepping to the next
+        // node while a quest still has stages left would skip them silently, and a page of
+        // alternatives would move on after the first of several the player was given.
+        //
+        // The distinction is deliberate: advancing within a group is a different fact from
+        // advancing between nodes, and the two used to be the same word.
+        $group = self::group_for($cmid, $quizid, $currentslot, $profile, $attemptid);
+        $subslot = ($group !== null && $group['mode'] !== slot_config_schema::GROUP_MODE_SCENES)
+            ? (int)$group['active']
+            : 0;
+        if ($subslot > 0) {
+            return self::payload(
+                self::ACTION_SUBSTEP,
+                $subslot,
+                self::page_for_slot($quizid, $subslot),
+                $attemptid,
+                $cmid,
+                $group
+            );
         }
 
         $nextslot = branch_resolver::resolve_next_slot(
@@ -83,15 +107,48 @@ final class navigation_resolver {
         );
 
         if ($nextslot <= 0) {
-            return self::payload(self::ACTION_FINISH, 0, 0, $attemptid);
+            return self::payload(self::ACTION_FINISH, 0, 0, $attemptid, $cmid);
         }
 
         return self::payload(
             self::ACTION_CONTINUE,
             $nextslot,
             self::page_for_slot($quizid, $nextslot),
-            $attemptid
+            $attemptid,
+            $cmid,
+            null
         );
+    }
+
+    /**
+     * Resolve the page group the current slot belongs to.
+     *
+     * Zero when the page is not a group, or when the group is done - the caller then resolves an
+     * ordinary branch. Keeping "another stage here" and "another node there" apart is what lets a
+     * staged quest exist at all: with one answer for both, finishing stage one of three would
+     * look exactly like finishing the whole quest.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $currentslot The slot just answered.
+     * @param \stdClass $profile The player's profile.
+     * @param int $attemptid The attempt, which fixes the choice of alternatives.
+     * @return array|null The group resolution, or null when the page is not a group.
+     */
+    private static function group_for(
+        int $cmid,
+        int $quizid,
+        int $currentslot,
+        \stdClass $profile,
+        int $attemptid
+    ): ?array {
+        $page = self::page_for_slot($quizid, $currentslot);
+        $solved = profile_service::solved_slots($profile);
+        // The slot just answered counts as solved: the profile is written after navigation is
+        // resolved, so reading it alone would offer the same stage again.
+        $solved[$currentslot] = true;
+
+        return page_group_resolver::resolve($cmid, $page, $attemptid, $solved);
     }
 
     /**
@@ -122,12 +179,21 @@ final class navigation_resolver {
      * @param int $nextslot The resolved slot, or 0.
      * @param int $nextpage The zero-based page index, or 0.
      * @param int $attemptid The attempt ID, or 0 when not known.
+     * @param int $cmid The course-module ID, needed to resolve the level. 0 skips that.
+     * @param array|null $group The resolved page group, when the next slot belongs to one.
      * @return array The navigation payload.
      */
-    private static function payload(string $action, int $nextslot, int $nextpage, int $attemptid): array {
+    private static function payload(
+        string $action,
+        int $nextslot,
+        int $nextpage,
+        int $attemptid,
+        int $cmid = 0,
+        ?array $group = null
+    ): array {
         $url = '';
         if ($attemptid > 0) {
-            if ($action === self::ACTION_CONTINUE) {
+            if ($action === self::ACTION_CONTINUE || $action === self::ACTION_SUBSTEP) {
                 $url = (new \moodle_url('/mod/quiz/attempt.php', [
                     'attempt' => $attemptid,
                     'page' => $nextpage,
@@ -137,11 +203,27 @@ final class navigation_resolver {
             }
         }
 
+        // Whether the next slot opens a new level, and what that level is called. Resolved here
+        // because the level structure is the quiz's, not the game mode's - a mode that worked it
+        // out itself would be reading quiz_sections, which is exactly the kind of second
+        // interpretation this resolver exists to prevent.
+        $level = ($cmid > 0 && $nextslot > 0)
+            ? flow_service::level_for_slot($cmid, $nextslot)
+            : null;
+
         return [
             'action' => $action,
             'nextslot' => $nextslot,
             'nextpage' => $nextpage,
             'url' => $url,
+            'enterslevel' => (bool)($level['isfirst'] ?? false) && ($level['heading'] ?? '') !== '',
+            'levelheading' => (string)($level['heading'] ?? ''),
+            // Where the player stands in the group, for a mode that wants to show it.
+            // Resolved here so every mode shows the same thing, and so no mode has to know
+            // what a group is.
+            'groupmode' => (string)($group['mode'] ?? slot_config_schema::GROUP_MODE_SCENES),
+            'grouptotal' => (int)($group['total'] ?? 0),
+            'groupdone' => (int)($group['done'] ?? 0),
             // The label is resolved server-side too. A mode that invented its own wording would
             // be making a decision about a state it does not own - and the three modes disagreed
             // about what "no next slot" even meant.
@@ -156,11 +238,36 @@ final class navigation_resolver {
      */
     public static function external_structure(): \core_external\external_single_structure {
         return new \core_external\external_single_structure([
-            'action' => new \core_external\external_value(PARAM_ALPHA, 'continue, finish or stay'),
+            'action' => new \core_external\external_value(
+                PARAM_ALPHA,
+                'continue, substep, finish or stay. "substep" means another stage of the same '
+                    . 'page group follows - the run itself has not advanced.'
+            ),
             'nextslot' => new \core_external\external_value(PARAM_INT, 'Resolved next slot number, 0 when none'),
             'nextpage' => new \core_external\external_value(PARAM_INT, 'Zero-based attempt page of the next slot'),
             'url' => new \core_external\external_value(PARAM_URL, 'Where to navigate, empty when staying'),
             'label' => new \core_external\external_value(PARAM_TEXT, 'Label for the navigation control'),
+            'enterslevel' => new \core_external\external_value(
+                PARAM_BOOL,
+                'True when the next slot opens a new, named level - play the chapter_start '
+                    . 'narrative once here rather than on every question of the level.'
+            ),
+            'levelheading' => new \core_external\external_value(
+                PARAM_TEXT,
+                'The level name, from the quiz section heading. Empty when there is none.'
+            ),
+            'groupmode' => new \core_external\external_value(
+                PARAM_ALPHA,
+                'scenes, alternatives or quest - how the questions of this page relate'
+            ),
+            'grouptotal' => new \core_external\external_value(
+                PARAM_INT,
+                'How many stages this page group has, 0 when it is not a group'
+            ),
+            'groupdone' => new \core_external\external_value(
+                PARAM_INT,
+                'How many stages of the group the player has completed'
+            ),
         ]);
     }
 }

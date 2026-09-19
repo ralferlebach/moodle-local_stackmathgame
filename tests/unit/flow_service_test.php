@@ -309,4 +309,63 @@ final class flow_service_test extends advanced_testcase {
 
         $this->assertSame(1, flow_service::get_slot_config($this->cmid, 1)['rewards']['stash']['quantity']);
     }
+    /**
+     * A quiz without section headings is one unnamed level.
+     *
+     * Moodle always creates a section starting at slot 1, usually with no heading. Treating that
+     * as a level called "" would put an empty title above every flow list.
+     */
+    public function test_a_plain_quiz_is_one_level(): void {
+        $structure = flow_service::get_structure($this->cmid);
+
+        $this->assertCount(1, $structure);
+        $this->assertSame('', $structure[0]['heading']);
+        $this->assertCount(3, $structure[0]['pages']);
+    }
+
+    /**
+     * A section heading starts a new level, and the following slots belong to it.
+     */
+    public function test_a_section_heading_starts_a_level(): void {
+        global $DB;
+
+        $DB->insert_record('quiz_sections', (object)[
+            'quizid' => $this->quiz->id,
+            'firstslot' => 2,
+            'heading' => 'The forest',
+            'shufflequestions' => 0,
+        ]);
+
+        $structure = flow_service::get_structure($this->cmid);
+
+        $this->assertCount(2, $structure);
+        $this->assertSame('The forest', $structure[1]['heading']);
+        $this->assertSame(2, $structure[1]['firstslot']);
+    }
+
+    /**
+     * A page with one question each is not reported as crowded.
+     */
+    public function test_single_question_pages_are_not_crowded(): void {
+        $this->assertSame([], flow_service::get_crowded_pages($this->cmid));
+    }
+
+    /**
+     * A page holding several questions is reported.
+     *
+     * The branch resolver navigates between pages, so the questions after the first on a page are
+     * never played. Naming them is the point: silently skipping a teacher's questions is worse
+     * than saying the game cannot use them yet.
+     */
+    public function test_a_shared_page_is_reported(): void {
+        global $DB;
+
+        // Put slots 2 and 3 on the same page as each other.
+        $DB->set_field('quiz_slots', 'page', 2, ['quizid' => $this->quiz->id, 'slot' => 3]);
+
+        $crowded = flow_service::get_crowded_pages($this->cmid);
+
+        $this->assertNotEmpty($crowded);
+        $this->assertSame([2, 3], reset($crowded));
+    }
 }

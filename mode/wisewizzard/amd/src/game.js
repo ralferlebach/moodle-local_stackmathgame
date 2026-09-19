@@ -33,6 +33,32 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
 
     'use strict';
 
+    /**
+     * Return the element that shows the stage counter, creating it on first use.
+     *
+     * Created lazily: a quiz whose pages hold one question each never has a group, and an empty
+     * element in every HUD would be markup nobody asked for.
+     *
+     * @param {Element} parent The container to attach it to.
+     * @returns {Element|null} The element, or null when there is no container.
+     */
+    function stageElement(parent) {
+        if (!parent) {
+            return null;
+        }
+        var existing = parent.querySelector('.smg-wizzard-stage');
+        if (existing) {
+            return existing;
+        }
+        var element = document.createElement('div');
+        element.className = 'smg-wizzard-stage small text-muted d-none';
+        // Announced politely: the counter changes as a side effect of answering, and an assertive
+        // region would interrupt what the screen reader is saying about the answer itself.
+        element.setAttribute('aria-live', 'polite');
+        parent.appendChild(element);
+        return element;
+    }
+
     /** Default DM avatar URL (Hochschule Bochum public asset). */
     var AVATAR_URL = 'https://marvin.hs-bochum.de/~mneugebauer/dm-avatar-grin.svg';
 
@@ -224,7 +250,15 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
                 // cfg.branching: the server resolver is canonical, and re-deciding here is what
                 // left linear scenes - the default every auto-created slot gets - with no way
                 // forward at all.
-                GameCore.applyNavigation(ui.next, GameCore.navigationFrom(response));
+                                var decision = GameCore.navigationFrom(response);
+                GameCore.applyNavigation(ui.next, decision);
+                // Where the player stands inside a quest or a set of alternatives. Rendered by the
+                // shared helper so all three modes agree on when a group is worth mentioning.
+                GameCore.applyGroupProgress(
+                    stageElement(ui.bubble),
+                    decision,
+                    M.util.get_string('stageprogress', 'local_stackmathgame')
+                );
             }
         };
     }

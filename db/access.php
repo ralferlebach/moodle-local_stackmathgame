@@ -41,11 +41,15 @@ $capabilities = [
             'manager' => CAP_ALLOW,
         ],
     ],
+    // A label is a site-wide progress space: several quizzes sharing one form a single campaign,
+    // and XP carries across them. Creating or reassigning a label therefore reaches beyond the
+    // course it is done in, which is why an editing teacher does not get it by default - the
+    // README has always described it that way, the definition did not. Granting it deliberately
+    // to a role remains possible, and is the intended route.
     'local/stackmathgame:managelabels' => [
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
-            'editingteacher' => CAP_ALLOW,
             'manager' => CAP_ALLOW,
         ],
     ],

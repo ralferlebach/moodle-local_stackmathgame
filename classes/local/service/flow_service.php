@@ -200,6 +200,116 @@ final class flow_service {
     }
 
     /**
+     * Report the quiz's own structure: levels from section headings, groups from pages.
+     *
+     * Read-only, and deliberately so. Moodle already lets an author express both of these -
+     * a section heading starts a new part of the quiz, and several questions on one page belong
+     * together - and the game has been ignoring both. Surfacing them costs nothing and is the
+     * foundation the rest of issue #9 needs: you cannot configure what a page of questions means
+     * until the editor can show that the page exists.
+     *
+     * Nothing here changes how the game plays. Deciding whether the questions on one page are
+     * alternatives, the stages of one quest, or simply separate scenes is a further step, and it
+     * needs a data model that does not exist yet.
+     *
+     * @param int $cmid The course-module ID.
+     * @return array[] One entry per level: heading, and its pages with their slot numbers.
+     */
+    public static function get_structure(int $cmid): array {
+        global $DB;
+
+        $cm = quiz_configurator::get_supported_cm($cmid);
+        $quizid = (int)$cm->instance;
+
+        $sections = $DB->get_records('quiz_sections', ['quizid' => $quizid], 'firstslot ASC');
+        $slots = self::get_slots($cmid);
+
+        // Moodle always has a section starting at slot 1, usually without a heading. An unnamed
+        // first section is the quiz itself, not a level, so it gets no title rather than an
+        // empty one.
+        $boundaries = [];
+        foreach ($sections as $section) {
+            $boundaries[(int)$section->firstslot] = trim((string)$section->heading);
+        }
+
+        $levels = [];
+        $current = null;
+        foreach ($slots as $slotnumber => $slot) {
+            if (isset($boundaries[$slotnumber]) || $current === null) {
+                $heading = $boundaries[$slotnumber] ?? '';
+                $current = [
+                    'heading' => $heading,
+                    'firstslot' => $slotnumber,
+                    'pages' => [],
+                ];
+                $levels[] = &$current;
+                unset($current);
+                $current = &$levels[count($levels) - 1];
+            }
+            $page = navigation_resolver::page_for_slot($quizid, $slotnumber);
+            if (!isset($current['pages'][$page])) {
+                $current['pages'][$page] = [];
+            }
+            $current['pages'][$page][] = $slotnumber;
+        }
+        unset($current);
+
+        return $levels;
+    }
+
+    /**
+     * Return the level a slot belongs to, and whether that slot opens it.
+     *
+     * The runtime needs both halves: which level the player is in, so it can name it, and whether
+     * they have just entered it, so the intro plays once rather than on every question of the
+     * level.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $slot The slot number.
+     * @return array{heading: string, firstslot: int, isfirst: bool, index: int}|null
+     *         The level, or null when the slot is unknown.
+     */
+    public static function level_for_slot(int $cmid, int $slot): ?array {
+        foreach (self::get_structure($cmid) as $index => $level) {
+            foreach ($level['pages'] as $slots) {
+                if (in_array($slot, $slots, true)) {
+                    return [
+                        'heading' => (string)$level['heading'],
+                        'firstslot' => (int)$level['firstslot'],
+                        'isfirst' => (int)$level['firstslot'] === $slot,
+                        'index' => (int)$index,
+                    ];
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Report pages that hold more than one question.
+     *
+     * The branch resolver navigates between pages, so today a page with several questions plays
+     * only its first one and silently skips the rest. Until issue #9 gives those pages a meaning,
+     * naming them is the honest thing to do - a game that quietly ignores a teacher's questions
+     * is worse than one that says it cannot use them yet.
+     *
+     * @param int $cmid The course-module ID.
+     * @return array[] Page number to the slot numbers it holds, only for pages with several.
+     */
+    public static function get_crowded_pages(int $cmid): array {
+        $pages = [];
+        foreach (self::get_structure($cmid) as $level) {
+            foreach ($level['pages'] as $page => $slots) {
+                if (count($slots) > 1) {
+                    $pages[$page] = $slots;
+                }
+            }
+        }
+        ksort($pages);
+        return $pages;
+    }
+
+    /**
      * Report slots a player can never reach, and slots a player can never leave.
      *
      * Both are authoring mistakes that no single direction card is wrong about - each one is

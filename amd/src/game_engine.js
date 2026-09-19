@@ -352,6 +352,7 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
         }).then(function(results) {
             state.store.narrative =
                 results[0] && results[0].lines ? results[0].lines : [];
+
             state.store.nextnode =
                 results[1] && results[1].nextnode ? results[1].nextnode : null;
             // The submit response is the authority on where the player goes next, because it
@@ -364,6 +365,23 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                 state.store.profile = results[2].profile;
                 state.store.design = results[2].design || state.store.design;
             }
+            // A new level opens: the chapter narrative is fetched once, here, rather than by each
+            // mode. Kept as its own link in the chain rather than nested inside the previous one,
+            // so the mode is dispatched to exactly once, after everything it needs has arrived.
+            var nav = state.store.navigation;
+            if (!nav || !nav.enterslevel) {
+                return null;
+            }
+            return call('local_stackmathgame_get_narrative', {
+                quizid: state.config.quizid,
+                scene: 'chapter_start'
+            });
+        }).then(function(chapter) {
+            if (chapter && chapter.lines && chapter.lines.length) {
+                // Prepended, so the level intro reads before the outcome text.
+                state.store.narrative = chapter.lines.concat(state.store.narrative);
+            }
+
             // Dispatch to the active game module.
             if (state.activeGame && typeof state.activeGame.onAnswer === 'function') {
                 state.activeGame.onAnswer(response, state.store);
