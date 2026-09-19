@@ -7,6 +7,8 @@
  */
 
 const { expect } = require('@playwright/test');
+const { clickVisible } = require('./visible');
+const { CATEGORY, selectCategory } = require('./stack-question');
 
 /**
  * Add a quiz to a course with the game behaviour set.
@@ -62,11 +64,18 @@ async function expandAll(page) {
 async function addQuestionsFromBank(page, cmid, names) {
   await page.goto(`/mod/quiz/edit.php?cmid=${cmid}`);
 
-  await page.locator('a:has-text("Add"), button:has-text("Add")').first().click();
-  await page.locator('a:has-text("from question bank")').first().click();
+  await clickVisible(
+    page.getByRole('link', { name: /^Add/ }).or(page.getByRole('button', { name: /^Add/ })),
+    'Opening the add-question menu'
+  );
+  await clickVisible(
+    page.getByRole('link', { name: /from question bank/i }),
+    'Choosing "from question bank"'
+  );
 
   const dialog = page.locator('.modal-dialog').last();
   await expect(dialog, 'The question bank chooser did not open').toBeVisible({ timeout: 30000 });
+  await selectCategory(dialog, CATEGORY);
 
   for (const name of names) {
     const row = dialog.locator(`tr:has-text("${name}")`).first();

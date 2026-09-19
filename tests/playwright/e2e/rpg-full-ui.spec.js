@@ -25,24 +25,31 @@ const game = require('./support/games/rpg');
 
 const ADMIN_USER = process.env.SMG_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.SMG_ADMIN_PASS || 'Admin!23';
-const PLAYER_USER = process.env.SMG_PLAYER_USER || 'smgplayer';
+// Unique per run. A fixed username works once and then collides with itself: Moodle rejects the
+// second account with "username already taken", and the form error is easy to misread as a
+// broken form rather than a site that still holds last run's participant. CI installs a fresh
+// site every time and would not notice; a re-run against an existing site would.
+const PLAYER_USER = process.env.SMG_PLAYER_USER || `smgplayer${Date.now()}`;
 const PLAYER_PASS = process.env.SMG_PLAYER_PASS || 'Smg-Play-Pass!1';
 const PLAYER_FIRST = 'Pat';
 const PLAYER_LAST = 'Player';
 const BASE_URL = process.env.SMG_BASE_URL || 'http://127.0.0.1:8000';
 
 /**
- * The questions, and the answers that solve them.
+ * The questions used, and the answers that solve them.
  *
- * Deliberately trivial. What is under test is the plugin's integration with STACK - the
- * authoring forms, the game configuration, the runtime - not STACK's ability to do algebra. A
- * hard question would only add ways for the test to fail for reasons that are nobody's fault.
+ * Three of the five in the fixture: the first is information-only and the last expects a chain of
+ * reasoning, neither of which says anything about the game. These three are equation strings, so
+ * the answer typed is literally what STACK expects.
  */
 const QUESTIONS = [
-  { name: 'Quest 1 – one and one', text: 'What is 1 + 1?', answer: '2' },
-  { name: 'Quest 2 – two times three', text: 'What is 2 * 3?', answer: '6' },
-  { name: 'Quest 3 – solve for x', text: 'If x + 2 = 5, what is x?', answer: '3' },
+  { name: 'SMG Fixture 02 - One Plus One', answer: '1+1=2' },
+  { name: 'SMG Fixture 03 - Two Times Two', answer: '2*2=4' },
+  { name: 'SMG Fixture 04 - Three Cubed', answer: '3^3=27' },
 ];
+
+/** The fixture file the questions are imported from. */
+const FIXTURE = require('path').resolve(__dirname, '..', '..', 'fixtures', 'e2e_stack_questions.xml');
 
 const LEVEL_TWO_HEADING = 'Level 2 – The deeper forest';
 
@@ -100,16 +107,15 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       await users.enrol(page, courseid, `${PLAYER_FIRST} ${PLAYER_LAST}`, 'Student');
     });
 
-    await step('Create three STACK questions in the question bank', async () => {
-      for (const question of QUESTIONS) {
-        await stackQuestion.createStackQuestion(page, courseid, question);
-      }
+    await step('Import the STACK fixture questions', async () => {
+      await stackQuestion.importQuestions(page, courseid, FIXTURE);
     });
 
     await step('Preview each question and confirm the CAS grades it', async () => {
       // Done before the questions reach the quiz. A question that cannot be graded would
       // otherwise surface much later, in the play-through, as a game that refuses to advance -
-      // and the report would point at the game rather than at the question.
+      // and the report would point at the game rather than at the question. It is also the one
+      // check that the imported fixture and the live CAS agree with each other.
       for (const question of QUESTIONS) {
         await stackQuestion.previewAndVerify(page, courseid, question.name, question.answer);
       }

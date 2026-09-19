@@ -12,6 +12,7 @@
  */
 
 const { expect } = require('@playwright/test');
+const { clickVisible } = require('./visible');
 
 /**
  * Create a user account through Site administration.
@@ -61,9 +62,19 @@ async function createUser(page, user) {
 
   await page.click('#id_submitbutton');
 
+  // Where Moodle lands after saving a user differs by version and by how the page was reached,
+  // so the account is confirmed where it can always be found: the user list, filtered by the
+  // username that was just used. Asserting on the landing page instead made the check depend on
+  // a redirect that has nothing to do with whether the account exists.
+  await expect(
+    page.locator('#id_username'),
+    'The user form did not save - it is still on screen, so something was rejected'
+  ).toBeHidden({ timeout: 30000 });
+
+  await page.goto(`/admin/user.php?search=${encodeURIComponent(user.username)}`);
   await expect(
     page.locator(`text=${user.firstname} ${user.lastname}`).first(),
-    'The new account does not appear in the user list'
+    `The account ${user.username} is not in the user list`
   ).toBeVisible({ timeout: 30000 });
 }
 
@@ -77,7 +88,14 @@ async function createUser(page, user) {
  */
 async function enrol(page, courseid, fullname, role) {
   await page.goto(`/user/index.php?id=${courseid}`);
-  await page.locator('button:has-text("Enrol users"), a:has-text("Enrol users")').first().click();
+  // By accessible name rather than by text content. Moodle wraps the label in spans and adds
+  // icons, so :has-text() misses a control that the page plainly shows - the failure then reads
+  // "0 elements matched" while the screenshot shows the button. getByRole matches what a screen
+  // reader announces, which is what the error context reports too.
+  await clickVisible(
+    page.getByRole('button', { name: 'Enrol users' }),
+    'Opening the enrolment dialog'
+  );
 
   const dialog = page.locator('.modal-dialog').last();
   await expect(dialog, 'The enrolment dialog did not open').toBeVisible({ timeout: 30000 });
@@ -85,7 +103,7 @@ async function enrol(page, courseid, fullname, role) {
   // Moodle's autocomplete, by its own markup rather than by "the first text input": the dialog
   // also contains the role selector and the enrolment options, and which of them counts as first
   // depends on the version.
-  const search = dialog.locator('.form-autocomplete-input, input[role="combobox"]').first();
+  const search = dialog.locator('input.form-autocomplete-input, input[role="combobox"]').first();
   await expect(search, 'The participant search box is not in the dialog').toBeVisible({ timeout: 30000 });
   await search.click();
   await search.fill(fullname);

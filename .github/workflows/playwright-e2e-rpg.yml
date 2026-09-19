@@ -200,7 +200,6 @@ jobs:
           SMG_BASE_URL: http://127.0.0.1:8000
           SMG_ADMIN_USER: admin
           SMG_ADMIN_PASS: 'Admin!23'
-          SMG_PLAYER_USER: smgplayer
           SMG_PLAYER_PASS: 'Smg-Play-Pass!1'
         run: npm run e2e:rpg
 

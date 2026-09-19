@@ -1,12 +1,14 @@
 /**
- * Creating STACK questions through the question bank form.
+ * Getting STACK questions into a course's question bank, through the import form.
  *
- * No XML or GIFT import. Importing is a legitimate thing for a teacher to do, but it is not the
- * authoring workflow, and this suite exists to prove the authoring workflow works - a question
- * bank filled from a file says nothing about whether the form can produce a playable question.
+ * Ralf supplies the questions as a fixture rather than having the test author them field by
+ * field. That is a deliberate narrowing of scope: what this suite is for is the game - its
+ * settings, its flow editor, its runtime - and typing a STACK question into Moodle's question
+ * form tests Moodle's question form. The import screen is still the interface; it is what a
+ * teacher does with questions they were given.
  *
- * The questions are deliberately trivial (1+1, 2*3, x+2=5). What is under test is the plugin's
- * integration with STACK, not STACK's algebra.
+ * The questions themselves stay trivial (1+1=2, 2*2=4, 3^3=27) so that a failure means the game
+ * is wrong, never that the algebra was hard.
  *
  * @module     local_stackmathgame/e2e/stack-question
  * @copyright  2026 Ralf Erlebach
@@ -14,6 +16,9 @@
  */
 
 const { expect } = require('@playwright/test');
+
+/** The category the fixture file declares for its questions. */
+const CATEGORY = 'StackMathGame E2E Fixtures';
 
 /**
  * Create one STACK question in a course's question bank.
@@ -31,77 +36,93 @@ const { expect } = require('@playwright/test');
  * @param {string} question.text The prompt, without the placeholders.
  * @param {string} question.answer The correct answer, as a Maxima expression.
  */
-async function createStackQuestion(page, courseid, question) {
-  // Through the question bank and its chooser, not a constructed addquestion.php URL. The URL
-  // form takes different parameters between Moodle versions, and guessing them would mean the
-  // test fails on a version difference that a person clicking "Create a new question" would
-  // never notice.
-  await page.goto(`/question/edit.php?courseid=${courseid}`);
+async function importQuestions(page, courseid, fixture) {
+  await page.goto(`/question/bank/importquestions/import.php?courseid=${courseid}`);
 
-  await page.locator('button:has-text("Create a new question"), input[value*="Create a new question"]')
-    .first().click();
-
-  const chooser = page.locator('.modal-dialog, .qbank-chooser, form').last();
-  const stack = chooser.locator('label:has-text("STACK"), input[value="stack"]').first();
+  const format = page.locator('#id_format_xml');
   await expect(
-    stack,
-    'STACK is not offered in the question type chooser - is qtype_stack installed?'
+    format,
+    'The import form has no Moodle XML option - is the question bank reachable?'
   ).toBeVisible({ timeout: 30000 });
-  await stack.click();
+  await format.check();
 
-  const go = chooser.locator('button:has-text("Add"), input[value="Add"], button:has-text("Continue")').first();
-  if (await go.count()) {
-    await go.click();
+  // "Get category from file" off, so everything lands in the course default category. The fixture
+  // declares its own category, and Moodle 4.5's question bank filters by category through an
+  // autocomplete widget rather than a plain select - reproducing that UI in the test would be a
+  // page of clicks that says nothing about this plugin. One checkbox removes the problem: the
+  // questions are then exactly where the bank and the quiz chooser already look.
+  // It is an advanced element, hidden until "Show more..." is used - so unchecking it without
+  // expanding first waits on something that is in the DOM and not on screen.
+  const showMore = page.locator('a.moreless-toggler, a:has-text("Show more")').first();
+  if (await showMore.count() && await showMore.isVisible()) {
+    await showMore.click();
+  }
+  const fromFile = page.locator('#id_catfromfile');
+  if (await fromFile.count() && await fromFile.isVisible() && await fromFile.isChecked()) {
+    await fromFile.uncheck();
   }
 
+  // Moodle's file picker, not a plain file field. The import form shows a drop area whose real
+  // <input type="file"> only exists inside the repository dialog, so setting files on the page
+  // directly waits for an element that is never rendered.
+  await page.getByRole('button', { name: /Choose a file|Add\.\.\./i }).first().click();
+
+  // Addressed on the page rather than inside a scoped container: the picker is Moodle's YUI
+  // dialogue and its wrapper class has changed more than once, so scoping to it made the step
+  // fail with "the picker did not open" while the picker was plainly open.
   await expect(
-    page.locator('#id_name'),
-    'The STACK question form did not open'
+    page.getByRole('heading', { name: /File picker/i }).first(),
+    'The file picker did not open'
+  ).toBeVisible({ timeout: 30000 });
+
+  const uploadRepo = page.getByRole('link', { name: /Upload a file/i }).first();
+  if (await uploadRepo.count()) {
+    await uploadRepo.click();
+  }
+
+  await page.locator('input[type="file"]').first().setInputFiles(fixture);
+  await page.getByRole('button', { name: /Upload this file/i }).first().click();
+
+  await expect(
+    page.locator('.filepicker-filename, .fp-filename').first(),
+    'The uploaded file does not appear on the import form'
   ).toBeVisible({ timeout: 60000 });
-
-  await page.fill('#id_name', question.name);
-
-  // The three placeholders are what make a STACK question: the input to type into, the
-  // validation line that echoes how STACK read it, and the feedback the tree produces.
-  const body = `<p>${question.text}</p><p>[[input:ans1]] [[validation:ans1]]</p><div>[[feedback:prt1]]</div>`;
-  await fillEditor(page, '#id_questiontext', body);
-
-  await page.fill('#id_ans1modelans', question.answer);
 
   await page.click('#id_submitbutton');
 
   await expect(
-    page.locator(`text=${question.name}`).first(),
-    `The question "${question.name}" was not saved - check the form for validation errors`
-  ).toBeVisible({ timeout: 60000 });
+    page.locator('text=/importing|questions? from file|Fragen/i').first(),
+    'The import produced no progress report'
+  ).toBeVisible({ timeout: 120000 });
+
+  const proceed = page.locator('button:has-text("Continue"), input[value="Continue"]').first();
+  if (await proceed.count()) {
+    await proceed.click();
+  }
 }
 
 /**
- * Write into a Moodle editor field, whichever editor is configured.
+ * Switch a question bank view to the category the fixture created.
  *
- * Atto and TinyMCE both replace the textarea with an iframe or a contenteditable div, so setting
- * the textarea's value alone is silently discarded on submit.
+ * The fixture declares its own category ("$course$/top/StackMathGame E2E Fixtures"), and both the
+ * bank list and the quiz's question chooser open on the course default instead. The questions are
+ * imported and correct; they are simply on another page - which reads as "the import silently did
+ * nothing" and sends you looking in the wrong place.
  *
- * @param {import('@playwright/test').Page} page The page.
- * @param {string} selector The textarea selector.
- * @param {string} html The HTML to write.
+ * @param {import('@playwright/test').Locator|import('@playwright/test').Page} scope Page or dialog.
+ * @param {string} fragment Part of the category name.
  */
-async function fillEditor(page, selector, html) {
-  const editable = page.locator(`${selector}editable, [contenteditable="true"]`).first();
-  if (await editable.count()) {
-    await editable.click();
-    await editable.evaluate((node, value) => {
-      node.innerHTML = value;
-      node.dispatchEvent(new Event('input', { bubbles: true }));
-    }, html);
-    // The editor copies its content back into the textarea on submit; nudging it here keeps the
-    // two in step even when the editor is slow to react.
-    await page.locator(selector).first().evaluate((node, value) => {
-      node.value = value;
-    }, html).catch(() => {});
+async function selectCategory(scope, fragment) {
+  const selector = scope.locator('select[name="category"], #id_selectacategory, .searchoptions select')
+    .first();
+  if (!(await selector.count())) {
     return;
   }
-  await page.fill(selector, html);
+  const option = selector.locator(`option:has-text("${fragment}")`).first();
+  if (!(await option.count())) {
+    return;
+  }
+  await selector.selectOption({ value: await option.getAttribute('value') });
 }
 
 /**
@@ -117,7 +138,8 @@ async function fillEditor(page, selector, html) {
  * @param {string} answer The known correct answer.
  */
 async function previewAndVerify(page, courseid, name, answer) {
-  await page.goto(`/question/edit.php?courseid=${courseid}`);
+  await page.goto(`/question/edit.php?courseid=${courseid}&qperpage=100`);
+  await selectCategory(page, CATEGORY);
   const row = page.locator(`tr:has-text("${name}")`).first();
   await expect(row, `"${name}" is not in the question bank`).toBeVisible({ timeout: 30000 });
 
@@ -147,4 +169,4 @@ async function previewAndVerify(page, courseid, name, answer) {
   await preview.close();
 }
 
-module.exports = { createStackQuestion, previewAndVerify, fillEditor };
+module.exports = { CATEGORY, importQuestions, previewAndVerify, selectCategory };

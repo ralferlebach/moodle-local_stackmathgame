@@ -20,18 +20,41 @@ const { expect } = require('@playwright/test');
  * @param {string} password The password.
  */
 async function login(page, username, password) {
-  await page.goto('/login/index.php');
-  await page.fill('#username', username);
-  await page.fill('#password', password);
-  await page.click('#loginbtn');
+  // Up to three attempts. Moodle's login form carries a one-shot token tied to the session, and
+  // the session cookie is written by the request that renders the form - so a form fetched from
+  // one PHP worker and submitted to another can be rejected with "Invalid login" while the
+  // credentials are perfectly correct. It is a property of the throwaway web server the test
+  // runs against, not of Moodle and not of this plugin, and retrying a fresh form is the honest
+  // response: it neither hides a wrong password (which fails all three times) nor lets an
+  // infrastructure race fail the whole journey.
+  let notice = '';
+  let landed = '';
 
-  // .first(): Moodle's user menu matches all three of these at once - the wrapper, the toggle
-  // and the region - and a union that resolves to several elements is a strict-mode failure, not
-  // a match. The login had in fact succeeded; only the assertion was wrong.
-  await expect(
-    page.locator('#user-menu-toggle, .usermenu, #usermenu').first(),
-    `Login as ${username} did not reach a logged-in page`
-  ).toBeVisible({ timeout: 30000 });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.goto('/login/index.php');
+    await page.fill('#username', username);
+    await page.fill('#password', password);
+    await page.click('#loginbtn');
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+
+    const menu = page.locator('#user-menu-toggle, .usermenu, #usermenu').first();
+    if (await menu.isVisible().catch(() => false)) {
+      return;
+    }
+
+    landed = page.url();
+    notice = (await page.locator('.loginerrors, .alert-danger').allTextContents())
+      .join(' ').trim();
+  }
+
+  // The landing URL and the page's own message are in the failure, because "element not found"
+  // on its own cannot distinguish wrong credentials from a changed theme from a redirect to a
+  // site policy page.
+  expect(
+    false,
+    `Login as ${username} failed three times. Landed on ${landed}.`
+      + (notice ? ` The page says: ${notice}` : '')
+  ).toBe(true);
 }
 
 /**

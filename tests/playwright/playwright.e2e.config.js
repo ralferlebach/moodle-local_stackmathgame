@@ -28,9 +28,9 @@ module.exports = defineConfig({
     // Recorded on success as well as on failure. A green run is the deliverable here: a watchable
     // record of the finished game, usable for documentation and for showing the plugin to people
     // who will never read a test report.
-    video: 'on',
+    video: process.env.SMG_NO_RECORD ? 'off' : 'on',
     screenshot: 'on',
-    trace: 'on',
+    trace: process.env.SMG_NO_RECORD ? 'off' : 'on',
     actionTimeout: 60000,
     navigationTimeout: 90000,
   },
