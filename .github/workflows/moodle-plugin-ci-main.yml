@@ -147,7 +147,16 @@ jobs:
           # Runs before grunt so the failure names the file and says how to rebuild it. Grunt
           # reports staleness too, but as one lint line among many - and the fix is not obvious
           # from it, because a single rebuild in the plugin root leaves every mode/*/ stale.
-          bash "$PLUGIN_DIR/tools/check_amd_fresh.sh" "$PLUGIN_DIR"
+          #
+          # PLUGIN_DIR lives in moodle-plugin-ci's own ci/.env, not in the step environment - the
+          # first version of this step assumed the latter and ran against an empty path, which
+          # bash reported as "/tools/check_amd_fresh.sh: No such file or directory".
+          plugindir=$(sed -n 's/^PLUGIN_DIR=//p' ci/.env)
+          if [ -z "$plugindir" ]; then
+            echo "PLUGIN_DIR not found in ci/.env - did the install step run?" >&2
+            exit 1
+          fi
+          bash "$plugindir/tools/check_amd_fresh.sh" "$plugindir"
 
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}

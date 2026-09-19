@@ -33,7 +33,10 @@ async function createQuiz(page, courseid, name) {
   // the game play only the first question of each page.
   await page.selectOption('#id_questionsperpage', '1');
 
-  await page.click('#id_submitbutton2');
+  // "Save and display", not "Save and return to course": the second button lands on the course
+  // page, where there is no course-module id to read, so the step afterwards had nothing to work
+  // with. The two ids differ by a single character and do opposite things.
+  await page.click('#id_submitbutton');
   await expect(page).toHaveURL(/mod\/quiz\//, { timeout: 60000 });
 
   const cmid = Number(new URL(page.url()).searchParams.get('id')
@@ -48,9 +51,18 @@ async function createQuiz(page, courseid, name) {
  * @param {import('@playwright/test').Page} page The page.
  */
 async function expandAll(page) {
-  const expander = page.locator('a:has-text("Expand all"), .collapseexpand').first();
-  if (await expander.count()) {
-    await expander.click().catch(() => {});
+  // By role, and both roles: Moodle renders "Expand all" as a link in some versions and a button
+  // in others. The selector that only looked for a link left the form collapsed, and the field
+  // it was meant to reveal - the question behaviour - then timed out as though it did not exist.
+  const byRole = page.getByRole('button', { name: /Expand all/i })
+    .or(page.getByRole('link', { name: /Expand all/i }));
+  if (await byRole.count()) {
+    await byRole.first().click().catch(() => {});
+    return;
+  }
+  const legacy = page.locator('.collapseexpand').first();
+  if (await legacy.count()) {
+    await legacy.click().catch(() => {});
   }
 }
 
@@ -65,26 +77,49 @@ async function addQuestionsFromBank(page, cmid, names) {
   await page.goto(`/mod/quiz/edit.php?cmid=${cmid}`);
 
   await clickVisible(
-    page.getByRole('link', { name: /^Add/ }).or(page.getByRole('button', { name: /^Add/ })),
+    page.getByRole('button', { name: /^Add$/ }).or(page.getByRole('link', { name: /^Add$/ })),
     'Opening the add-question menu'
   );
+
+  // The menu entries are rendered as anchors inside a dropdown and reported with varying roles
+  // between Moodle versions, so they are matched by their container and their text rather than by
+  // a role - a role-only locator found nothing while the menu was open in front of it.
   await clickVisible(
-    page.getByRole('link', { name: /from question bank/i }),
+    page.locator('.dropdown-menu, [role="menu"], .menu')
+      .locator('a, button, [role="menuitem"]')
+      .filter({ hasText: /from question bank/i }),
     'Choosing "from question bank"'
   );
 
-  const dialog = page.locator('.modal-dialog').last();
-  await expect(dialog, 'The question bank chooser did not open').toBeVisible({ timeout: 30000 });
-  await selectCategory(dialog, CATEGORY, page);
+  // Scoped to the page, not to a .modal-dialog. Moodle 4.5 renders the question chooser inline
+  // rather than in a modal, so everything scoped to a dialog matched nothing while the chooser
+  // was plainly on screen - and every failure said the question had not been imported.
+  await expect(
+    page.getByRole('combobox', { name: /Category/i }).first(),
+    'The question chooser did not open'
+  ).toBeVisible({ timeout: 30000 });
+
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await selectCategory(page, CATEGORY, page);
 
   for (const name of names) {
-    const row = dialog.locator(`tr:has-text("${name}")`).first();
-    await expect(row, `"${name}" is not offered in the chooser`).toBeVisible({ timeout: 30000 });
-    await row.locator('input[type="checkbox"]').first().check();
+    const entry = page.getByText(name, { exact: false }).first();
+    await expect(entry, `"${name}" is not offered in the chooser`).toBeVisible({ timeout: 30000 });
+
+    const row = entry
+      .locator('xpath=ancestor::*[self::tr or self::li or contains(@class,"row")][1]')
+      .first();
+    const box = (await row.count())
+      ? row.locator('input[type="checkbox"]').first()
+      : page.locator('input[type="checkbox"]').first();
+    await box.check();
   }
 
-  await dialog.locator('button:has-text("Add selected questions"), input[value*="Add selected"]')
-    .first().click();
+  await clickVisible(
+    page.getByRole('button', { name: /Add selected questions/i })
+      .or(page.locator('input[value*="Add selected"]')),
+    'Adding the selected questions'
+  );
 
   for (const name of names) {
     await expect(

@@ -115,6 +115,11 @@ async function importQuestions(page, courseid, fixture) {
  *        autocomplete renders outside the scope it belongs to.
  */
 async function selectCategory(scope, fragment, page) {
+  const trace = (msg) => {
+    if (process.env.SMG_DEBUG_FILTER) {
+      console.log('[filter]', msg);
+    }
+  };
   // Three renderings, because Moodle has changed this twice and the differences are not cosmetic.
   //
   //  * up to 4.3    a plain <select name="category"> above the list;
@@ -130,6 +135,7 @@ async function selectCategory(scope, fragment, page) {
   // aria-hidden="true" - so a branch that only asked "is there a select?" always took the wrong
   // path and timed out trying to choose an option in an element no one can see.
   const legacy = scope.locator('select[name="category"], #id_selectacategory').first();
+  trace(`legacy count=${await legacy.count()}`);
   if (await legacy.count() && await legacy.isVisible()) {
     await selectByText(legacy, fragment);
     return;
@@ -137,6 +143,7 @@ async function selectCategory(scope, fragment, page) {
 
   const filterValue = scope.locator('#filter-value-category, select[id^="filter-value-category"]')
     .first();
+  trace(`filterValue count=${await filterValue.count()} visible=${await filterValue.isVisible().catch(() => 'n/a')}`);
   if (await filterValue.count() && await filterValue.isVisible()) {
     await selectByText(filterValue, fragment);
     await applyFilters(scope, page);
@@ -148,20 +155,34 @@ async function selectCategory(scope, fragment, page) {
   // The visible half of the autocomplete. Moodle gives it a generated id
   // (form_autocomplete_input-<timestamp>), so it is found by role instead.
   const auto = scope.locator('input[role="combobox"], input[id^="form_autocomplete_input"]').last();
+  trace(`auto count=${await auto.count()}`);
   if (!(await auto.count())) {
+    trace('no autocomplete found - returning without filtering');
     return;
   }
   await auto.click();
   await auto.fill(fragment);
-  const suggestion = page
-    .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
-    .filter({ hasText: fragment })
-    .first();
+  // Plain [role="option"]: Moodle renders the suggestions in a container whose class has changed
+  // between versions, and scoping to it found nothing while the options were plainly there. The
+  // role is what the widget guarantees.
+  const suggestion = page.locator('[role="option"]').filter({ hasText: fragment }).first();
   await expect(
     suggestion,
     `The category filter found nothing called "${fragment}"`
   ).toBeVisible({ timeout: 30000 });
   await suggestion.click();
+
+  // The hidden <select> behind the autocomplete is the authority on what was actually chosen.
+  // Checking it turns a silent miss - the click landing on nothing, the filter staying empty -
+  // into a failure that says so, instead of an empty question list three assertions later.
+  const backing = scope.locator('#filter-value-category, select[data-field-name="category"]').first();
+  if (await backing.count()) {
+    await expect(
+      backing,
+      `The category filter did not take "${fragment}" - the suggestion was clicked but nothing was selected`
+    ).not.toHaveValue('', { timeout: 10000 });
+  }
+
   await applyFilters(scope, page);
 }
 
@@ -207,9 +228,19 @@ async function applyFilters(scope, page) {
  * @param {string} answer The known correct answer.
  */
 async function previewAndVerify(page, courseid, name, answer) {
-  await page.goto(`/question/edit.php?courseid=${courseid}&qperpage=100`);
+  // Without qperpage: that parameter made Moodle render a page with no filter controls at
+  // all, so every branch below found nothing and the helper returned without filtering - which
+  // looked exactly like the import having failed.
+  await page.goto(`/question/edit.php?courseid=${courseid}`);
+  // The filter row is built by an AMD module after the page loads, so measuring straight after
+  // goto() finds no controls at all - which reads as "this page has no filter" rather than "the
+  // filter is not there yet", and sends you looking for the wrong Moodle version.
+  await page.waitForLoadState('networkidle').catch(() => {});
   await selectCategory(page, CATEGORY, page);
-  const row = page.locator(`tr:has-text("${name}")`).first();
+  // filter({ hasText }) rather than the :has-text() pseudo-class: the latter takes the name as a
+  // CSS-ish argument, and these names contain spaces and hyphens that it does not handle the way
+  // it looks like it should. The question was on the page every time; the selector was not.
+  const row = page.locator('tr').filter({ hasText: name }).first();
   await expect(row, `"${name}" is not in the question bank`).toBeVisible({ timeout: 30000 });
 
   const [preview] = await Promise.all([
