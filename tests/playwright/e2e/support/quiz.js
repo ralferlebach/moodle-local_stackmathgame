@@ -75,7 +75,7 @@ async function addQuestionsFromBank(page, cmid, names) {
 
   const dialog = page.locator('.modal-dialog').last();
   await expect(dialog, 'The question bank chooser did not open').toBeVisible({ timeout: 30000 });
-  await selectCategory(dialog, CATEGORY);
+  await selectCategory(dialog, CATEGORY, page);
 
   for (const name of names) {
     const row = dialog.locator(`tr:has-text("${name}")`).first();

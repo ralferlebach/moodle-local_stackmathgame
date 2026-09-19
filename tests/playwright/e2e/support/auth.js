@@ -21,24 +21,29 @@ const { expect } = require('@playwright/test');
  */
 async function login(page, username, password) {
   // Up to three attempts. Moodle's login form carries a one-shot token tied to the session, and
-  // the session cookie is written by the request that renders the form - so a form fetched from
-  // one PHP worker and submitted to another can be rejected with "Invalid login" while the
-  // credentials are perfectly correct. It is a property of the throwaway web server the test
-  // runs against, not of Moodle and not of this plugin, and retrying a fresh form is the honest
-  // response: it neither hides a wrong password (which fails all three times) nor lets an
-  // infrastructure race fail the whole journey.
+  // the form can be rejected with "Invalid login" while the credentials are perfectly correct.
+  //
+  // The retry has to recognise its own success. The first version did not: when an attempt had
+  // in fact logged in and only the confirming assertion lost a race, the next attempt returned to
+  // the login page and met "You are already logged in as ...", where there is no username field
+  // at all - so the run failed with a sixty-second timeout on #username, which reads like a
+  // broken login page rather than a session that was established all along.
   let notice = '';
   let landed = '';
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     await page.goto('/login/index.php');
+
+    if (await isLoggedIn(page)) {
+      return;
+    }
+
     await page.fill('#username', username);
     await page.fill('#password', password);
     await page.click('#loginbtn');
     await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-    const menu = page.locator('#user-menu-toggle, .usermenu, #usermenu').first();
-    if (await menu.isVisible().catch(() => false)) {
+    if (await isLoggedIn(page)) {
       return;
     }
 
@@ -55,6 +60,27 @@ async function login(page, username, password) {
     `Login as ${username} failed three times. Landed on ${landed}.`
       + (notice ? ` The page says: ${notice}` : '')
   ).toBe(true);
+}
+
+/**
+ * Report whether this browser already holds a Moodle session.
+ *
+ * Two signals, because Moodle offers two: the user menu on any ordinary page, and the "you are
+ * already logged in" dialog that the login page itself shows to an authenticated visitor. The
+ * second is the one a retry runs into, and taking it as a failure is what made the retry worse
+ * than no retry.
+ *
+ * @param {import('@playwright/test').Page} page The page.
+ * @returns {Promise<boolean>} True when a session exists.
+ */
+async function isLoggedIn(page) {
+  const menu = page.locator('#user-menu-toggle, .usermenu, #usermenu').first();
+  if (await menu.isVisible().catch(() => false)) {
+    return true;
+  }
+
+  const already = page.locator('text=/already logged in/i').first();
+  return already.isVisible().catch(() => false);
 }
 
 /**

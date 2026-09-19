@@ -111,8 +111,10 @@ async function importQuestions(page, courseid, fixture) {
  *
  * @param {import('@playwright/test').Locator|import('@playwright/test').Page} scope Page or dialog.
  * @param {string} fragment Part of the category name.
+ * @param {import('@playwright/test').Page} page The page, for the suggestion list, which the
+ *        autocomplete renders outside the scope it belongs to.
  */
-async function selectCategory(scope, fragment) {
+async function selectCategory(scope, fragment, page) {
   // Moodle 4.5 filters the question bank through a filter row, not a category dropdown: pick the
   // filter type "Category", choose the category in its autocomplete, then apply. The old
   // select[name=category] does not exist, so the previous version of this helper found nothing
@@ -141,7 +143,9 @@ async function selectCategory(scope, fragment) {
   await value.click();
   await value.fill(fragment);
 
-  const suggestion = scope.page()
+  // The suggestion list is attached to the document, not inside the filter row, so it is looked
+  // for on the page - a Locator has no .page() and scoping here found nothing.
+  const suggestion = page
     .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
     .filter({ hasText: fragment })
     .first();
@@ -151,7 +155,15 @@ async function selectCategory(scope, fragment) {
   ).toBeVisible({ timeout: 30000 });
   await suggestion.click();
 
+  // Subcategories included: the fixture's category sits beside the course default under "top",
+  // and the filter otherwise shows only the one category it was given.
+  const subcats = scope.getByRole('checkbox', { name: /subcategories/i }).first();
+  if (await subcats.count() && !(await subcats.isChecked())) {
+    await subcats.check().catch(() => {});
+  }
+
   await scope.getByRole('button', { name: /Apply filters/i }).first().click();
+  await page.waitForLoadState('networkidle').catch(() => {});
 }
 
 /**
@@ -168,7 +180,7 @@ async function selectCategory(scope, fragment) {
  */
 async function previewAndVerify(page, courseid, name, answer) {
   await page.goto(`/question/edit.php?courseid=${courseid}&qperpage=100`);
-  await selectCategory(page, CATEGORY);
+  await selectCategory(page, CATEGORY, page);
   const row = page.locator(`tr:has-text("${name}")`).first();
   await expect(row, `"${name}" is not in the question bank`).toBeVisible({ timeout: 30000 });
 
