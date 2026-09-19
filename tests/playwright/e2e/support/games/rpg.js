@@ -30,7 +30,7 @@ module.exports = {
    */
   async waitUntilReady(page) {
     await expect(
-      page.locator('.smg-runtime-shell'),
+      page.locator('.smg-runtime-shell').first(),
       'The game shell was never injected - the AMD chain did not complete'
     ).toBeAttached({ timeout: 60000 });
 

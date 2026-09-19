@@ -21,7 +21,7 @@ const { expect } = require('@playwright/test');
 async function assertNoBlockers(page, cmid) {
   await page.goto(`/local/stackmathgame/quiz_settings.php?cmid=${cmid}`);
 
-  const blockers = page.locator('.smg-prereq-error, tr:has(.badge-danger), .alert-danger');
+  const blockers = page.locator('.smg-prereq-error, tr:has(.badge-danger), .alert-danger').first();
   if (await blockers.count()) {
     const text = (await blockers.first().innerText()).trim();
     expect(text, `The quiz reports a prerequisite blocker: ${text}`).toBe('');
@@ -133,7 +133,7 @@ async function configureScene(page, cmid, slot, settings) {
 async function assertScenePersisted(page, cmid, slot, selector, expected) {
   await page.goto(`/local/stackmathgame/flow.php?cmid=${cmid}&slot=${slot}&action=editslot`);
   await expect(
-    page.locator(selector),
+    page.locator(selector).first(),
     `Slot ${slot} did not keep ${selector} across a reload`
   ).toHaveValue(expected, { timeout: 30000 });
 }

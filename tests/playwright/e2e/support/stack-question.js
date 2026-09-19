@@ -32,12 +32,32 @@ const { expect } = require('@playwright/test');
  * @param {string} question.answer The correct answer, as a Maxima expression.
  */
 async function createStackQuestion(page, courseid, question) {
-  await page.goto(`/question/bank/editquestion/addquestion.php?courseid=${courseid}&qtype=stack&returnurl=/question/edit.php%3Fcourseid%3D${courseid}`);
+  // Through the question bank and its chooser, not a constructed addquestion.php URL. The URL
+  // form takes different parameters between Moodle versions, and guessing them would mean the
+  // test fails on a version difference that a person clicking "Create a new question" would
+  // never notice.
+  await page.goto(`/question/edit.php?courseid=${courseid}`);
+
+  await page.locator('button:has-text("Create a new question"), input[value*="Create a new question"]')
+    .first().click();
+
+  const chooser = page.locator('.modal-dialog, .qbank-chooser, form').last();
+  const stack = chooser.locator('label:has-text("STACK"), input[value="stack"]').first();
+  await expect(
+    stack,
+    'STACK is not offered in the question type chooser - is qtype_stack installed?'
+  ).toBeVisible({ timeout: 30000 });
+  await stack.click();
+
+  const go = chooser.locator('button:has-text("Add"), input[value="Add"], button:has-text("Continue")').first();
+  if (await go.count()) {
+    await go.click();
+  }
 
   await expect(
     page.locator('#id_name'),
-    'The STACK question form did not open - is qtype_stack installed?'
-  ).toBeVisible({ timeout: 30000 });
+    'The STACK question form did not open'
+  ).toBeVisible({ timeout: 60000 });
 
   await page.fill('#id_name', question.name);
 
@@ -76,7 +96,7 @@ async function fillEditor(page, selector, html) {
     }, html);
     // The editor copies its content back into the textarea on submit; nudging it here keeps the
     // two in step even when the editor is slow to react.
-    await page.locator(selector).evaluate((node, value) => {
+    await page.locator(selector).first().evaluate((node, value) => {
       node.value = value;
     }, html).catch(() => {});
     return;

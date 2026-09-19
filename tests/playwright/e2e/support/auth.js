@@ -25,8 +25,11 @@ async function login(page, username, password) {
   await page.fill('#password', password);
   await page.click('#loginbtn');
 
+  // .first(): Moodle's user menu matches all three of these at once - the wrapper, the toggle
+  // and the region - and a union that resolves to several elements is a strict-mode failure, not
+  // a match. The login had in fact succeeded; only the assertion was wrong.
   await expect(
-    page.locator('#user-menu-toggle, .usermenu, #usermenu'),
+    page.locator('#user-menu-toggle, .usermenu, #usermenu').first(),
     `Login as ${username} did not reach a logged-in page`
   ).toBeVisible({ timeout: 30000 });
 }
@@ -42,9 +45,11 @@ async function logout(page) {
   await page.goto(`/login/logout.php?sesskey=${key}`);
 
   // Moodle asks for confirmation when the key is stale.
-  const confirm = page.locator('button:has-text("Log out"), input[value="Log out"], button:has-text("Continue")');
+  const confirm = page
+    .locator('button:has-text("Log out"), input[value="Log out"], button:has-text("Continue")')
+    .first();
   if (await confirm.count()) {
-    await confirm.first().click().catch(() => {});
+    await confirm.click().catch(() => {});
   }
   await expect(page.locator('#username, a:has-text("Log in")').first()).toBeVisible({ timeout: 30000 });
 }

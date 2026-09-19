@@ -99,8 +99,7 @@ async function addSectionHeading(page, cmid, slot, heading) {
   // The control sits on the page break above the slot it starts at.
   const adder = page.locator('a:has-text("Add"), button:has-text("Add")').nth(slot - 1);
   await adder.click();
-  await page.locator('a:has-text("a new section heading"), a:has-text("new section heading")')
-    .first().click();
+  await page.locator('a:has-text("new section heading")').first().click();
 
   const input = page.locator('input[name="heading"], .inplaceeditable input').first();
   await expect(input, 'The section heading field did not appear').toBeVisible({ timeout: 30000 });

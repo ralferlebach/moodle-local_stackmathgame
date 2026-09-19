@@ -170,11 +170,11 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
 
     await step('Start the quiz and wait for the RPG to take over', async () => {
       await page.goto(`/mod/quiz/view.php?id=${cmid}`);
-      const form = page.locator('form[action*="startattempt.php"]');
+      const form = page.locator('form[action*="startattempt.php"]').first();
       await expect(form.first(), 'The quiz offers no way to start an attempt').toBeVisible({ timeout: 30000 });
       await form.first().locator('button[type="submit"], input[type="submit"]').first().click();
 
-      const confirm = page.locator('#id_submitbutton, .modal button:has-text("Continue")');
+      const confirm = page.locator('#id_submitbutton, .modal button:has-text("Continue")').first();
       if (await confirm.count()) {
         await confirm.first().click().catch(() => {});
       }
@@ -221,7 +221,7 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       // "Finish" rather than "next": the last scene is configured to end the run, so a control
       // that still offers another scene would mean the branching never noticed the end.
       await expect(
-        page.locator('.smg-runtime-shell'),
+        page.locator('.smg-runtime-shell').first(),
         'The game shell disappeared before the end of the run'
       ).toBeAttached();
 
