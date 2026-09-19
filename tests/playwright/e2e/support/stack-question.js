@@ -113,16 +113,45 @@ async function importQuestions(page, courseid, fixture) {
  * @param {string} fragment Part of the category name.
  */
 async function selectCategory(scope, fragment) {
-  const selector = scope.locator('select[name="category"], #id_selectacategory, .searchoptions select')
+  // Moodle 4.5 filters the question bank through a filter row, not a category dropdown: pick the
+  // filter type "Category", choose the category in its autocomplete, then apply. The old
+  // select[name=category] does not exist, so the previous version of this helper found nothing
+  // and returned quietly - and the questions looked as though they had never been imported.
+  const plainSelect = scope.locator('select[name="category"], #id_selectacategory').first();
+  if (await plainSelect.count()) {
+    const option = plainSelect.locator(`option:has-text("${fragment}")`).first();
+    if (await option.count()) {
+      await plainSelect.selectOption({ value: await option.getAttribute('value') });
+    }
+    return;
+  }
+
+  const filterType = scope.getByRole('combobox', { name: /Filter type/i }).first();
+  if (!(await filterType.count())) {
+    return;
+  }
+  await filterType.selectOption({ label: 'Category' }).catch(() => {});
+
+  // The value control appears only once a filter type is chosen, and it is an autocomplete.
+  const value = scope.locator('input.form-autocomplete-input, input[role="combobox"]').last();
+  await expect(
+    value,
+    'The category filter offers no value field'
+  ).toBeVisible({ timeout: 30000 });
+  await value.click();
+  await value.fill(fragment);
+
+  const suggestion = scope.page()
+    .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
+    .filter({ hasText: fragment })
     .first();
-  if (!(await selector.count())) {
-    return;
-  }
-  const option = selector.locator(`option:has-text("${fragment}")`).first();
-  if (!(await option.count())) {
-    return;
-  }
-  await selector.selectOption({ value: await option.getAttribute('value') });
+  await expect(
+    suggestion,
+    `The category filter found nothing called "${fragment}"`
+  ).toBeVisible({ timeout: 30000 });
+  await suggestion.click();
+
+  await scope.getByRole('button', { name: /Apply filters/i }).first().click();
 }
 
 /**

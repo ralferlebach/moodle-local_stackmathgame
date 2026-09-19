@@ -115,7 +115,7 @@ fix: clear fix-phpdoc fix-lint-php build
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-js lint-react build test-react test-amd phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-js lint-react amd-fresh build test-react test-amd phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
@@ -377,3 +377,12 @@ jmeter: clear jmeter-setup
 	@echo ""
 	@echo "Results written to $(LOAD_DIR)/stackmathgame-load-results.jtl"
 
+
+# Fails when a committed AMD build is older than its source - the project's most expensive
+# recurring mistake, because nothing errors: the browser runs the old module while the source
+# beside it looks current. Placed before `build` on purpose, so `make check` reports the problem
+# rather than quietly repairing it and leaving the stale file committed.
+amd-fresh:
+	@bash tools/check_amd_fresh.sh .
+
+.PHONY: amd-fresh

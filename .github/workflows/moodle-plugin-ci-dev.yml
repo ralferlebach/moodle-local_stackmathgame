@@ -216,6 +216,13 @@ jobs:
       - name: Mustache Lint
         if: ${{ always() }}
         run: set -o pipefail; moodle-plugin-ci mustache 2>&1 | tee ci-logs/mustache.log
+      - name: AMD builds are current
+        run: |
+          # Runs before grunt so the failure names the file and says how to rebuild it. Grunt
+          # reports staleness too, but as one lint line among many - and the fix is not obvious
+          # from it, because a single rebuild in the plugin root leaves every mode/*/ stale.
+          bash "$PLUGIN_DIR/tools/check_amd_fresh.sh" "$PLUGIN_DIR"
+
       - name: Grunt (AMD build + ESLint)
         if: ${{ always() }}
         # local_stackmathgame ships AMD modules in amd/src/ AND in every mode subplugin
