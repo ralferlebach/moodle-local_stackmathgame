@@ -9,3 +9,4 @@
 .github/stack-phpunit-init.php
 .github/stack-cas-lib.php
 .github/stack-site-init.php
+.github/e2e-seed.php

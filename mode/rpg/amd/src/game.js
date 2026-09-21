@@ -449,12 +449,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         updateHUD(hudParts, score.mana, score.fairies);
 
         // Show intro narrative.
-        var currentSlot = parseInt(
-            (document.querySelector('.que') || {}).getAttribute
-                ? (document.querySelector('.que').getAttribute('data-smg-slot') || '0')
-                : '0',
-            10
-        );
+        // From the engine, which reads it from Moodle's own question id. Looking for a
+        // data-smg-slot attribute here found nothing, because nothing sets it.
+        var currentSlot = parseInt(gameState.currentslot || 0, 10) || 0;
         if (currentSlot) {
             var introCfg = slotMap[String(currentSlot)];
             var introText = introCfg && introCfg.narrative && introCfg.narrative.intro
@@ -463,6 +460,16 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             if (introText) {
                 bubble.innerHTML = introText;
                 bubble.style.display = 'block';
+            }
+
+            // An instruction scene asks for nothing, so its way forward is shown straight away.
+            // Waiting for an answer - the only path that used to render the control - left a
+            // welcome or briefing page with no exit, because such pages hide their input.
+            var sceneType = introCfg && introCfg.scene && introCfg.scene.type ? introCfg.scene.type : '';
+            if (sceneType === 'instruction' && gameState.navigation) {
+                bubble.appendChild(nextBtn);
+                bubble.style.display = 'block';
+                GameCore.applyNavigation(nextBtn, GameCore.navigationFrom({navigation: gameState.navigation}));
             }
         }
 

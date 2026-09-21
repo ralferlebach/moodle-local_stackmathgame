@@ -251,12 +251,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         var slotMap = buildSlotMap(gameState.questionmap);
         var bubble = buildBubble();
         showGuide(gameState, bubble, true);
-        var currentSlot = parseInt(
-            (document.querySelector('.que') || {}).getAttribute
-                ? (document.querySelector('.que').getAttribute('data-smg-slot') || '0')
-                : '0',
-            10
-        );
+        // From the engine, which reads it from Moodle's own question id. Looking for a
+        // data-smg-slot attribute here found nothing, because nothing sets it.
+        var currentSlot = parseInt(gameState.currentslot || 0, 10) || 0;
 
         // Show intro narrative on page load.
         if (currentSlot) {

@@ -15,38 +15,38 @@
 
 const { test, expect } = require('@playwright/test');
 const auth = require('./support/auth');
-const course = require('./support/course');
 const quiz = require('./support/quiz');
 const stackQuestion = require('./support/stack-question');
 const editor = require('./support/stackmathgame-editor');
-const users = require('./support/users');
 const diag = require('./support/artifact-summary');
 const game = require('./support/games/rpg');
 const { clickVisible } = require('./support/visible');
 
 const ADMIN_USER = process.env.SMG_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.SMG_ADMIN_PASS || 'Admin!23';
-// Unique per run. A fixed username works once and then collides with itself: Moodle rejects the
-// second account with "username already taken", and the form error is easy to misread as a
-// broken form rather than a site that still holds last run's participant. CI installs a fresh
-// site every time and would not notice; a re-run against an existing site would.
-const PLAYER_USER = process.env.SMG_PLAYER_USER || `smgplayer${Date.now()}`;
+// Created in the backend by .github/e2e-seed.php, which the workflow runs before this test.
+// Participant, course and enrolment are site administration rather than game building, and
+// driving them through the interface was the most fragile part of the journey.
+const PLAYER_USER = process.env.SMG_PLAYER_USER;
 const PLAYER_PASS = process.env.SMG_PLAYER_PASS || 'Smg-Play-Pass!1';
-const PLAYER_FIRST = 'Pat';
-const PLAYER_LAST = 'Player';
+const COURSE_ID = Number(process.env.SMG_COURSE_ID || 0);
 const BASE_URL = process.env.SMG_BASE_URL || 'http://127.0.0.1:8000';
 
 /**
- * The questions used, and the answers that solve them.
+ * All five fixture questions, and what solves each.
  *
- * Three of the five in the fixture: the first is information-only and the last expects a chain of
- * reasoning, neither of which says anything about the game. These three are equation strings, so
- * the answer typed is literally what STACK expects.
+ * The answer is a list of lines. Four questions take a single line; the equivalence-reasoning
+ * question takes one line per step, and its first line is already filled in by STACK
+ * (the "firstline" option), so only the steps after it are typed.
  */
 const QUESTIONS = [
-  { name: 'SMG Fixture 02 - One Plus One', answer: '1+1=2' },
-  { name: 'SMG Fixture 03 - Two Times Two', answer: '2*2=4' },
-  { name: 'SMG Fixture 04 - Three Cubed', answer: '3^3=27' },
+  // A welcome page: its input is hidden by the question itself, so it is not answered but
+  // left - which is what the instruction scene type is for.
+  { name: 'SMG Fixture 01 - Welcome to the Game', answer: [], instruction: true },
+  { name: 'SMG Fixture 02 - One Plus One', answer: ['1+1=2'] },
+  { name: 'SMG Fixture 03 - Two Times Two', answer: ['2*2=4'] },
+  { name: 'SMG Fixture 04 - Three Cubed', answer: ['3^3=27'] },
+  { name: 'SMG Fixture 05 - Equivalence Reasoning', answer: ['1+2*27', '1+54', '55'], appendToFirstLine: true },
 ];
 
 /** The fixture file the questions are imported from. */
@@ -61,7 +61,7 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
     const stamp = Date.now();
     const trouble = diag.watchForTrouble(page, BASE_URL);
     const done = [];
-    let courseid = 0;
+    const courseid = COURSE_ID;
     let cmid = 0;
     let scenes = [];
 
@@ -81,30 +81,13 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       done.push(title);
     };
 
+    await step('The backend prepared a participant and a course', async () => {
+      expect(PLAYER_USER, 'SMG_PLAYER_USER is not set - run .github/e2e-seed.php first').toBeTruthy();
+      expect(courseid, 'SMG_COURSE_ID is not set - run .github/e2e-seed.php first').toBeGreaterThan(0);
+    });
+
     await step('Log in as an administrator', async () => {
       await auth.login(page, ADMIN_USER, ADMIN_PASS);
-    });
-
-    await step('Create the participant account', async () => {
-      // Created here, before the course, so the enrolment step below has somebody to enrol. Doing
-      // it through Site administration rather than a CLI script is the point: an account conjured
-      // outside the interface would not show that a real person can be given access.
-      await users.createUser(page, {
-        username: PLAYER_USER,
-        password: PLAYER_PASS,
-        firstname: PLAYER_FIRST,
-        lastname: PLAYER_LAST,
-        email: `${PLAYER_USER}@example.invalid`,
-      });
-    });
-
-    await step('Create a course', async () => {
-      courseid = await course.createCourse(page, `Math adventure ${stamp}`, `SMGRPG${stamp}`);
-    });
-
-    await step('Enrol the participant', async () => {
-      await users.enrol(page, courseid, `${PLAYER_FIRST} ${PLAYER_LAST}`, 'Student',
-        `${PLAYER_USER}@example.invalid`);
     });
 
     await step('Import the STACK fixture questions', async () => {
@@ -151,7 +134,7 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       for (let i = 0; i < scenes.length; i++) {
         const last = i === scenes.length - 1;
         await editor.configureScene(page, cmid, scenes[i], {
-          sceneType: last ? game.finalSceneType : 'challenge',
+          sceneType: QUESTIONS[i].instruction ? 'instruction' : (last ? game.finalSceneType : 'challenge'),
           score: 10 * (i + 1),
           xp: 5 * (i + 1),
           intro: `Quest ${i + 1} begins.`,
@@ -188,15 +171,41 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       const before = await game.readHud(page);
 
       for (let i = 0; i < QUESTIONS.length; i++) {
-        const input = page.locator('.que input[id$="_ans1"]').first();
+        if (QUESTIONS[i].instruction) {
+          // Nothing to answer: the way forward has to be on offer the moment the scene loads.
+          // If it is not, the game treats a briefing page like a challenge nobody can solve.
+          const onward = game.nextControl(page);
+          await expect(
+            onward,
+            `Quest ${i + 1} is an instruction scene but offers no way on`
+          ).toBeVisible({ timeout: 60000 });
+          await onward.click();
+          await page.waitForLoadState('domcontentloaded').catch(() => {});
+          await game.waitUntilReady(page);
+          continue;
+        }
+
+        // An algebraic input is a text field, an equivalence-reasoning input a textarea - so
+        // both are looked for. Waiting for the field is what tells "the game reached this quest"
+        // from "the game is stuck on the last one".
+        const input = page.locator('.que input[id$="_ans1"], .que textarea[id$="_ans1"]').first();
         await expect(
           input,
           `Quest ${i + 1} shows no STACK input - the game did not reach it`
         ).toBeVisible({ timeout: 60000 });
 
+        const question = QUESTIONS[i];
+        let value = question.answer.join('\n');
+        if (question.appendToFirstLine) {
+          // STACK prefills the first line of an equivalence chain ("firstline"), and the steps
+          // continue below it. Overwriting it would remove the line the chain starts from.
+          const prefilled = (await input.inputValue()).trim();
+          value = [prefilled, ...question.answer].filter(Boolean).join('\n');
+        }
+
         // Twice: STACK grades only after the student has confirmed how the input was read.
         for (const pass of [1, 2]) {
-          await input.fill(QUESTIONS[i].answer);
+          await input.fill(value);
           await page.locator('.smg-action-check, .que input[type="submit"]').first().click();
           await page.waitForTimeout(pass === 1 ? 2000 : 4000);
         }

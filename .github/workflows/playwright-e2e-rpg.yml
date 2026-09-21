@@ -175,6 +175,16 @@ jobs:
           # which scan 4267 questions, take minutes and prove nothing about this plugin.
           php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
 
+      - name: Prepare the participant and the course in the backend
+        run: |
+          # Participant, course and enrolment are site administration, not game building, and
+          # they were the most fragile part of driving the journey through the browser. The
+          # script verifies the enrolment itself and fails loudly if it did not take.
+          cd moodle
+          php "$GITHUB_WORKSPACE/plugin/.github/e2e-seed.php" > /tmp/e2e-seed.env
+          sed -n "s/^export \([A-Z_][A-Z_]*\)='\(.*\)'$/\1=\2/p" /tmp/e2e-seed.env >> "$GITHUB_ENV"
+          echo "Seeded:"; sed -n "s/^export \([A-Z_][A-Z_]*\)=.*/  \1/p" /tmp/e2e-seed.env
+
       - name: Start the Moodle web server
         run: |
           # PHP's built-in server is single-threaded unless PHP_CLI_SERVER_WORKERS is set. A
@@ -200,7 +210,6 @@ jobs:
           SMG_BASE_URL: http://127.0.0.1:8000
           SMG_ADMIN_USER: admin
           SMG_ADMIN_PASS: 'Admin!23'
-          SMG_PLAYER_PASS: 'Smg-Play-Pass!1'
         run: npm run e2e:rpg
 
       - name: Upload the recording and the result

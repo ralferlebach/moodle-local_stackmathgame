@@ -70,6 +70,18 @@ final class navigation_resolver {
         \stdClass $profile,
         int $attemptid = 0
     ): array {
+        // An instruction scene asks for nothing, so it never holds the player back - whatever the
+        // outcome, including none at all. The schema has always described the type as "no answer
+        // required", but nothing honoured it: a welcome or briefing page was treated like any
+        // challenge, the player could never answer it (such pages usually hide their input), and
+        // the run stopped on its very first scene. Resolved here, before any outcome is looked
+        // at, so an unanswered instruction scene is the same as a solved one.
+        $sceneconfig = flow_service::get_slot_config($cmid, $currentslot) ?? [];
+        $scenetype = (string)($sceneconfig['scene']['type'] ?? '');
+        if ($scenetype === slot_config_schema::SCENE_TYPE_INSTRUCTION) {
+            $outcome = slot_config_schema::OUTCOME_GRADEDRIGHT;
+        }
+
         // A wrong answer keeps the player on the scene. Resolving a target for it would let the
         // client offer a way forward the moment an answer is graded wrong, which is the opposite
         // of what a game wants: the retry is the point.

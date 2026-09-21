@@ -275,6 +275,15 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                         profile: state.store.profile,
                         questionmap: state.store.questionmap,
                         narrative: state.store.narrative,
+                        // The navigation the server resolved for this scene at load time. A mode
+                        // needs it before any answer exists: an instruction scene asks for nothing
+                        // and must offer its way forward immediately.
+                        navigation: state.store.navigation,
+                        // Resolved once, here. The modes used to look for a data-smg-slot
+                        // attribute that nothing sets, found 0, and skipped everything that
+                        // depends on the current scene - the intro narrative never showed, and an
+                        // instruction scene had no way forward.
+                        currentslot: getCurrentSlot(),
                         // Assets are addressed by key, from the map the server resolved out of
                         // the design's package manifest. A mode must not build a path: doing so
                         // works only for bundled packages and breaks the moment a design is

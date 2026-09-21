@@ -212,12 +212,9 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         }
 
         // Show intro narrative on page load.
-        var currentSlot = parseInt(
-            (document.querySelector('.que') || {}).getAttribute
-                ? (document.querySelector('.que').getAttribute('data-smg-slot') || '0')
-                : '0',
-            10
-        );
+        // From the engine, which reads it from Moodle's own question id. Looking for a
+        // data-smg-slot attribute here found nothing, because nothing sets it.
+        var currentSlot = parseInt(gameState.currentslot || 0, 10) || 0;
         if (currentSlot) {
             var introCfg = slotMap[String(currentSlot)];
             var introText = introCfg && introCfg.narrative && introCfg.narrative.intro
