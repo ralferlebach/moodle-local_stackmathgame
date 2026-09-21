@@ -7,6 +7,7 @@
  */
 
 const { expect } = require('@playwright/test');
+const { expandAll } = require('./quiz');
 
 /**
  * Open the game settings and read the prerequisite panel before changing anything.
@@ -89,10 +90,9 @@ async function configureScene(page, cmid, slot, settings) {
     `The direction card for slot ${slot} did not open`
   ).toBeVisible({ timeout: 30000 });
 
-  const expander = page.locator('a:has-text("Expand all"), .collapseexpand').first();
-  if (await expander.count()) {
-    await expander.click().catch(() => {});
-  }
+  // Shared with the quiz form: "Expand all" is a button in some versions and a link in others,
+  // and a helper that looked for only one of them left the narrative and reward sections closed.
+  await expandAll(page);
 
   if (settings.sceneType) {
     await page.selectOption('#id_scenetype', settings.sceneType);

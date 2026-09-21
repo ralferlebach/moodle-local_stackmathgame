@@ -181,7 +181,7 @@ jobs:
           # Moodle page pulls many subresources in parallel, so one worker stalls as soon as a
           # browser reaches it.
           cd moodle
-          PHP_CLI_SERVER_WORKERS=8 php -S 127.0.0.1:8000 -t . > /tmp/moodle-server.log 2>&1 &
+          PHP_CLI_SERVER_WORKERS=16 php -S 127.0.0.1:8000 -t . > /tmp/moodle-server.log 2>&1 &
           for i in $(seq 1 45); do
             curl -sf -o /dev/null "$MOODLE_WWWROOT/login/index.php" && break
             sleep 2

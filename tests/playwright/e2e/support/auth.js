@@ -13,6 +13,32 @@
 const { expect } = require('@playwright/test');
 
 /**
+ * Navigate, retrying a navigation the server did not answer.
+ *
+ * PHP's built-in web server, which the CI job runs Moodle on, occasionally leaves a worker busy
+ * with the tail of a redirect chain - most reliably straight after a logout. The next navigation
+ * then waits the full timeout for a worker that will never pick it up. A shorter timeout and a
+ * retry turn a ninety-second hang into a two-second hiccup. A page that is genuinely broken still
+ * fails, just three times instead of once.
+ *
+ * @param {import('@playwright/test').Page} page The page.
+ * @param {string} url The URL.
+ */
+async function gotoResilient(page, url) {
+  let last;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      return;
+    } catch (error) {
+      last = error;
+      await page.waitForTimeout(1000);
+    }
+  }
+  throw last;
+}
+
+/**
  * Log in through the login form.
  *
  * @param {import('@playwright/test').Page} page The page.
@@ -32,7 +58,7 @@ async function login(page, username, password) {
   let landed = '';
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await page.goto('/login/index.php');
+    await gotoResilient(page, '/login/index.php');
 
     if (await isLoggedIn(page)) {
       return;
@@ -84,23 +110,43 @@ async function isLoggedIn(page) {
 }
 
 /**
+ * Navigations here wait for the document, not for every subresource.
+ *
+ * Playwright's default waits for "load", which includes every image, font and script. Straight
+ * after a logout, one of those can be held by a PHP worker that is still finishing the redirect
+ * chain, and the next goto then waits ninety seconds for a sprite rather than for the page.
+ * Whether the page is usable is checked explicitly afterwards anyway.
+ */
+
+/**
  * Log out through the user menu.
  *
  * @param {import('@playwright/test').Page} page The page.
  */
 async function logout(page) {
-  await page.goto('/my/');
+  await gotoResilient(page, '/my/');
   const key = await page.evaluate(() => (window.M && window.M.cfg && window.M.cfg.sesskey) || '');
-  await page.goto(`/login/logout.php?sesskey=${key}`);
+
+  // logout.php answers with a redirect chain, and Chromium reports the first hop as ERR_ABORTED
+  // when the second one supersedes it. The logout itself has happened by then, so the navigation
+  // error is expected and caught; what is checked is the outcome, not the transport.
+  await page.goto(`/login/logout.php?sesskey=${key}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // Moodle asks for confirmation when the key is stale.
   const confirm = page
     .locator('button:has-text("Log out"), input[value="Log out"], button:has-text("Continue")')
     .first();
-  if (await confirm.count()) {
+  if (await confirm.count() && await confirm.isVisible()) {
     await confirm.click().catch(() => {});
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
   }
-  await expect(page.locator('#username, a:has-text("Log in")').first()).toBeVisible({ timeout: 30000 });
+
+  await gotoResilient(page, '/login/index.php');
+  await expect(
+    page.locator('#username'),
+    'Still logged in after logging out - the next login would act as the wrong user'
+  ).toBeVisible({ timeout: 30000 });
 }
 
 module.exports = { login, logout };

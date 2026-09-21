@@ -28,6 +28,9 @@ module.exports = defineConfig({
     // Recorded on success as well as on failure. A green run is the deliverable here: a watchable
     // record of the finished game, usable for documentation and for showing the plugin to people
     // who will never read a test report.
+    // SMG_NO_RECORD=1 turns recording off for a faster local iteration. It is not needed for the
+    // journey to pass: an earlier suspicion that recording broke the login turned out to be the
+    // login retry failing to recognise its own success. CI records.
     video: process.env.SMG_NO_RECORD ? 'off' : 'on',
     screenshot: 'on',
     trace: process.env.SMG_NO_RECORD ? 'off' : 'on',

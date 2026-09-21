@@ -86,7 +86,14 @@ async function createUser(page, user) {
  * @param {string} fullname The display name, as the picker shows it.
  * @param {string} role The role to give, e.g. "Student".
  */
-async function enrol(page, courseid, fullname, role) {
+async function enrol(page, courseid, fullname, role, identity) {
+  // Searched and confirmed by a unique identity, not by the display name. Every run creates a
+  // "Pat Player", so on any site that has seen a previous run the name matches several accounts:
+  // the picker offered the oldest one, the dialog enrolled it, and the confirmation - which also
+  // looked for "Pat Player" - found that old account in the list and passed. The participant who
+  // then logged in was not enrolled at all, and the failure surfaced two steps later as "the
+  // quiz offers no way to start an attempt".
+  const needle = identity || fullname;
   await page.goto(`/user/index.php?id=${courseid}`);
   // By accessible name rather than by text content. Moodle wraps the label in spans and adds
   // icons, so :has-text() misses a control that the page plainly shows - the failure then reads
@@ -106,17 +113,17 @@ async function enrol(page, courseid, fullname, role) {
   const search = dialog.locator('input.form-autocomplete-input, input[role="combobox"]').first();
   await expect(search, 'The participant search box is not in the dialog').toBeVisible({ timeout: 30000 });
   await search.click();
-  await search.fill(fullname);
+  await search.fill(needle);
 
   // The suggestion list is rendered outside the input, and typing alone does not select anybody -
   // a dialog submitted without a selection enrols nobody and reports success.
   const suggestion = page
     .locator('.form-autocomplete-suggestions [role="option"], [role="listbox"] [role="option"]')
-    .filter({ hasText: fullname })
+    .filter({ hasText: needle })
     .first();
   await expect(
     suggestion,
-    `The participant search found nobody called ${fullname}`
+    `The participant search found nobody matching ${needle}`
   ).toBeVisible({ timeout: 30000 });
   await suggestion.click();
 
@@ -127,9 +134,10 @@ async function enrol(page, courseid, fullname, role) {
 
   await dialog.locator('button:has-text("Enrol")').last().click();
 
+  await page.goto(`/user/index.php?id=${courseid}&perpage=5000`, { waitUntil: 'domcontentloaded' });
   await expect(
-    page.locator(`table td:has-text("${fullname}")`).first(),
-    `${fullname} was not enrolled`
+    page.locator('table').filter({ hasText: needle }).first(),
+    `${needle} was not enrolled - the dialog reported success but the participant list lacks them`
   ).toBeVisible({ timeout: 30000 });
 }
 

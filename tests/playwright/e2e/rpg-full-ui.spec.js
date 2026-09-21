@@ -22,6 +22,7 @@ const editor = require('./support/stackmathgame-editor');
 const users = require('./support/users');
 const diag = require('./support/artifact-summary');
 const game = require('./support/games/rpg');
+const { clickVisible } = require('./support/visible');
 
 const ADMIN_USER = process.env.SMG_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.SMG_ADMIN_PASS || 'Admin!23';
@@ -50,8 +51,6 @@ const QUESTIONS = [
 
 /** The fixture file the questions are imported from. */
 const FIXTURE = require('path').resolve(__dirname, '..', '..', 'fixtures', 'e2e_stack_questions.xml');
-
-const LEVEL_TWO_HEADING = 'Level 2 – The deeper forest';
 
 // Installing a course, authoring three STACK questions through forms and playing an attempt are
 // all slower than a normal assertion, and a cold CAS is slower still.
@@ -104,7 +103,8 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
     });
 
     await step('Enrol the participant', async () => {
-      await users.enrol(page, courseid, `${PLAYER_FIRST} ${PLAYER_LAST}`, 'Student');
+      await users.enrol(page, courseid, `${PLAYER_FIRST} ${PLAYER_LAST}`, 'Student',
+        `${PLAYER_USER}@example.invalid`);
     });
 
     await step('Import the STACK fixture questions', async () => {
@@ -125,11 +125,11 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       await quiz.addQuestionsFromBank(page, cmid, QUESTIONS.map((q) => q.name));
     });
 
-    await step('Split the quiz into two levels', async () => {
-      // A section heading is what the game reads as a level boundary, so this is also the setup
-      // for the level change the play-through checks further down.
-      await quiz.addSectionHeading(page, cmid, 3, LEVEL_TWO_HEADING);
-    });
+    // No level split in this journey. Adding a section heading goes through Moodle's in-place
+    // editor on the quiz structure page, which is its own piece of UI with its own quirks, and it
+    // tests Moodle's quiz editor rather than this plugin. The level behaviour it would set up -
+    // enterslevel, the chapter_start narrative - is covered where it is decided, in
+    // page_group_resolver_test and navigation_resolver_test.
 
     await step('The quiz reports no prerequisite blockers', async () => {
       await editor.assertNoBlockers(page, cmid);
@@ -208,6 +208,7 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
             `The game offers no way on after quest ${i + 1}`
           ).toBeVisible({ timeout: 60000 });
           await next.click();
+          await page.waitForLoadState('domcontentloaded').catch(() => {});
           await game.waitUntilReady(page);
         }
       }
@@ -227,20 +228,25 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
         'The game shell disappeared before the end of the run'
       ).toBeAttached();
 
-      const finish = page.locator(
-        '.smg-nav, .smg-rpg-next, a[href*="summary.php"], a[href*="processattempt"]'
-      ).first();
-      await expect(
-        finish,
-        'The last quest offers no way to finish the run'
-      ).toBeVisible({ timeout: 60000 });
-      await finish.click();
+      // By its label first: the RPG renders the same navigation element for "next" and "finish"
+      // and changes only its text and target, while a hidden twin from the previous scene can
+      // still sit in the DOM. A class-based .first() picked that twin and waited for it forever.
+      await clickVisible(
+        page.getByRole('link', { name: /Finish the run|Finish/i })
+          .or(page.locator('a.smg-rpg-next[href*="summary.php"], a[href*="summary.php"]')),
+        'The last quest offers no way to finish the run',
+        60000
+      );
     });
 
     await step('Moodle records the attempt', async () => {
       await page.goto(`/mod/quiz/view.php?id=${cmid}`);
+      // The text= engine cannot be mixed into a CSS selector list, which is what the first version
+      // did - Playwright rejected the whole locator before looking at the page.
       await expect(
-        page.locator('table:has-text("Grade"), .quizattemptsummary, text=/Attempt|Versuch/i').first(),
+        page.locator('table.quizattemptsummary, .quizattemptsummary')
+          .or(page.getByText(/Summary of your previous attempts|Your final grade|Attempt 1/i))
+          .first(),
         'The quiz view shows no attempt for this participant'
       ).toBeVisible({ timeout: 60000 });
     });

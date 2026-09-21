@@ -155,13 +155,20 @@ async function selectCategory(scope, fragment, page) {
   // The visible half of the autocomplete. Moodle gives it a generated id
   // (form_autocomplete_input-<timestamp>), so it is found by role instead.
   const auto = scope.locator('input[role="combobox"], input[id^="form_autocomplete_input"]').last();
-  trace(`auto count=${await auto.count()}`);
-  if (!(await auto.count())) {
-    trace('no autocomplete found - returning without filtering');
-    return;
-  }
+  // Waited for, not counted once. The chooser modal builds its filter row after the dialog is
+  // already visible, so a single count() immediately after opening it is zero - and the helper
+  // then returned without filtering, leaving the default category on screen. That looked
+  // identical to "the questions were never imported", which is where three runs went.
+  await expect(
+    auto,
+    'No category filter appeared - neither a select nor an autocomplete'
+  ).toBeVisible({ timeout: 30000 });
   await auto.click();
   await auto.fill(fragment);
+  // The widget debounces its search. Waiting only for a suggestion to appear is not enough: the
+  // list is rebuilt once more when the query settles, and a click on the first render is
+  // discarded - the selection then reads as made while the filter still holds the default.
+  await page.waitForTimeout(1500);
   // Plain [role="option"]: Moodle renders the suggestions in a container whose class has changed
   // between versions, and scoping to it found nothing while the options were plainly there. The
   // role is what the widget guarantees.
@@ -170,7 +177,19 @@ async function selectCategory(scope, fragment, page) {
     suggestion,
     `The category filter found nothing called "${fragment}"`
   ).toBeVisible({ timeout: 30000 });
+  trace(`suggestion text: ${JSON.stringify((await suggestion.innerText()).trim())}`);
+  trace(`all options: ${JSON.stringify((await page.locator('[role="option"]').allInnerTexts()).map(s => s.trim()))}`);
   await suggestion.click();
+  await page.waitForTimeout(1000);
+
+  // Wait for the widget to show the selection before applying. Moodle's autocomplete writes the
+  // chosen item into a "Selected items" region asynchronously, and applying the filter in the
+  // meantime submits the default category - which here holds no questions at all, so the chooser
+  // came back empty and looked as though the category had never been imported into.
+  await expect(
+    scope.locator('.form-autocomplete-selection').filter({ hasText: fragment }).first(),
+    `The category filter did not register "${fragment}"`
+  ).toBeVisible({ timeout: 15000 });
 
   // The hidden <select> behind the autocomplete is the authority on what was actually chosen.
   // Checking it turns a silent miss - the click landing on nothing, the filter staying empty -
@@ -183,7 +202,10 @@ async function selectCategory(scope, fragment, page) {
     ).not.toHaveValue('', { timeout: 10000 });
   }
 
+  trace(`selection region: ${JSON.stringify((await scope.locator('.form-autocomplete-selection').allInnerTexts()).map(s => s.trim()))}`);
+  trace('applying filters');
   await applyFilters(scope, page);
+  trace('filter applied');
 }
 
 /**
@@ -210,8 +232,11 @@ async function applyFilters(scope, page) {
   const apply = scope.getByRole('button', { name: /Apply filters/i }).first();
   if (await apply.count()) {
     await apply.click();
-    // The list is rebuilt over AJAX, so waiting for navigation would wait forever.
+    // The list is rebuilt over AJAX, so waiting for navigation would wait forever - and
+    // networkidle returns before the table is swapped in, which is why the first version read an
+    // empty list and reported the questions as missing.
     await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(1500);
   }
 }
 

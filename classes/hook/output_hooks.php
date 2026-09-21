@@ -129,6 +129,9 @@ class output_hooks {
             $cmid = (int)$PAGE->cm->id;
         }
         if ($cmid <= 0) {
+            $cmid = self::cmid_from_attempt(optional_param('attempt', 0, PARAM_INT));
+        }
+        if ($cmid <= 0) {
             return;
         }
 
@@ -191,5 +194,33 @@ class output_hooks {
             'themeAssetUrl' => $themeurl,
             'config' => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
+    }
+
+    /**
+     * Resolve the course module of a quiz attempt from the attempt id alone.
+     *
+     * attempt.php does not need a cmid in its URL - Moodle derives the quiz from the attempt - and
+     * most of the ways a player reaches the page do not carry one: Moodle's own page navigation,
+     * the "return to attempt" link on the summary page, a bookmark, and the game's own
+     * "next scene" link. Reading the cmid only from the request therefore meant the game ran on
+     * the first page of an attempt and silently vanished on every page after it, leaving the plain
+     * quiz behind with its native Check button. The end-to-end journey found this; no unit test
+     * could have, because each page works when opened with a cmid.
+     *
+     * @param int $attemptid The attempt id from the request, or 0.
+     * @return int The course-module id, or 0 when it cannot be resolved.
+     */
+    public static function cmid_from_attempt(int $attemptid): int {
+        global $DB;
+
+        if ($attemptid <= 0) {
+            return 0;
+        }
+        $quizid = (int)$DB->get_field('quiz_attempts', 'quiz', ['id' => $attemptid]);
+        if ($quizid <= 0) {
+            return 0;
+        }
+        $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, IGNORE_MISSING);
+        return $cm ? (int)$cm->id : 0;
     }
 }

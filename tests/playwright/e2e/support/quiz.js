@@ -75,55 +75,48 @@ async function expandAll(page) {
  */
 async function addQuestionsFromBank(page, cmid, names) {
   await page.goto(`/mod/quiz/edit.php?cmid=${cmid}`);
+  await page.waitForLoadState('networkidle').catch(() => {});
 
   await clickVisible(
     page.getByRole('button', { name: /^Add$/ }).or(page.getByRole('link', { name: /^Add$/ })),
     'Opening the add-question menu'
   );
 
-  // The menu entries are rendered as anchors inside a dropdown and reported with varying roles
-  // between Moodle versions, so they are matched by their container and their text rather than by
-  // a role - a role-only locator found nothing while the menu was open in front of it.
+  // The menu entries are anchors whose reported role varies between versions, so they are matched
+  // by text. "Add" itself appears in several menus on this page, hence the anchored /^Add$/ above.
   await clickVisible(
-    page.locator('.dropdown-menu, [role="menu"], .menu')
-      .locator('a, button, [role="menuitem"]')
-      .filter({ hasText: /from question bank/i }),
+    page.locator('a').filter({ hasText: /from question bank/i }),
     'Choosing "from question bank"'
   );
 
-  // Scoped to the page, not to a .modal-dialog. Moodle 4.5 renders the question chooser inline
-  // rather than in a modal, so everything scoped to a dialog matched nothing while the chooser
-  // was plainly on screen - and every failure said the question had not been imported.
-  await expect(
-    page.getByRole('combobox', { name: /Category/i }).first(),
-    'The question chooser did not open'
-  ).toBeVisible({ timeout: 30000 });
-
+  const modal = page.locator('.modal-dialog').last();
+  await expect(modal, 'The question chooser did not open').toBeVisible({ timeout: 30000 });
+  // The modal renders its shell first and fills in the filter row and the question table after.
+  await page.waitForTimeout(3000);
+  // The modal fetches its question list over AJAX; measuring before that finishes finds an empty
+  // filter row and an empty table.
   await page.waitForLoadState('networkidle').catch(() => {});
-  await selectCategory(page, CATEGORY, page);
+
+  // The chooser opens on the course default category, which is empty here - the fixture brings
+  // its own. Without this the questions are genuinely absent from the modal, which is exactly
+  // what "not offered in the chooser" was reporting, correctly.
+  await selectCategory(modal, CATEGORY, page);
 
   for (const name of names) {
-    const entry = page.getByText(name, { exact: false }).first();
-    await expect(entry, `"${name}" is not offered in the chooser`).toBeVisible({ timeout: 30000 });
-
-    const row = entry
-      .locator('xpath=ancestor::*[self::tr or self::li or contains(@class,"row")][1]')
-      .first();
-    const box = (await row.count())
-      ? row.locator('input[type="checkbox"]').first()
-      : page.locator('input[type="checkbox"]').first();
-    await box.check();
+    const row = modal.locator('tr').filter({ hasText: name }).first();
+    await expect(row, `"${name}" is not offered in the chooser`).toBeVisible({ timeout: 30000 });
+    await row.locator('input[type="checkbox"]').first().check();
   }
 
   await clickVisible(
-    page.getByRole('button', { name: /Add selected questions/i })
-      .or(page.locator('input[value*="Add selected"]')),
+    modal.getByRole('button', { name: /Add selected questions/i })
+      .or(modal.locator('input[value*="Add selected"]')),
     'Adding the selected questions'
   );
 
   for (const name of names) {
     await expect(
-      page.locator(`text=${name}`).first(),
+      page.locator('tr, li').filter({ hasText: name }).first(),
       `"${name}" did not land in the quiz`
     ).toBeVisible({ timeout: 30000 });
   }
@@ -139,19 +132,43 @@ async function addQuestionsFromBank(page, cmid, names) {
  */
 async function addSectionHeading(page, cmid, slot, heading) {
   await page.goto(`/mod/quiz/edit.php?cmid=${cmid}`);
+  await page.waitForLoadState('networkidle').catch(() => {});
 
-  // The control sits on the page break above the slot it starts at.
-  const adder = page.locator('a:has-text("Add"), button:has-text("Add")').nth(slot - 1);
-  await adder.click();
-  await page.locator('a:has-text("new section heading")').first().click();
+  // The "Add" control sits on the page break above the slot the new section starts at, so the
+  // nth one is the one that matters. Matched by role, like the others: :has-text("Add") also
+  // matches "Add from the question bank", which opens the wrong menu entirely.
+  const adders = page.getByRole('button', { name: /^Add$/ })
+    .or(page.getByRole('link', { name: /^Add$/ }));
+  await adders.nth(slot - 1).click();
+  await page.waitForTimeout(600);
 
-  const input = page.locator('input[name="heading"], .inplaceeditable input').first();
+  await clickVisible(
+    page.locator('a').filter({ hasText: /new section heading/i }),
+    'Choosing "a new section heading"'
+  );
+  await page.waitForTimeout(1500);
+
+  // Moodle inserts the section under a placeholder name and does not open the editor: the
+  // placeholder is an inplaceeditable that has to be clicked first. Waiting for the input without
+  // that click waits for something no version has ever shown on its own.
+  const editable = page
+    .locator('.inplaceeditable')
+    .filter({ hasText: /Untitled|New section|Section/i })
+    .last();
+  if (await editable.count()) {
+    await editable.locator('a, [role="button"]').first().click().catch(async () => {
+      await editable.click().catch(() => {});
+    });
+    await page.waitForTimeout(800);
+  }
+
+  const input = page.locator('.inplaceeditable input, input[name="heading"]').first();
   await expect(input, 'The section heading field did not appear').toBeVisible({ timeout: 30000 });
   await input.fill(heading);
   await input.press('Enter');
 
   await expect(
-    page.locator(`text=${heading}`).first(),
+    page.getByText(heading, { exact: false }).first(),
     `The section heading "${heading}" was not saved`
   ).toBeVisible({ timeout: 30000 });
 }

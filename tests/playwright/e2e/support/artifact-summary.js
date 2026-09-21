@@ -33,9 +33,19 @@ function watchForTrouble(page, baseurl) {
   };
 
   page.on('console', (message) => {
-    if (message.type() === 'error') {
-      collected.consoleErrors.push(message.text());
+    if (message.type() !== 'error') {
+      return;
     }
+    // "Failed to load resource" is Chromium echoing a network failure into the console, without
+    // the URL. The network itself is judged below by requestfailed and response, which do know
+    // the URL and count only the site's own requests. Counting the echo as well let every
+    // third-party asset the sandbox could not reach - fonts and a CDN behind an intercepting
+    // proxy, reported as ERR_CERT_AUTHORITY_INVALID - fail a journey whose own requests were all
+    // fine. What this listener is for is script errors, and those it still catches.
+    if (message.text().startsWith('Failed to load resource')) {
+      return;
+    }
+    collected.consoleErrors.push(message.text());
   });
 
   page.on('pageerror', (error) => {
