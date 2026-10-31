@@ -17,6 +17,7 @@
 namespace local_stackmathgame\unit;
 
 use advanced_testcase;
+use local_stackmathgame\external\get_question_fragment;
 use local_stackmathgame\external\submit_answer;
 use local_stackmathgame\game\quiz_configurator;
 use local_stackmathgame\local\service\flow_service;
@@ -355,7 +356,9 @@ final class stack_submit_test extends advanced_testcase {
 
         $result = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);
 
-        $this->assertNotEmpty($result['inputnames']);
+        // The question's own inputs - this one has several - and nothing that is not an input.
+        $this->assertContains('ans1', $result['inputnames']);
+        $this->assertNotContains('step_lang', $result['inputnames']);
     }
 
     /**
@@ -437,5 +440,26 @@ final class stack_submit_test extends advanced_testcase {
         $result = $this->submit_and_grade($attemptobj, 1, ['ans1' => self::WRONG_ANSWER]);
 
         $this->assertFalse($result['firstsolve']);
+    }
+    /**
+     * The fragment of an owned attempt renders, and names its inputs.
+     *
+     * The success case of the endpoint, which no test called: it threw on every request, and the
+     * engine quietly fell back to refetching the whole page after each check, so the fault never
+     * showed. Checked after an answer, when the question has input data to report.
+     *
+     * @covers \local_stackmathgame\external\get_question_fragment
+     */
+    public function test_fragment_of_an_owned_attempt_renders_and_names_its_inputs(): void {
+        $attemptobj = $this->start_attempt();
+        $this->submit_and_grade($attemptobj, 1, ['ans1' => self::CORRECT_ANSWER]);
+
+        $fragment = get_question_fragment::execute((int)$attemptobj->get_attemptid(), 1);
+
+        $this->assertSame('ok', $fragment['status']);
+        $this->assertNotSame('', $fragment['questionhtml']);
+        $this->assertContains('ans1', $fragment['inputnames']);
+        // STACK's language stamp is stored with every answer, but nobody types it.
+        $this->assertNotContains('step_lang', $fragment['inputnames']);
     }
 }

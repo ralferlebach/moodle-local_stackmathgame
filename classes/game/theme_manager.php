@@ -93,6 +93,16 @@ class theme_manager {
             (string)$theme->modecomponent,
             (string)$theme->slug
         );
+        $sprites = package_registry::build_sprite_meta(
+            (string)$theme->modecomponent,
+            (string)$theme->slug
+        );
+        // A design without a bundled package on disk is an uploaded one: its artwork is in file
+        // storage and its sprite geometry in the stored manifest.
+        if (!$runtimeassets && empty($theme->isbundled)) {
+            $runtimeassets = \local_stackmathgame\local\packaging\design_assets::runtime_assets($theme);
+            $sprites = \local_stackmathgame\local\packaging\design_assets::sprite_meta($theme);
+        }
         $modekey     = preg_replace('/^stackmathgamemode_/', '', (string)$theme->modecomponent);
         $slugsafe    = preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$theme->slug);
         $themeclass  = 'smg-mode-' . $modekey . ' smg-design-' . $slugsafe;
@@ -111,6 +121,7 @@ class theme_manager {
             'mechanics'     => json_decode((string)($theme->mechanicsjson ?? '{}'), true) ?: [],
             'assets'        => json_decode((string)($theme->assetmanifestjson ?? '{}'), true) ?: [],
             'runtimeassets' => $runtimeassets,
+            'sprites'       => $sprites,
             'thumbnailurl'  => (string)($runtimeassets['thumbnail'] ?? ''),
             'modekey'       => $modekey,
             'themeclass'    => $themeclass,

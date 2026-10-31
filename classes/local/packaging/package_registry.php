@@ -71,6 +71,33 @@ class package_registry {
     }
 
     /**
+     * Return the sprite geometry a package declares for its animated assets.
+     *
+     * Kept in the package, not in the mode: frame size, frame count and timing belong to the
+     * artwork. A different design with different sheets would otherwise need a code change, and
+     * a sheet animated with the wrong frame width scrolls through half-frames - visibly wrong,
+     * with no error anywhere.
+     *
+     * @param string $modecomponent The mode component.
+     * @param string $slug The package slug.
+     * @return array Map of asset key to ['frames', 'framewidth', 'frameheight', 'frameduration'].
+     */
+    public static function build_sprite_meta(string $modecomponent, string $slug): array {
+        $manifest = self::get_bundled_package($modecomponent, $slug);
+        $sprites = [];
+        foreach ((array)($manifest['sprites'] ?? []) as $key => $meta) {
+            $meta = (array)$meta;
+            $sprites[(string)$key] = [
+                'frames' => max(1, (int)($meta['frames'] ?? 1)),
+                'framewidth' => max(0, (int)($meta['framewidth'] ?? 0)),
+                'frameheight' => max(0, (int)($meta['frameheight'] ?? 0)),
+                'frameduration' => max(0, (int)($meta['frameduration'] ?? 0)),
+            ];
+        }
+        return $sprites;
+    }
+
+    /**
      * Build an asset URL map from a package manifest.
      *
      * @param string $modecomponent The mode component name.

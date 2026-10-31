@@ -15,8 +15,7 @@
     "guide_happy": "assets/ui/guide_happy.svg",
     "guide_think": "assets/ui/guide_think.svg",
     "goal_flag": "assets/ui/goal_flag.svg",
-    "boss_icon": "assets/ui/boss_icon.svg",
-    "operators_panel": "assets/ui/operators_panel.svg"
+    "boss_icon": "assets/ui/boss_icon.svg"
   },
   "narrativefile": "narrative.json",
   "uifile": "ui.json",

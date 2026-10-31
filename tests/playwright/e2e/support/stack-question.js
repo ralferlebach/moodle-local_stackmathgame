@@ -16,6 +16,7 @@
  */
 
 const { expect } = require('@playwright/test');
+const { uploadThroughFilepicker } = require('./filepicker');
 
 /** The category the fixture file declares for its questions. */
 const CATEGORY = 'StackMathGame E2E Fixtures';
@@ -62,31 +63,7 @@ async function importQuestions(page, courseid, fixture) {
     await fromFile.uncheck();
   }
 
-  // Moodle's file picker, not a plain file field. The import form shows a drop area whose real
-  // <input type="file"> only exists inside the repository dialog, so setting files on the page
-  // directly waits for an element that is never rendered.
-  await page.getByRole('button', { name: /Choose a file|Add\.\.\./i }).first().click();
-
-  // Addressed on the page rather than inside a scoped container: the picker is Moodle's YUI
-  // dialogue and its wrapper class has changed more than once, so scoping to it made the step
-  // fail with "the picker did not open" while the picker was plainly open.
-  await expect(
-    page.getByRole('heading', { name: /File picker/i }).first(),
-    'The file picker did not open'
-  ).toBeVisible({ timeout: 30000 });
-
-  const uploadRepo = page.getByRole('link', { name: /Upload a file/i }).first();
-  if (await uploadRepo.count()) {
-    await uploadRepo.click();
-  }
-
-  await page.locator('input[type="file"]').first().setInputFiles(fixture);
-  await page.getByRole('button', { name: /Upload this file/i }).first().click();
-
-  await expect(
-    page.locator('.filepicker-filename, .fp-filename').first(),
-    'The uploaded file does not appear on the import form'
-  ).toBeVisible({ timeout: 60000 });
+  await uploadThroughFilepicker(page, fixture);
 
   await page.click('#id_submitbutton');
 

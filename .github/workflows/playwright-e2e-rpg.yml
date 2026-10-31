@@ -22,6 +22,20 @@ on:
         description: 'Moodle branch to install'
         required: false
         default: 'MOODLE_405_STABLE'
+      stackmatheditor:
+        # Play the journey with the STACK Math Editor in front of every STACK field. The journey
+        # answers through the editor's documented interface - value into the original field,
+        # input and change events - and taking over such values is new in 1.3 (issue #77), on
+        # the development branch. Release 1.2.2 on main is compatible with the game as well, but
+        # overwrites a value written from outside when the check runs, so it cannot be driven
+        # this way; it is covered by the manual checks recorded in docs/sessions/session-003.md.
+        description: 'STACK Math Editor to install alongside (none, or a branch of ralferlebach/moodle-local_stackmatheditor)'
+        required: false
+        type: choice
+        default: 'none'
+        options:
+          - 'none'
+          - 'development'
 
 jobs:
   e2e-rpg:
@@ -117,6 +131,14 @@ jobs:
           # Soft integrations: installed so the XP / Stash bridges are exercised, not skipped.
           install_plugin FMCorz/moodle-block_xp                       blocks/xp                            master
           install_plugin FMCorz/moodle-block_stash                    blocks/stash                         master
+
+      - name: Install the STACK Math Editor
+        if: ${{ github.event.inputs.stackmatheditor && github.event.inputs.stackmatheditor != 'none' }}
+        run: |
+          git clone --depth 1 --branch "${{ github.event.inputs.stackmatheditor }}" \
+            https://github.com/ralferlebach/moodle-local_stackmatheditor.git moodle/local/stackmatheditor
+          rm -rf moodle/local/stackmatheditor/.git
+          echo "STACK Math Editor: $(sed -n "s/.*release *= *'\(.*\)'.*/\1/p" moodle/local/stackmatheditor/version.php)"
 
       - name: Verify a clean plugin layout
         run: |

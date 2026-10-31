@@ -405,11 +405,7 @@ class submit_answer extends \core_external\external_api {
                 },
                 $answers
             ),
-            // Deliberately get_last_qt_data(): get_qt_data() does not exist on question_attempt,
-            // and the catch that used to wrap this swallowed the resulting TypeError, so the client
-            // silently received an empty list on every submission - it could never rebind the
-            // inputs after a fragment refresh.
-            'inputnames'    => array_keys($qa->get_last_qt_data()),
+            'inputnames'    => api::answer_input_names($qa),
             'previousstate' => $previousstate,
             'message'       => $message,
             'profile'       => api::export_profile($profile),

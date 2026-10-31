@@ -178,7 +178,11 @@ class output_hooks {
             // The stage counter string is used by all three mode modules; M.util.get_string()
             // only finds a string declared here, and a missing one renders as the raw
             // key rather than failing, so an omission is easy to ship unnoticed.
-            ['nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready', 'stageprogress'],
+            [
+                'nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready', 'stageprogress',
+                'checkanswer', 'standardview', 'nextscene', 'previousscene', 'fairies', 'mana', 'tutorname',
+                'navstart', 'navfinish', 'navboss',
+            ],
             'local_stackmathgame'
         );
         $PAGE->requires->js_call_amd('local_stackmathgame/game_engine', 'init', [[

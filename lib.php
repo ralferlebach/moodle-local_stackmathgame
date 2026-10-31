@@ -106,3 +106,45 @@ function local_stackmathgame_extend_settings_navigation(
         new pix_icon('i/settings', '')
     );
 }
+
+/**
+ * Serve the artwork of designs uploaded through the Game Design Studio.
+ *
+ * Only the design asset area is served, only in the system context, and only to someone logged
+ * in: the artwork is used on quiz attempt pages, which require a login anyway, and a design may
+ * carry artwork licensed for use on this site but not for publication beyond it.
+ *
+ * @param stdClass $course The course (unused; the area lives in the system context).
+ * @param stdClass|null $cm The course module (unused).
+ * @param context $context The context of the file.
+ * @param string $filearea The file area.
+ * @param array $args Item id, then the file path and name.
+ * @param bool $forcedownload Whether to force a download.
+ * @param array $options Additional options for send_stored_file().
+ * @return bool False when the file is not served.
+ */
+function local_stackmathgame_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload, array $options = []) {
+    $served = $filearea === \local_stackmathgame\local\packaging\design_assets::FILEAREA;
+    if (!$served || $context->contextlevel !== CONTEXT_SYSTEM) {
+        return false;
+    }
+    require_login(null, false);
+
+    $itemid = (int)array_shift($args);
+    $filename = array_pop($args);
+    $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
+
+    $file = get_file_storage()->get_file(
+        $context->id,
+        'local_stackmathgame',
+        $filearea,
+        $itemid,
+        $filepath,
+        $filename
+    );
+    if (!$file || $file->is_directory()) {
+        return false;
+    }
+    // Artwork changes only by re-import, which replaces the file; a long cache lifetime is safe.
+    send_stored_file($file, DAYSECS, 0, $forcedownload, $options);
+}

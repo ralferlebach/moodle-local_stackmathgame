@@ -144,6 +144,15 @@ class get_quiz_config extends \core_external\external_api {
                 new \core_external\external_single_structure([
                     'key' => new \core_external\external_value(PARAM_ALPHANUMEXT, 'Asset key from the package manifest'),
                     'url' => new \core_external\external_value(PARAM_URL, 'Resolved URL of the asset'),
+                    'frames' => new \core_external\external_value(
+                        PARAM_INT,
+                        'Frames in the sheet; 1 for a still image',
+                        VALUE_DEFAULT,
+                        1
+                    ),
+                    'framewidth' => new \core_external\external_value(PARAM_INT, 'Width of one frame in px', VALUE_DEFAULT, 0),
+                    'frameheight' => new \core_external\external_value(PARAM_INT, 'Height of one frame in px', VALUE_DEFAULT, 0),
+                    'frameduration' => new \core_external\external_value(PARAM_INT, 'Milliseconds per frame', VALUE_DEFAULT, 0),
                 ]),
                 'Resolved asset URLs, addressed by key',
                 VALUE_DEFAULT,

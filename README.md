@@ -25,6 +25,45 @@ Optional integrations, wired through silent-fail bridges: **block_xp** and **blo
 they are absent nothing breaks and no error is shown; if they are present, solving a scene can
 award experience points and stash items.
 
+Maths input editors
+-------------------
+
+The game works with the **STACK Math Editor** (`local_stackmatheditor`) in every mode. It is not
+a dependency: without it students type into STACK's own fields, with it they use its visual
+editor, and nothing needs to be configured either way.
+
+The two plugins meet only at the interface the editor documents - the original STACK input and
+its `stackmatheditor:*` events - never at its internal markup:
+
+* **The game's check is a check.** It is a submit control named like STACK's own Check buttons,
+  so the editor writes every visible editor into its original field and announces
+  `stackmatheditor:beforecheck` before the game sends the answer. The native submission is
+  suppressed; the answer is sent once, through the game.
+* **A field keeps its editor.** A mode that lays a question out as a scene moves only fields that
+  are themselves visible. A field an editor stands in front of - hidden from sight but kept in the
+  accessibility tree, as the editor does it - stays where the editor placed it, and the check
+  control goes with it. Once a page has shown an editor, its fields stay put for that page, so the
+  editor does not jump after the first check.
+* **Only STACK's own fields move.** A mode recognises them by the name the question engine
+  gives them (`q<usage>:<slot>_<input>`). An editor's internal elements - MathQuill captures
+  keystrokes through a hidden textarea of its own - are never touched.
+* **Replaced questions are announced.** After every check the game swaps in a freshly rendered
+  question and raises Moodle's filter event for it. Release 1.3 of the editor watches the page
+  and attaches to the new question by itself.
+* **Older editors are re-initialised.** Release 1.2.2 does not attach to replaced content. When a
+  swap leaves a question without the editor it had, the game reloads the page once the answer is
+  saved, so the editor initialises again; the scene then shows as solved. With 1.3 this never
+  happens.
+* **Moods follow the field.** The tutor reacts to `input` events on the original field, which
+  the editor raises for every change.
+
+Checked against release 1.2.2 (`main`) and 1.3.0-dev (`development`). The browser journey can
+also be run with the editor installed (workflow input `stackmatheditor`); it answers through the
+editor's documented interface, which needs 1.3.
+
+The same rules hold for any input surface that treats the original STACK field as its interface.
+
+
 
 Motivation for this plugin
 --------------------------

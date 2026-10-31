@@ -119,6 +119,13 @@ final class design_validator {
             }
         }
 
+        // The artwork: every declared file present, of an allowed type, within size, and - for
+        // SVG - free of script. A package that passes here stores completely or not at all.
+        $errors = array_merge(
+            $errors,
+            \local_stackmathgame\local\packaging\design_assets::validate($zip, $manifest)
+        );
+
         $zip->close();
         return $errors;
     }

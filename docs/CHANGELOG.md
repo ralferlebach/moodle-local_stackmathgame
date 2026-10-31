@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026090248
+
+### Fixed
+- The question fragment endpoint never returned a fragment: it called a method that does not
+  exist, passed render_question() its arguments in the wrong order, and fell back to an API Moodle
+  reserves for unit tests. After every check the engine therefore reloaded the whole page instead
+  of swapping the question. It now swaps only the question.
+- RPG: the hidden textarea MathQuill uses to capture keystrokes was moved out of the editor into
+  the scene, which lost the last character of an answer. Only STACK's own named fields move.
+- Tutor and exit game: a scene solved on an earlier visit, or before a reload, offered no way on.
+- The reported input names included STACK's language stamp (step_lang).
+
+### Added
+- With a maths editor that does not attach to replaced content (STACK Math Editor 1.2.2), the
+  page reloads after a check so the editor initialises again.
+- E2E workflow input `stackmatheditor` to run the journey with the editor installed.
+
+## 2026090247
+
+### Added
+- Chapter landmarks in the quiz navigation for every mode: a house on the starting scene, a skull
+  on a boss, a chequered flag on "Finish attempt". Font Awesome Free from Moodle core.
+- Compatibility with the STACK Math Editor in every mode (see README, "Maths input editors").
+- A warning on the game settings page when MathJax is loaded from an external server.
+- Design packages with artwork are imported through the Game Design Studio.
+
+### Changed
+- All user-facing labels in the engine and the modes come from the language pack (en, de).
+- RPG: the elf steps aside when a tall validation would cover him; validation ends above the
+  arrows; the panel width no longer depends on the scene's.
+- Digital Mentoring (wisewizzard) mode rebuilt after the original's layout; the operator keyboard
+  is gone, the STACK Math Editor replaces it.
+
+### Fixed
+- The engine used game_core without declaring it as a dependency.
+- Formulas in a question swapped in after a check stayed as raw TeX.
+
 ## Unreleased
 
 ### Added

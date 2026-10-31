@@ -186,6 +186,15 @@ if ($data = $form->get_data()) {
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gamesettings', 'local_stackmathgame'));
+// The game itself loads nothing from elsewhere; Moodle's MathJax filter may. Said here, where the
+// game is set up, because it is a site setting the plugin must not change on its own.
+$mathjaxhost = \local_stackmathgame\local\service\site_check::mathjax_external_host();
+if ($mathjaxhost !== null) {
+    echo $OUTPUT->notification(
+        get_string('mathjaxexternal', 'local_stackmathgame', s($mathjaxhost)),
+        \core\output\notification::NOTIFY_WARNING
+    );
+}
 // The flow lives on its own page but is reached from here: the settings are what a teacher
 // opens first, and a link they have to be told about is a link that does not exist.
 echo html_writer::div(

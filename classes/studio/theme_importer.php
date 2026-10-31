@@ -127,8 +127,15 @@ class theme_importer {
             }
         }
 
+        // The manifest names the design, not the file it happened to be uploaded as: a package
+        // renamed on its way to the site ("rpg_fantasy (1).zip") must still update the same design.
+        $manifestslug = clean_param((string)($manifest['slug'] ?? $manifest['designslug'] ?? ''), PARAM_ALPHANUMEXT);
+        if ($manifestslug !== '') {
+            $slug = $manifestslug;
+        }
+
         $name          = clean_param(
-            (string)($manifest['displayname'] ?? ucwords(str_replace('_', ' ', $slug))),
+            (string)($manifest['name'] ?? $manifest['displayname'] ?? ucwords(str_replace('_', ' ', $slug))),
             PARAM_TEXT
         );
         $modecomponent = clean_param((string)($manifest['modecomponent'] ?? ''), PARAM_COMPONENT);
@@ -200,6 +207,21 @@ class theme_importer {
                 'createdby'        => (int)$USER->id,
                 'modifiedby'       => (int)$USER->id,
             ]);
+        }
+
+        // The artwork goes into Moodle's file storage, under this design. Until this step the
+        // importer kept the manifest and threw the files away, so an uploaded design had no
+        // artwork at all.
+        $zip = new \ZipArchive();
+        if ($zip->open($tmpzippath) === true) {
+            $stored = \local_stackmathgame\local\packaging\design_assets::store($zip, $manifest, $designid);
+            $zip->close();
+            $DB->set_field(
+                'local_stackmathgame_design',
+                'assetmanifestjson',
+                json_encode($stored, JSON_UNESCAPED_UNICODE),
+                ['id' => $designid]
+            );
         }
 
         theme_manager::purge_cache();

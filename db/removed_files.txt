@@ -26,3 +26,6 @@ tests/behat/behat_local_stackmatheditor.php
 mode/exitgames/.eslintrc
 mode/rpg/.eslintrc
 mode/wisewizzard/.eslintrc
+mode/wisewizzard/packages/wisewizzard_default/assets/ui/operators_panel.svg
+mode/exitgames/packages/exitgames_default/assets/ui/operators_panel.svg
+cli/install_design_package.php

@@ -182,4 +182,23 @@ final class activity_endpoints_test extends game_quiz_testcase {
 
         $this->assertSame($before, $DB->count_records('local_stackmathgame_design'));
     }
+    /**
+     * Every asset reaches the client with its sprite geometry, and a still image reports one frame.
+     *
+     * A mode animates a sheet by sliding a strip through a window one frame at a time. Without the
+     * geometry it would either show the whole sheet squashed into one frame or step through
+     * half-frames - both visibly wrong, neither an error anywhere.
+     */
+    public function test_assets_carry_sprite_geometry(): void {
+        $design = get_activity_config::execute($this->cmid)['design'];
+
+        $this->assertNotEmpty($design['runtimeassets']);
+        foreach ($design['runtimeassets'] as $asset) {
+            $this->assertArrayHasKey('frames', $asset);
+            $this->assertGreaterThanOrEqual(1, $asset['frames']);
+        }
+        // The bundled placeholders are still images.
+        $keys = array_column($design['runtimeassets'], 'frames', 'key');
+        $this->assertSame(1, $keys['elf_idle'] ?? null, 'elf_idle is missing or animated in the placeholder design');
+    }
 }

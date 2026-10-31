@@ -56,6 +56,7 @@ final class shipped_assets_test extends advanced_testcase {
         return $found;
     }
 
+
     /**
      * Every package states its licence.
      */

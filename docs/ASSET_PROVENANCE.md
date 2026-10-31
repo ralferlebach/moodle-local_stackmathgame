@@ -88,11 +88,17 @@ exist; the port does not reproduce those animations.
 
 ## Consequence for the plugin
 
-Only material whose licence is established goes into this repository. Everything marked
-*unresolved* is delivered as a **site-local design package**: imported through the Game Design
-Studio, stored in Moodle's own file storage, served by Moodle. That satisfies the requirement that
-nothing is loaded from outside at runtime, and it keeps artwork of unknown status out of a GPL
-repository that anyone can copy.
+Only material whose licence is established goes into this repository. The artwork of the two
+scenarios is delivered as **design packages imported through the Game Design Studio**
+(Studio → Import): a ZIP with a `manifest.json` and the artwork. The importer checks every file,
+stores it in Moodle's own file storage under the design, and Moodle serves it through
+`pluginfile.php`. Nothing is loaded from anywhere else at runtime, the artwork survives plugin
+upgrades, and artwork of unresolved status stays out of a GPL repository that anyone can copy.
 
-Once a licence is confirmed, the corresponding row moves from *unresolved* to a stated licence, and
-the asset may move into the repository if that licence allows it.
+The packages are site deliverables, not part of the plugin release. Once a licence is confirmed,
+the corresponding row above moves from *unresolved* to a stated licence, and the artwork may move
+into the bundled package if that licence allows it.
+
+The packages contain reduced versions of the originals — backgrounds at 1920 px width, sprite
+sheets at half size — because the scene is at most 1200 px wide. This changes the file size, not
+the licence position.

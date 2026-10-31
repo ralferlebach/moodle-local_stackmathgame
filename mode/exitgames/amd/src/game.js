@@ -260,6 +260,15 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
             showBubble(bubble, slotMap, currentSlot, 'intro');
         }
 
+        // The way on at once where nothing is left to answer: an instruction scene, and a scene
+        // solved on an earlier visit or before a reload. As in the other two modes.
+        var cfg = slotMap[String(currentSlot)] || {};
+        var type = cfg.scene && cfg.scene.type ? cfg.scene.type : '';
+        var solvedBefore = currentSlot > 0 && GameCore.isSlotSolved(gameState, currentSlot);
+        if ((type === 'instruction' || solvedBefore) && gameState.navigation) {
+            updateNav({navigation: gameState.navigation});
+        }
+
         return {
             /**
              * React to a submit_answer response.

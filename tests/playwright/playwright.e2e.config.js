@@ -15,6 +15,10 @@
 
 const { defineConfig } = require('@playwright/test');
 
+// SMG_VIEWPORT=1920x1080 for reference captures at a given size. Unset in CI, which keeps
+// Playwright's default.
+const viewport = (process.env.SMG_VIEWPORT || '').match(/^(\d+)x(\d+)$/);
+
 module.exports = defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.js',
@@ -25,6 +29,11 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.SMG_BASE_URL || 'http://127.0.0.1:8000',
     headless: true,
+    ...(viewport ? { viewport: { width: Number(viewport[1]), height: Number(viewport[2]) } } : {}),
+    // Only for local reference captures behind an intercepting proxy, where third-party HTTPS -
+    // MathJax's CDN, for one - fails certificate checks and the maths stays as raw TeX. Never set
+    // in CI, where certificates are real.
+    ignoreHTTPSErrors: !!process.env.SMG_IGNORE_HTTPS_ERRORS,
     // Recorded on success as well as on failure. A green run is the deliverable here: a watchable
     // record of the finished game, usable for documentation and for showing the plugin to people
     // who will never read a test report.

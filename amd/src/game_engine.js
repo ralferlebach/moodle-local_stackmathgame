@@ -27,7 +27,8 @@
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notification) {
+define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_core', 'core_filters/events'],
+    function($, Ajax, Notification, GameCore, FilterEvents) {
 
     'use strict';
 
@@ -110,7 +111,17 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             return result;
         }
         const seen = new Set();
-        question.querySelectorAll('input, textarea, select').forEach(function(node) {
+        // The question, plus any part of it a mode has moved elsewhere on the page. A mode that
+        // lays the question out as a scene moves the answer field and the question's hidden
+        // inputs out of .que; collecting from .que alone would then submit nothing at all - not
+        // even the sequence check, without which Moodle rejects the attempt.
+        const nodes = [];
+        [question].concat(Array.from(document.querySelectorAll('[data-smg-question-part]'))).forEach(function(root) {
+            root.querySelectorAll('input, textarea, select').forEach(function(node) {
+                nodes.push(node);
+            });
+        });
+        nodes.forEach(function(node) {
             if (!node.name || node.disabled) {
                 return;
             }
@@ -183,14 +194,47 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
             const replacement = doc.querySelector('.que') || doc.body.firstElementChild;
             const current = getCurrentQuestion();
             if (replacement && current && current.parentNode) {
-                current.parentNode.replaceChild(replacement, current);
-                bindInputs();
+                swapQuestion(current, replacement);
                 return true;
             }
             return false;
         }).catch(function() {
             return false;
         });
+    }
+
+    /**
+     * Put a freshly rendered question in place of the current one.
+     *
+     * One route for both refresh paths, so both announce the new content the same way: through
+     * Moodle's filter event, which is how MathJax learns there is maths to typeset and how any
+     * input surface that follows Moodle's conventions learns there are new fields to enhance.
+     * The STACK Math Editor watches the page itself as well, so it needs no signal - but a
+     * question whose formulas stay as raw TeX after the first check is a question nobody reads.
+     *
+     * @param {Element} current The question on the page.
+     * @param {Element} replacement The freshly rendered question.
+     * @returns {void}
+     */
+    function swapQuestion(current, replacement) {
+        var hadSurface = GameCore.hasInputSurface(current);
+        current.parentNode.replaceChild(replacement, current);
+        bindInputs();
+        FilterEvents.notifyFilterContentUpdated([replacement]);
+
+        // An input surface that does not follow replaced content - the STACK Math Editor before
+        // release 1.3 is one - leaves the fresh question with bare fields, and the student loses
+        // the editor after the first check. Given time to attach first, then the page is reloaded
+        // so every surface initialises again. The answer is already saved; the reloaded page shows
+        // the scene as solved. Surfaces that do follow replaced content never trigger this.
+        if (hadSurface) {
+            window.setTimeout(function() {
+                var now = getCurrentQuestion();
+                if (now === replacement && !GameCore.hasInputSurface(now)) {
+                    window.location.reload();
+                }
+            }, 800);
+        }
     }
 
     /**
@@ -211,8 +255,7 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                 const replacement = doc.querySelector(selector) || doc.querySelector('.que');
                 const current = getCurrentQuestion();
                 if (replacement && current && current.parentNode) {
-                    current.parentNode.replaceChild(replacement, current);
-                    bindInputs();
+                    swapQuestion(current, replacement);
                 }
                 return true;
             })
@@ -225,7 +268,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
      * @returns {void}
      */
     function bindInputs() {
-        document.querySelectorAll('.que input[type="text"], .que textarea').forEach(function(input) {
+        var selector = '.que input[type="text"], .que textarea, '
+            + '[data-smg-question-part] input[type="text"], [data-smg-question-part] textarea';
+        document.querySelectorAll(selector).forEach(function(input) {
             input.addEventListener('focus', function() {
                 state.activeInput = input;
             });
@@ -289,6 +334,10 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
                         // works only for bundled packages and breaks the moment a design is
                         // imported, and it fails invisibly because a broken src renders empty.
                         assets: state.store.assets,
+                        // The same assets as a list, each with the sprite geometry its package
+                        // declares. "assets" stays a plain key-to-URL map because the other modes
+                        // read it that way; a mode that animates sheets reads this one.
+                        assetlist: (state.store.design && state.store.design.runtimeassets) || [],
                         // Kept for the shared fallback directory only. Not a place to append
                         // filenames to - use assets[key].
                         assetBaseUrl: state.config.themeAssetUrl || ''
@@ -304,9 +353,18 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
     /**
      * Handle the game-check button click: submit answers and dispatch to game module.
      *
+     * @param {Event} [event] The click on the check control.
      * @returns {void}
      */
-    function handleGameCheck() {
+    function handleGameCheck(event) {
+        // A submit button named like STACK's own Check buttons ("...-submit"), so that input
+        // surfaces that follow STACK's check - the STACK Math Editor among them - treat it as one:
+        // they write every visible editor into its original STACK input and announce the check
+        // before this handler runs. The native submission is prevented here; the answer goes to
+        // the server through submit_answer, exactly once.
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
         const attemptid = getAttemptId();
         const slot = getCurrentSlot();
         const answers = collectAnswers();
@@ -439,12 +497,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
         shell.className = 'smg-runtime-shell';
         shell.innerHTML = [
             '<div class="smg-runtime-actions mt-2">',
-            '  <button type="button" class="btn btn-primary btn-sm smg-action-check">',
-            '    Antwort prüfen',
+            '  <button type="submit" name="smg-game-check-submit" class="btn btn-primary btn-sm smg-action-check">',
             '  </button> ',
-            '  <button type="button" class="btn btn-secondary btn-sm smg-action-native">',
-            '    Standard-Ansicht',
-            '  </button>',
+            '  <button type="button" class="btn btn-secondary btn-sm smg-action-native"></button>',
             '</div>'
         ].join('');
         if (question && question.parentNode) {
@@ -452,6 +507,10 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
         } else {
             document.body.insertBefore(shell, document.body.firstChild);
         }
+        // Labels from the language pack, set as text: they were German literals in the markup,
+        // shown as such to every English-speaking student.
+        shell.querySelector('.smg-action-check').textContent = M.util.get_string('checkanswer', 'local_stackmathgame');
+        shell.querySelector('.smg-action-native').textContent = M.util.get_string('standardview', 'local_stackmathgame');
         shell.querySelector('.smg-action-check').addEventListener('click', handleGameCheck);
         shell.querySelector('.smg-action-native').addEventListener('click', function() {
             document.querySelectorAll('.smg-native-controls').forEach(function(node) {
@@ -500,6 +559,9 @@ define(['jquery', 'core/ajax', 'core/notification'], function($, Ajax, Notificat
 
             ensureShell();
             bindInputs();
+
+            // The chapter landmarks in Moodle's quiz navigation are the same for every mode.
+            GameCore.decorateQuizNavigation(state.store.questionmap);
 
             var modecomponent = (state.store.design && state.store.design.modecomponent) || '';
             return loadGameModule(modecomponent);

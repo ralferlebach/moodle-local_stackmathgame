@@ -13,11 +13,19 @@
 const { expect } = require('@playwright/test');
 
 module.exports = {
-  /** The name shown in the design selector. */
-  designName: 'RPG',
+  /**
+   * The design to play, by the name shown in the selector.
+   *
+   * "RPG Default" ships with the plugin and has placeholder artwork. A site that has installed
+   * the licensed package through the Game Design Studio plays "RPG Fantasy" instead.
+   */
+  designName: process.env.SMG_RPG_DESIGN || 'RPG Default',
 
   /** The scene type to give the final question, so the run ends on a boss. */
   finalSceneType: 'boss',
+
+  /** The RPG counts fairies and mana; the journey checks that solving moves them. */
+  hasCounters: true,
 
   /**
    * Wait until the RPG has taken over the page.
@@ -35,8 +43,8 @@ module.exports = {
     ).toBeAttached({ timeout: 60000 });
 
     await expect(
-      page.locator('.smg-rpg-stage, .smg-rpg-hud').first(),
-      'The RPG interface never appeared, although the shell is there'
+      page.locator('.smg-rpg-stage').first(),
+      'The RPG stage never appeared, although the shell is there'
     ).toBeVisible({ timeout: 60000 });
   },
 
@@ -47,9 +55,12 @@ module.exports = {
    * @returns {Promise<{mana: number, fairies: number}>} What the HUD currently shows.
    */
   async readHud(page) {
-    const text = await page.locator('.smg-rpg-hud').first().innerText().catch(() => '');
-    const numbers = (text.match(/\d+/g) || []).map(Number);
-    return { mana: numbers[0] || 0, fairies: numbers[1] || 0 };
+    // By data attribute, not by position in the text: the counters sit side by side in an order
+    // that follows the original's layout, and reading "the first number" was a guess about it.
+    const read = async (name) => Number(
+      (await page.locator(`[data-smg-hud="${name}"]`).first().innerText().catch(() => '0')) || 0
+    );
+    return { mana: await read('mana'), fairies: await read('fairies') };
   },
 
   /**
@@ -59,6 +70,8 @@ module.exports = {
    * @returns {import('@playwright/test').Locator} The control.
    */
   nextControl(page) {
-    return page.locator('.smg-rpg-next, .smg-nav, a:has-text("→")').first();
+    // Only an open way on is a link. The locked arrow stays on screen - grey - so visibility
+    // alone would accept a control that goes nowhere.
+    return page.locator('a.smg-rpg-next[href]').first();
   },
 };

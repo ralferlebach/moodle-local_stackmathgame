@@ -91,32 +91,12 @@ class get_question_fragment extends \core_external\external_api {
         $status       = 'fallback';
 
         try {
-            if (method_exists($attemptobj, 'render_question')) {
-                try {
-                    $result = $attemptobj->render_question($slot, false, $url, $renderer);
-                    if (is_string($result) && $result !== '') {
-                        $questionhtml = $result;
-                    } else if (is_object($result) && method_exists($renderer, 'render')) {
-                        $questionhtml = $renderer->render($result);
-                    }
-                } catch (\Throwable $inner) {
-                    debugging('SMG render_question failed: ' . $inner->getMessage(), DEBUG_DEVELOPER);
-                }
-            }
-            if ($questionhtml === '') {
-                try {
-                    $usage        = $attemptobj->get_question_usage();
-                    $options      = $attemptobj->get_display_options(true);
-                    $questionhtml = $usage->render_question(
-                        $slot,
-                        $renderer,
-                        $options,
-                        (string)$slot
-                    );
-                } catch (\Throwable $inner) {
-                    debugging('SMG render via usage failed: ' . $inner->getMessage(), DEBUG_DEVELOPER);
-                }
-            }
+            // The renderer before the page URL - quiz_attempt::render_question($slot, $reviewing,
+            // $renderer, $thispageurl). The arguments used to be passed the other way round, which
+            // threw a TypeError on every call; a second path through get_question_usage(), which
+            // Moodle reserves for unit tests, then failed as well. The endpoint therefore never
+            // returned a fragment, and the engine quietly reloaded the whole page after every check.
+            $questionhtml = (string)$attemptobj->render_question($slot, false, $renderer, $url);
             if ($questionhtml !== '') {
                 $status = 'ok';
             }
@@ -126,12 +106,7 @@ class get_question_fragment extends \core_external\external_api {
             debugging('SMG get_question_fragment error: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
 
-        $inputnames = [];
-        foreach ($qa->get_qt_data() as $name => $value) {
-            if ($name !== '-submit' && $name !== ':sequencecheck' && strpos($name, '_') !== 0) {
-                $inputnames[] = (string)$name;
-            }
-        }
+        $inputnames = api::answer_input_names($qa);
 
         return [
             'status'        => $status,

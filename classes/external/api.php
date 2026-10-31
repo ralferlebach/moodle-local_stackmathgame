@@ -38,6 +38,32 @@ use local_stackmathgame\local\service\profile_service;
  */
 class api {
     /**
+     * Name the answer fields of a question attempt - the ones a student fills in.
+     *
+     * The question's own list of inputs where the type has one (STACK does), otherwise the data
+     * last submitted minus the engine's bookkeeping. Taking the submitted data alone also named
+     * STACK's language stamp, step_lang, which STACK stores with every answer but no student
+     * ever types.
+     *
+     * @param \question_attempt $qa The question attempt.
+     * @return string[] The input names.
+     */
+    public static function answer_input_names(\question_attempt $qa): array {
+        $question = $qa->get_question();
+        if (property_exists($question, 'inputs') && is_array($question->inputs) && $question->inputs) {
+            return array_map('strval', array_keys($question->inputs));
+        }
+        $names = [];
+        foreach (array_keys($qa->get_last_qt_data()) as $name) {
+            $name = (string)$name;
+            if ($name !== '-submit' && $name !== ':sequencecheck' && strpos($name, '_') !== 0) {
+                $names[] = $name;
+            }
+        }
+        return $names;
+    }
+
+    /**
      * Normalise a raw question payload to canonical keys.
      *
      * @param array $payload Raw payload array.
@@ -322,12 +348,23 @@ class api {
      */
     private static function export_runtime_assets(array $config): array {
         $assets = [];
+        $sprites = (array)($config['sprites'] ?? []);
         foreach ((array)($config['runtimeassets'] ?? []) as $key => $url) {
             $url = (string)$url;
             if ($url === '') {
                 continue;
             }
-            $assets[] = ['key' => (string)$key, 'url' => $url];
+            // Sprite geometry travels with the asset it describes, so a mode never has to know
+            // which artwork a design ships. A still image reports one frame.
+            $meta = (array)($sprites[(string)$key] ?? []);
+            $assets[] = [
+                'key' => (string)$key,
+                'url' => $url,
+                'frames' => max(1, (int)($meta['frames'] ?? 1)),
+                'framewidth' => (int)($meta['framewidth'] ?? 0),
+                'frameheight' => (int)($meta['frameheight'] ?? 0),
+                'frameduration' => (int)($meta['frameduration'] ?? 0),
+            ];
         }
         return $assets;
     }

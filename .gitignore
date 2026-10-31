@@ -57,3 +57,4 @@ tests/playwright/test-results/
 tests/playwright/playwright-report/
 tests/jest/node_modules/
 tests/jest/package-lock.json
+

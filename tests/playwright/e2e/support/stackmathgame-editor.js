@@ -8,6 +8,7 @@
 
 const { expect } = require('@playwright/test');
 const { expandAll } = require('./quiz');
+const { uploadThroughFilepicker } = require('./filepicker');
 
 /**
  * Open the game settings and read the prerequisite panel before changing anything.
@@ -43,10 +44,25 @@ async function enableGame(page, cmid, design) {
   await expect(enabled, 'The game settings form has no enable switch').toBeVisible({ timeout: 30000 });
   await enabled.check();
 
-  const designSelect = page.locator('#id_designid');
-  if (await designSelect.count()) {
-    await designSelect.selectOption({ label: design instanceof RegExp ? design : new RegExp(design, 'i') });
-  }
+  // The design picker is a radio group, one card per design - not a select. The first version
+  // of this helper looked for #id_designid, found nothing and skipped the choice without a word,
+  // so every journey ran with whatever design was preselected, whatever it had been asked for.
+  // It now fails when the design is not on offer, and says what was.
+  const radios = page.locator('input[type="radio"][name="designid"]');
+  await expect(radios.first(), 'The game settings offer no design to choose').toBeAttached({ timeout: 30000 });
+  const choices = await radios.evaluateAll((nodes) => nodes.map((n) => {
+    const label = n.closest('label') || document.querySelector(`label[for="${n.id}"]`);
+    const text = ((label && label.textContent) || n.parentElement.textContent || '').replace(/\s+/g, ' ').trim();
+    return { id: n.id, value: n.value, text };
+  }));
+  // Anchored at the start, without a closing word boundary: the card's text runs the design name
+  // straight into its component name ("RPG Fantasystackmathgamemode_rpg..."), so "\\bRPG Fantasy\\b"
+  // never matched - and "RPG" alone would have matched two designs.
+  const escaped = String(design).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const wanted = design instanceof RegExp ? design : new RegExp(`^${escaped}`, 'i');
+  const match = choices.find((c) => wanted.test(c.text));
+  expect(match, `No design matching "${design}" - offered: ${choices.map((c) => c.text).join(' | ')}`).toBeTruthy();
+  await page.locator(`input[type="radio"][name="designid"][value="${match.value}"]`).check({ force: true });
 
   await page.click('#id_submitbutton');
   await expect(
@@ -138,4 +154,32 @@ async function assertScenePersisted(page, cmid, slot, selector, expected) {
   ).toHaveValue(expected, { timeout: 30000 });
 }
 
-module.exports = { assertNoBlockers, assertScenePersisted, configureScene, enableGame, listScenes };
+
+/**
+ * Import a design package through the Game Design Studio.
+ *
+ * The same route a site administrator takes: Studio, Import, the ZIP into the file picker, save.
+ * The studio then opens the imported design, which is the confirmation that it was accepted.
+ *
+ * @param {import('@playwright/test').Page} page The page.
+ * @param {string} zip Absolute path of the design package.
+ * @param {string} name The design name the package declares.
+ */
+async function importDesignPackage(page, zip, name) {
+  await page.goto('/local/stackmathgame/studio.php?action=import');
+  await uploadThroughFilepicker(page, zip);
+  await page.click('#id_submitbutton');
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+
+  const problem = page.locator('.alert-danger').first();
+  if (await problem.isVisible().catch(() => false)) {
+    throw new Error(`The studio rejected the package: ${(await problem.innerText()).trim()}`);
+  }
+  await expect(
+    page.locator('input[name="name"]').first(),
+    'The studio did not open the imported design'
+  ).toHaveValue(new RegExp(name, 'i'), { timeout: 60000 });
+}
+
+module.exports = {
+  importDesignPackage, assertNoBlockers, assertScenePersisted, configureScene, enableGame, listScenes };

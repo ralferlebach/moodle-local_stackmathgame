@@ -114,11 +114,18 @@ async function addQuestionsFromBank(page, cmid, names) {
     'Adding the selected questions'
   );
 
+  // Confirmed on a freshly loaded structure page, not on the page the modal leaves behind. On a
+  // slow runner that page was still rendering - its heading showed the literal template
+  // placeholder "${heading}" - and the questions were reported missing although they had been
+  // added.
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.goto(`/mod/quiz/edit.php?cmid=${cmid}`);
+  await page.waitForLoadState('networkidle').catch(() => {});
   for (const name of names) {
     await expect(
       page.locator('tr, li').filter({ hasText: name }).first(),
       `"${name}" did not land in the quiz`
-    ).toBeVisible({ timeout: 30000 });
+    ).toBeVisible({ timeout: 60000 });
   }
 }
 

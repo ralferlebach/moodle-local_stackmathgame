@@ -19,8 +19,37 @@ const quiz = require('./support/quiz');
 const stackQuestion = require('./support/stack-question');
 const editor = require('./support/stackmathgame-editor');
 const diag = require('./support/artifact-summary');
-const game = require('./support/games/rpg');
+// The mode under test. SMG_GAME=wisewizzard plays the Digital Mentoring tutor instead of the RPG;
+// everything mode-specific - where the controls are, what the counters are - is in its profile.
+const game = require(`./support/games/${process.env.SMG_GAME || 'rpg'}`);
 const { clickVisible } = require('./support/visible');
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Where reference images go, when asked for.
+ *
+ * Set SMG_REFERENCE_DIR to have the journey photograph each kind of scene as it plays: the
+ * starting meadow, a monster before and after the answer, the validation box, the end. The images
+ * are for comparing against the original by eye - a layout regression shows up there long before
+ * it breaks an assertion.
+ */
+const REFERENCE_DIR = process.env.SMG_REFERENCE_DIR || '';
+
+/**
+ * Photograph the page for the reference set.
+ *
+ * @param {import('@playwright/test').Page} page The page.
+ * @param {string} name The file name, without extension.
+ */
+async function reference(page, name) {
+  if (!REFERENCE_DIR) {
+    return;
+  }
+  fs.mkdirSync(REFERENCE_DIR, { recursive: true });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: path.join(REFERENCE_DIR, `${name}.png`), fullPage: false });
+}
 
 const ADMIN_USER = process.env.SMG_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.SMG_ADMIN_PASS || 'Admin!23';
@@ -56,6 +85,30 @@ const FIXTURE = require('path').resolve(__dirname, '..', '..', 'fixtures', 'e2e_
 // all slower than a normal assertion, and a cold CAS is slower still.
 test.setTimeout(20 * 60 * 1000);
 
+/**
+ * Enter an answer into a STACK field, whether or not an editor stands in front of it.
+ *
+ * A visible field is filled like a student would. A hidden one is the interface of an input
+ * surface - the STACK Math Editor documents it as such: a script writes the value into the
+ * original field and dispatches input and change, and the editor takes the value over. Filling
+ * the editor's own widget instead would test that plugin's internals, which are not this
+ * suite's to depend on.
+ *
+ * @param {import('@playwright/test').Locator} field The original STACK input or textarea.
+ * @param {string} value The answer.
+ */
+async function answerField(field, value) {
+  if (await field.isVisible()) {
+    await field.fill(value);
+    return;
+  }
+  await field.evaluate((el, v) => {
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+}
+
 test.describe('StackMathGame RPG, built and played through the interface', () => {
   test('an administrator builds an RPG and a participant plays it to the end', async ({ page }) => {
     const stamp = Date.now();
@@ -89,6 +142,15 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
     await step('Log in as an administrator', async () => {
       await auth.login(page, ADMIN_USER, ADMIN_PASS);
     });
+
+    // Optional: a design package to import through the studio first. The licensed artwork is not
+    // part of the plugin, so CI plays the bundled placeholders; a site that has the package - and
+    // a local reference run - imports it here, by the same route an administrator would.
+    if (process.env.SMG_DESIGN_PACKAGE) {
+      await step('Import the design package through the Game Design Studio', async () => {
+        await editor.importDesignPackage(page, process.env.SMG_DESIGN_PACKAGE, game.designName);
+      });
+    }
 
     await step('Import the STACK fixture questions', async () => {
       await stackQuestion.importQuestions(page, courseid, FIXTURE);
@@ -171,6 +233,8 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       const before = await game.readHud(page);
 
       for (let i = 0; i < QUESTIONS.length; i++) {
+        await reference(page, `q${i + 1}-a-scene`);
+
         if (QUESTIONS[i].instruction) {
           // Nothing to answer: the way forward has to be on offer the moment the scene loads.
           // If it is not, the game treats a briefing page like a challenge nobody can solve.
@@ -188,11 +252,14 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
         // An algebraic input is a text field, an equivalence-reasoning input a textarea - so
         // both are looked for. Waiting for the field is what tells "the game reached this quest"
         // from "the game is stuck on the last one".
-        const input = page.locator('.que input[id$="_ans1"], .que textarea[id$="_ans1"]').first();
+        // Not scoped to .que: a mode may lay the question out as a scene and move the field into
+        // it. And not required to be visible: an input surface such as the STACK Math Editor
+        // keeps the original field as its interface and hides it behind its own editor.
+        const input = page.locator('input[id$="_ans1"], textarea[id$="_ans1"]').first();
         await expect(
           input,
-          `Quest ${i + 1} shows no STACK input - the game did not reach it`
-        ).toBeVisible({ timeout: 60000 });
+          `Quest ${i + 1} has no STACK input - the game did not reach it`
+        ).toBeAttached({ timeout: 60000 });
 
         const question = QUESTIONS[i];
         let value = question.answer.join('\n');
@@ -205,10 +272,14 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
 
         // Twice: STACK grades only after the student has confirmed how the input was read.
         for (const pass of [1, 2]) {
-          await input.fill(value);
+          await answerField(input, value);
           await page.locator('.smg-action-check, .que input[type="submit"]').first().click();
           await page.waitForTimeout(pass === 1 ? 2000 : 4000);
+          if (pass === 1) {
+            await reference(page, `q${i + 1}-b-validated`);
+          }
         }
+        await reference(page, `q${i + 1}-c-solved`);
 
         if (i < QUESTIONS.length - 1) {
           const next = game.nextControl(page);
@@ -223,10 +294,14 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       }
 
       const after = await game.readHud(page);
-      expect(
-        after.fairies,
-        `The RPG counters did not move: ${JSON.stringify(before)} → ${JSON.stringify(after)}`
-      ).toBeGreaterThan(before.fairies);
+      // Only for a mode that counts: the tutor has no counters, and a journey that asserted them
+      // regardless would fail for the wrong reason.
+      if (game.hasCounters) {
+        expect(
+          after.fairies,
+          `The counters did not move: ${JSON.stringify(before)} → ${JSON.stringify(after)}`
+        ).toBeGreaterThan(before.fairies);
+      }
     });
 
     await step('The run reaches its end', async () => {

@@ -14,12 +14,17 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * WiseWizzard (WiseGuy Tutor) mode game module for local_stackmathgame.
+ * Digital Mentoring (instant tutoring) mode: a tutor answers every attempt.
  *
- * A friendly animated tutor guides the player through the quiz in a
- * chat-style floating bubble. On correct answers the tutor congratulates
- * and shows the next question button. On wrong answers it delivers a
- * supportive hint from the slot narrative config.
+ * The layout follows the original "Digital Mentoring" instant-tutoring quiz: a round tutor avatar
+ * beside the question, and a speech bubble that the tutor fills after every check. The avatar's
+ * expression follows the attempt - grinning while idle, thinking while the student types, happy on
+ * a right answer, sad on a wrong one - and a red dot marks a message the student has not opened.
+ * On a wide screen avatar and bubble sit under the question in a row, the bubble's tail pointing
+ * at the avatar; on a narrow one they float at the bottom right, the bubble above the avatar.
+ *
+ * The original's on-screen operator keyboard is not reproduced: the STACK maths editor replaces it
+ * as a separate plugin.
  *
  * Based on alquiz-qpool-instant-tutoring.js
  * (c) 2022 Malte Neugebauer, Hochschule Bochum (MIT Licence).
@@ -33,40 +38,19 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
 
     'use strict';
 
-    /**
-     * Return the element that shows the stage counter, creating it on first use.
-     *
-     * Created lazily: a quiz whose pages hold one question each never has a group, and an empty
-     * element in every HUD would be markup nobody asked for.
-     *
-     * @param {Element} parent The container to attach it to.
-     * @returns {Element|null} The element, or null when there is no container.
-     */
-    function stageElement(parent) {
-        if (!parent) {
-            return null;
-        }
-        var existing = parent.querySelector('.smg-wizzard-stage');
-        if (existing) {
-            return existing;
-        }
-        var element = document.createElement('div');
-        element.className = 'smg-wizzard-stage small text-muted d-none';
-        // Announced politely: the counter changes as a side effect of answering, and an assertive
-        // region would interrupt what the screen reader is saying about the answer itself.
-        element.setAttribute('aria-live', 'polite');
-        parent.appendChild(element);
-        return element;
-    }
-
-    /** Default DM avatar URL (Hochschule Bochum public asset). */
-    var AVATAR_URL = 'https://marvin.hs-bochum.de/~mneugebauer/dm-avatar-grin.svg';
+    /** The four expressions, by asset key. A missing one falls back to the next in the list. */
+    var MOODS = {
+        grin: ['mentor_grin', 'mentor_happy'],
+        think: ['mentor_think', 'mentor_hint', 'mentor_grin', 'mentor_happy'],
+        happy: ['mentor_happy', 'mentor_grin'],
+        sad: ['mentor_sad', 'mentor_hint', 'mentor_happy']
+    };
 
     /**
-     * Build a slot-keyed navigation map from the questionmap array.
+     * Build a slot-keyed map from the question map.
      *
-     * @param {Array} questionmap Array of questionmap objects from get_quiz_config.
-     * @returns {Object} Map of slotnumber (string) to configjson object.
+     * @param {Array} questionmap Question map rows from get_quiz_config.
+     * @returns {Object} Map of slot number (string) to its parsed direction card.
      */
     function buildSlotMap(questionmap) {
         var map = {};
@@ -83,181 +67,246 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
     }
 
     /**
-     * Inject styles for the chat UI and tutor avatar.
+     * Inject the tutor styles once. Colours, sizes and shadows are the original's.
      *
      * @returns {void}
      */
     function injectStyles() {
-        if (document.getElementById('smg-wisewizzard-styles')) {
+        if (document.getElementById('smg-ww-styles')) {
             return;
         }
+        var css = [
+            // Narrow screens: avatar and bubble float at the bottom right, bubble on top.
+            '.smg-ww-chat{position:fixed;bottom:50px;right:50px;z-index:1030;display:flex;',
+            'flex-direction:column;align-items:flex-end;gap:.9rem;}',
+            '.smg-ww-avatarwrap{position:relative;flex:0 0 auto;cursor:pointer;background:none;border:0;padding:0;}',
+            '.smg-ww-avatar{display:block;width:7.5em;height:7.5em;border:2px solid #000;border-radius:50%;',
+            'background:#fff center/cover no-repeat;',
+            'box-shadow:0 .125rem .5rem rgba(0,0,0,.3),0 .0625rem .125rem rgba(0,0,0,.2);}',
+            '.smg-ww-dot{position:absolute;top:2%;right:0;width:1.6em;height:1.6em;border-radius:50%;',
+            'background:#e2001a;display:none;}',
+            '.smg-ww-chat.has-unread .smg-ww-dot{display:block;}',
+            '.smg-ww-bubble{position:relative;max-width:15em;background:#fcefdc;padding:1.125em 1.5em;',
+            'font-size:1.25em;border-radius:1rem;',
+            'box-shadow:0 .125rem .5rem rgba(0,0,0,.3),0 .0625rem .125rem rgba(0,0,0,.2);',
+            'transform:scale(1,0);transform-origin:bottom;transition:transform .6s;max-height:60vh;',
+            // Above the avatar on a narrow screen, its tail pointing down at it, as in the original.
+            'order:-1;}',
+            '.smg-ww-chat.is-open .smg-ww-bubble{transform:scale(1,1);}',
+            '.smg-ww-bubble::before{content:"";position:absolute;top:100%;right:1.5em;width:0;',
+            'border:.75rem solid transparent;border-bottom:none;border-top-color:#fcefdc;',
+            'filter:drop-shadow(0 .0625rem .0625rem rgba(0,0,0,.1));}',
+            '.smg-ww-content{overflow:auto;max-height:50vh;}',
+            '.smg-ww-next{display:inline-block;margin-top:.6em;font-size:.8em;}',
+            // Wide screens: a row under the question, the tail pointing left at the avatar.
+            '@media (min-width:991px){',
+            '.smg-ww-chat{position:relative;bottom:auto;right:auto;flex-direction:row;align-items:flex-start;',
+            'width:100%;margin:1rem 0;z-index:1;}',
+            '.smg-ww-bubble{order:2;max-width:none;flex:1 1 auto;transform:scale(1,0);transform-origin:top;',
+            'max-height:0;transition:transform .6s,max-height .6s;}',
+            '.smg-ww-chat.is-open .smg-ww-bubble{max-height:20em;}',
+            '.smg-ww-bubble::before{top:1.5em;right:100%;border:.75rem solid transparent;',
+            'border-left:none;border-right-color:#fcefdc;}',
+            '.smg-ww-content{max-height:19em;}',
+            '}',
+            // The tutor explains errors; STACK's own error line under the input would say it twice.
+            '.smg-ww-active .stackinputerror{display:none!important;}',
+            // One check control, not two: the engine's, which is what lets the tutor answer.
+            '.smg-ww-active .que .im-controls{display:none;}'
+        ].join('');
         var style = document.createElement('style');
-        style.id = 'smg-wisewizzard-styles';
-        style.textContent = [
-            '.smg-ww-chat {',
-            '  position: fixed;',
-            '  bottom: 20px;',
-            '  right: 20px;',
-            '  z-index: 100;',
-            '  max-width: 360px;',
-            '}',
-            '.smg-ww-avatar {',
-            '  width: 64px;',
-            '  border-radius: 50%;',
-            '  border: 2px solid #333;',
-            '  cursor: pointer;',
-            '  display: block;',
-            '  margin-top: 8px;',
-            '  margin-left: auto;',
-            '}',
-            '.smg-ww-bubble {',
-            '  display: none;',
-            '  position: relative;',
-            '  background: #fcefdc;',
-            '  padding: 1em 1.25em;',
-            '  border-radius: 1rem;',
-            '  box-shadow: 0 2px 8px rgba(0,0,0,.25);',
-            '  font-size: 1em;',
-            '  margin-bottom: 8px;',
-            '}',
-            '.smg-ww-bubble::after {',
-            '  content: "";',
-            '  position: absolute;',
-            '  top: 100%;',
-            '  right: 20px;',
-            '  border: 10px solid transparent;',
-            '  border-top-color: #fcefdc;',
-            '}',
-            '.smg-ww-chat.active .smg-ww-bubble {',
-            '  display: block;',
-            '}',
-            '.smg-ww-next {',
-            '  margin-top: .5em;',
-            '  display: none;',
-            '  float: right;',
-            '}',
-        ].join('\n');
+        style.id = 'smg-ww-styles';
+        style.textContent = css;
         document.head.appendChild(style);
     }
 
     /**
-     * Build the chat UI: bubble + avatar. Appended to document.body.
+     * Find the artwork for an expression, falling back along its list.
      *
-     * @param {string} avatarUrl URL for the tutor avatar image.
-     * @returns {{chat: Element, bubble: Element, next: Element}} UI elements.
+     * @param {Object} gameState The state handed to init().
+     * @param {string} mood One of the keys of MOODS.
+     * @returns {string} The image URL, or an empty string.
      */
-    function buildChatUI(avatarUrl) {
+    function moodUrl(gameState, mood) {
+        var keys = MOODS[mood] || MOODS.grin;
+        var assets = gameState.assets || {};
+        for (var i = 0; i < keys.length; i++) {
+            if (assets[keys[i]]) {
+                return assets[keys[i]];
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Build the tutor: avatar, unread dot, bubble and the way on.
+     *
+     * Placed beside the question, not inside it: after every answer the engine swaps the whole
+     * .que for a freshly rendered one, and a tutor living inside it would vanish with it.
+     *
+     * @returns {Object} References to the parts.
+     */
+    function buildTutor() {
         var chat = document.createElement('div');
-        chat.className = 'smg-ww-chat active';
+        chat.className = 'smg-ww-chat';
+
+        var wrap = document.createElement('button');
+        wrap.type = 'button';
+        wrap.className = 'smg-ww-avatarwrap';
+        wrap.setAttribute('aria-label', M.util.get_string('tutorname', 'local_stackmathgame'));
+        wrap.setAttribute('aria-expanded', 'false');
+        var avatar = document.createElement('span');
+        avatar.className = 'smg-ww-avatar';
+        var dot = document.createElement('span');
+        dot.className = 'smg-ww-dot';
+        wrap.appendChild(avatar);
+        wrap.appendChild(dot);
 
         var bubble = document.createElement('div');
         bubble.className = 'smg-ww-bubble';
+        bubble.setAttribute('aria-live', 'polite');
+        var content = document.createElement('div');
+        content.className = 'smg-ww-content';
+        var next = document.createElement('a');
+        next.className = 'btn btn-primary btn-sm smg-ww-next';
+        next.style.display = 'none';
+        bubble.appendChild(content);
+        bubble.appendChild(next);
 
-        var nextBtn = document.createElement('a');
-        nextBtn.className = 'btn btn-success btn-sm smg-ww-next';
-        nextBtn.textContent = 'Nächste Frage →';
-        bubble.appendChild(nextBtn);
+        chat.appendChild(wrap);
+        chat.appendChild(bubble);
 
-        var avatar = document.createElement('img');
-        avatar.className = 'smg-ww-avatar';
-        avatar.src = avatarUrl;
-        avatar.alt = 'Tutor';
-        avatar.addEventListener('click', function() {
-            chat.classList.toggle('active');
+        var que = document.querySelector('.que');
+        if (que && que.parentNode) {
+            que.parentNode.insertBefore(chat, que.nextSibling);
+        } else {
+            document.body.appendChild(chat);
+        }
+        document.body.classList.add('smg-ww-active');
+
+        wrap.addEventListener('click', function() {
+            var open = !chat.classList.contains('is-open');
+            chat.classList.toggle('is-open', open);
+            chat.classList.remove('has-unread');
+            wrap.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
 
-        chat.appendChild(bubble);
-        chat.appendChild(avatar);
-        document.body.appendChild(chat);
-
-        return {chat: chat, bubble: bubble, next: nextBtn};
+        return {chat: chat, wrap: wrap, avatar: avatar, content: content, next: next};
     }
 
-    // ── Public interface ───────────────────────────────────────────────────
-
     /**
-     * Initialise the WiseWizzard (tutor) mode.
+     * Start the mode on the current page.
      *
-     * @param {Object} gameState Bootstrap data from game_engine.
-     * @param {Object} gameState.config PHP config.
-     * @param {Object} gameState.design Design record.
-     * @param {Object} gameState.profile Player profile.
-     * @param {Array}  gameState.questionmap Array of questionmap rows.
-     * @param {Array}  gameState.narrative Initial narrative lines.
-     * @param {Object} gameState.assets Design assets by manifest key.
-     * @param {string} gameState.assetBaseUrl Shared fallback directory; do not append to it.
-     * @returns {{onAnswer: Function}} Game module interface.
+     * @param {Object} gameState The state handed over by the engine.
+     * @returns {{onAnswer: function}} The mode's contract with the engine.
      */
     function init(gameState) {
         injectStyles();
 
         var slotMap = buildSlotMap(gameState.questionmap);
-        // By key, from the design's resolved asset map. The previous version appended a
-        // filename to a base URL, which only ever worked for the bundled package - and the base
-        // URL it appended to was the generic shared directory for every design alike.
-        var avatarUrl = GameCore.assetUrl(gameState, 'mentor_happy', AVATAR_URL);
-        var ui = buildChatUI(avatarUrl);
+        var currentSlot = parseInt(gameState.currentslot || 0, 10) || 0;
+        var tutor = buildTutor();
 
         /**
-         * Show text in the tutor bubble.
+         * Change the tutor's expression.
          *
-         * @param {string} text HTML content to display.
+         * @param {string} mood One of the keys of MOODS.
+         * @returns {void}
+         */
+        function setMood(mood) {
+            var url = moodUrl(gameState, mood);
+            tutor.avatar.style.backgroundImage = url ? 'url("' + url + '")' : 'none';
+            tutor.chat.setAttribute('data-smg-mood', mood);
+        }
+
+        /**
+         * Put a message in the bubble and open it.
+         *
+         * @param {string} text The message.
          * @returns {void}
          */
         function say(text) {
-            // Preserve the next button at the end of the bubble.
-            ui.bubble.innerHTML = GameCore.escapeHtml(text);
-            ui.bubble.appendChild(ui.next);
-            ui.chat.classList.add('active');
+            // Nothing to say is not a message: an empty bubble popping open after a validation
+            // looks like the tutor lost its words. The last message stays instead.
+            if (!text) {
+                return;
+            }
+            tutor.content.textContent = text;
+            // As in the original: on a wide screen the bubble opens by itself and there is nothing
+            // unread; on a narrow one the tutor floats over the page, the message arrives folded,
+            // and the red dot says there is something to open.
+            if (window.matchMedia && window.matchMedia('(min-width: 991px)').matches) {
+                tutor.chat.classList.add('is-open');
+                tutor.chat.classList.remove('has-unread');
+                tutor.wrap.setAttribute('aria-expanded', 'true');
+            } else if (!tutor.chat.classList.contains('is-open')) {
+                tutor.chat.classList.add('has-unread');
+            }
         }
 
-        // Show intro narrative on page load.
-        // From the engine, which reads it from Moodle's own question id. Looking for a
-        // data-smg-slot attribute here found nothing, because nothing sets it.
-        var currentSlot = parseInt(gameState.currentslot || 0, 10) || 0;
-        if (currentSlot) {
-            var introCfg = slotMap[String(currentSlot)];
-            var introText = introCfg && introCfg.narrative && introCfg.narrative.intro
-                ? introCfg.narrative.intro
-                : 'Willkommen! Ich begleite dich durch die Aufgaben.';
-            say(introText);
+        setMood('grin');
+        var cfg = slotMap[String(currentSlot)] || {};
+        say(cfg.narrative && cfg.narrative.intro ? cfg.narrative.intro : '');
+
+        // Offered at once where nothing is left to answer: an instruction scene, and a scene solved
+        // on an earlier visit or before a reload. Only instruction scenes used to be covered, so a
+        // solved scene revisited - or reloaded behind an older maths editor - had no way on at all.
+        var type = cfg.scene && cfg.scene.type ? cfg.scene.type : '';
+        var solvedBefore = currentSlot > 0 && GameCore.isSlotSolved(gameState, currentSlot);
+        if ((type === 'instruction' || solvedBefore) && gameState.navigation) {
+            GameCore.applyNavigation(tutor.next, GameCore.navigationFrom({navigation: gameState.navigation}));
         }
+
+        // Thinking along while the student types. Bound on the document because the engine
+        // replaces the question - and its input - after every check.
+        document.addEventListener('input', function(e) {
+            if (e.target && e.target.closest && e.target.closest('.que')) {
+                setMood('think');
+            }
+        });
 
         return {
             /**
-             * React to a submit_answer response.
+             * React to a graded answer.
              *
-             * Shows success or hint text and updates next-question navigation.
-             *
-             * @param {Object} response The submit_answer web service response.
+             * @param {Object} response The submit_answer response.
              * @returns {void}
              */
             onAnswer: function(response) {
                 var slot = response.slot || currentSlot;
+                var slotCfg = slotMap[String(slot)] || {};
+                var narrative = slotCfg.narrative || {};
                 var solved = !!response.cannext;
-                var cfg = slotMap[String(slot)];
-                var narrative = cfg && cfg.narrative ? cfg.narrative : {};
-                var text = solved
-                    ? (narrative.success || 'Sehr gut! Weiter zur nächsten Aufgabe.')
-                    : (narrative.fail || 'Nicht ganz – schau dir die Aufgabe nochmal an!');
 
-                say(text);
+                setMood(solved ? 'happy' : 'sad');
+                say(solved ? (narrative.success || '') : (narrative.fail || ''));
 
-                // Render the navigation the server resolved. This mode no longer reads
-                // cfg.branching: the server resolver is canonical, and re-deciding here is what
-                // left linear scenes - the default every auto-created slot gets - with no way
-                // forward at all.
-                                var decision = GameCore.navigationFrom(response);
-                GameCore.applyNavigation(ui.next, decision);
-                // Where the player stands inside a quest or a set of alternatives. Rendered by the
-                // shared helper so all three modes agree on when a group is worth mentioning.
+                var decision = GameCore.navigationFrom(response);
+                GameCore.applyNavigation(tutor.next, decision);
                 GameCore.applyGroupProgress(
-                    stageElement(ui.bubble),
+                    stageCounter(tutor),
                     decision,
                     M.util.get_string('stageprogress', 'local_stackmathgame')
                 );
             }
         };
+    }
+
+    /**
+     * Return the stage counter element, created on first use.
+     *
+     * @param {Object} tutor The tutor parts.
+     * @returns {Element} The element.
+     */
+    function stageCounter(tutor) {
+        var existing = tutor.content.parentNode.querySelector('.smg-ww-stage');
+        if (existing) {
+            return existing;
+        }
+        var el = document.createElement('div');
+        el.className = 'smg-ww-stage small d-none';
+        tutor.content.parentNode.insertBefore(el, tutor.next);
+        return el;
     }
 
     return {init: init};
