@@ -68,4 +68,58 @@ final class output_hooks_test extends game_quiz_testcase {
         $this->assertSame(0, output_hooks::cmid_from_attempt(0));
         $this->assertSame(0, output_hooks::cmid_from_attempt(999999));
     }
+
+    /**
+     * The attempt page presents the slot the server resolves, not the first on the page (N06).
+     */
+    public function test_the_attempt_page_presents_the_resolved_slot(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->create_game_quiz(3);
+        $DB->set_field('quiz_slots', 'page', 1, ['quizid' => $this->fixturequizid]);
+        $config = \local_stackmathgame\local\service\flow_service::get_slot_config($this->fixturecmid, 1);
+        $config['group'] = ['mode' => 'quest', 'pick' => 1, 'strategy' => 'first'];
+        \local_stackmathgame\local\service\flow_service::save_slot_config($this->fixturecmid, 1, $config);
+        $student = $this->create_enrolled_student();
+        \mod_quiz\quiz_settings::create($this->fixturequizid)->get_grade_calculator()->recompute_quiz_sumgrades();
+        $quizobj = \mod_quiz\quiz_settings::create($this->fixturequizid, $student->id);
+        $quba = \question_engine::make_questions_usage_by_activity('mod_quiz', $quizobj->get_context());
+        $quba->set_preferred_behaviour('deferredfeedback');
+        $attempt = quiz_create_attempt($quizobj, 1, false, time(), false, $student->id);
+        quiz_start_new_attempt($quizobj, $quba, $attempt, 1, time());
+        quiz_attempt_save_started($quizobj, $quba, $attempt);
+        $attemptid = (int)$attempt->id;
+        $presented = fn(int $userid): int => output_hooks::presented_slot(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            $attemptid,
+            $userid
+        );
+
+        try {
+            $_GET['page'] = 0;
+            $this->assertSame(1, $presented((int)$student->id));
+
+            // Stage one solved: a reload of the same page shows stage two.
+            $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
+                (int)$student->id,
+                $this->fixturequizid
+            );
+            \local_stackmathgame\local\service\profile_service::apply_progress((int)$profile->id, [
+                'progress' => ['slots' => ['1' => ['solved' => 1]]],
+            ]);
+            $this->assertSame(2, $presented((int)$student->id));
+
+            // A future stage in the URL is not honoured.
+            $_GET['smgslot'] = 3;
+            $this->assertSame(2, $presented((int)$student->id));
+
+            // Somebody else's attempt resolves to nothing.
+            $this->assertSame(0, $presented(999999));
+        } finally {
+            unset($_GET['page'], $_GET['smgslot']);
+        }
+    }
 }

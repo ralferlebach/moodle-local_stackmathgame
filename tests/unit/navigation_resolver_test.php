@@ -172,6 +172,56 @@ final class navigation_resolver_test extends advanced_testcase {
     }
 
     /**
+     * A help path the author configured for a wrong answer is taken (re-audit N06).
+     *
+     * The resolver used to return "stay" for every wrong answer before it read the rule at all,
+     * so a jump to a help scene could be configured in the flow editor and never happened.
+     */
+    public function test_a_configured_wrong_answer_path_is_followed(): void {
+        $this->set_rule(1, slot_config_schema::OUTCOME_GRADEDWRONG, ['mode' => 'slot', 'target' => 3]);
+
+        $navigation = $this->resolve(1, slot_config_schema::OUTCOME_GRADEDWRONG);
+
+        $this->assertSame(navigation_resolver::ACTION_CONTINUE, $navigation['action']);
+        $this->assertSame(3, $navigation['nextslot']);
+        $this->assertStringContainsString('smgslot=3', $navigation['url']);
+    }
+
+    /**
+     * An early end configured for a wrong answer finishes the run.
+     */
+    public function test_a_configured_wrong_answer_end_finishes(): void {
+        $this->set_rule(2, slot_config_schema::OUTCOME_GRADEDWRONG, ['mode' => 'end']);
+
+        $navigation = $this->resolve(2, slot_config_schema::OUTCOME_GRADEDWRONG);
+
+        $this->assertSame(navigation_resolver::ACTION_FINISH, $navigation['action']);
+    }
+
+    /**
+     * Linear on a wrong answer is the default, and the default keeps the player on the scene.
+     *
+     * The linear rule must not walk the player past a question answered wrongly; and a rule for
+     * the correct answer is not a rule for the wrong one.
+     */
+    public function test_the_default_wrong_answer_rule_stays(): void {
+        $this->set_rule(1, slot_config_schema::OUTCOME_GRADEDWRONG, ['mode' => 'linear']);
+        $this->assertSame(navigation_resolver::ACTION_STAY, $this->resolve(1, slot_config_schema::OUTCOME_GRADEDWRONG)['action']);
+
+        $this->set_rule(1, slot_config_schema::OUTCOME_GRADEDRIGHT, ['mode' => 'slot', 'target' => 3]);
+        $this->assertSame(navigation_resolver::ACTION_STAY, $this->resolve(1, slot_config_schema::OUTCOME_GRADEDWRONG)['action']);
+    }
+
+    /**
+     * A wrong-answer jump to a slot that does not exist stays rather than inventing a target.
+     */
+    public function test_an_invalid_wrong_answer_target_stays(): void {
+        $this->set_rule(1, slot_config_schema::OUTCOME_GRADEDWRONG, ['mode' => 'slot', 'target' => 99]);
+
+        $this->assertSame(navigation_resolver::ACTION_STAY, $this->resolve(1, slot_config_schema::OUTCOME_GRADEDWRONG)['action']);
+    }
+
+    /**
      * An unreachable slot target falls back to linear rather than stranding the player.
      */
     public function test_invalid_slot_target_falls_back_to_linear(): void {

@@ -115,3 +115,85 @@ function local_stackmathgame_upgrade_dedupe_config_cmid(): void {
         }
     }
 }
+
+/**
+ * Remove session keys from answer payloads already written to the event log.
+ *
+ * Up to 2026090250 submit_answer logged the whole request as a list of values - the field names
+ * were dropped by array_values() - and the browser sent its session key with every answer, so
+ * every logged submission contains one (re-audit N01). Looking for a "sesskey" key therefore finds
+ * nothing; the rule has to recognise the value itself.
+ *
+ * The rule, applied to the "answers" entry of every answer_submitted payload:
+ *  - a list of plain values: every value that has the shape of a Moodle session key - exactly ten
+ *    characters from [A-Za-z0-9], which is what random_string(10) in sesskey() produces - is
+ *    removed. That can also remove a genuine answer of the same shape; this is accepted, because
+ *    the authoritative copy of every answer is the question attempt step, and keeping a credential
+ *    is the worse error.
+ *  - a list of name/value pairs: every pair named "sesskey" is removed.
+ *  - a map: the "sesskey" key is removed.
+ * A payload that was changed is marked with "sesskeyredacted": 1. Nothing else is touched, and
+ * running the routine again changes nothing.
+ *
+ * @return int The number of event log rows rewritten.
+ */
+function local_stackmathgame_redact_eventlog_sesskeys(): int {
+    global $DB;
+
+    $like = $DB->sql_like('payloadjson', ':needle');
+    $rows = $DB->get_recordset_select(
+        'local_stackmathgame_eventlog',
+        "eventtype = :eventtype AND $like",
+        ['eventtype' => 'answer_submitted', 'needle' => '%"answers"%'],
+        'id ASC',
+        'id, payloadjson'
+    );
+    $changed = 0;
+    foreach ($rows as $row) {
+        $payload = json_decode((string)$row->payloadjson, true);
+        if (!is_array($payload) || !isset($payload['answers']) || !is_array($payload['answers'])) {
+            continue;
+        }
+        $answers = local_stackmathgame_redact_sesskey_values($payload['answers']);
+        if ($answers === $payload['answers']) {
+            continue;
+        }
+        $payload['answers'] = $answers;
+        $payload['sesskeyredacted'] = 1;
+        $DB->set_field(
+            'local_stackmathgame_eventlog',
+            'payloadjson',
+            json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ['id' => (int)$row->id]
+        );
+        $changed++;
+    }
+    $rows->close();
+    return $changed;
+}
+
+/**
+ * Apply the session key rule of local_stackmathgame_redact_eventlog_sesskeys() to one list.
+ *
+ * @param array $answers The logged "answers" entry.
+ * @return array The entry without anything that is or looks like a session key.
+ */
+function local_stackmathgame_redact_sesskey_values(array $answers): array {
+    $islist = array_keys($answers) === range(0, count($answers) - 1);
+    if (!$islist) {
+        unset($answers['sesskey']);
+        return $answers;
+    }
+    $kept = [];
+    foreach ($answers as $entry) {
+        if (is_array($entry)) {
+            if ((string)($entry['name'] ?? '') === 'sesskey') {
+                continue;
+            }
+        } else if (is_scalar($entry) && preg_match('/^[A-Za-z0-9]{10}$/', (string)$entry)) {
+            continue;
+        }
+        $kept[] = $entry;
+    }
+    return $kept;
+}

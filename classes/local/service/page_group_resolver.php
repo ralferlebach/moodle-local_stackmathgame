@@ -122,6 +122,43 @@ final class page_group_resolver {
     }
 
     /**
+     * Decide which question of a page the runtime presents.
+     *
+     * The server's answer to "which slot now", used at first render, on reload and after a stage
+     * change alike. The runtime used to take the first question of the page, whatever the group
+     * resolution said (re-audit N06). A slot asked for explicitly - the navigation puts it in the
+     * URL - is honoured only when the player may play it; anything else falls back to the slot
+     * the resolution makes active, and on a finished group to the last slot the player played.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $page The zero-based attempt page.
+     * @param int $attemptid The attempt.
+     * @param array $solved Slot numbers already solved, as slot => true.
+     * @param int $requested The slot asked for, 0 for none.
+     * @return int The slot to present, 0 when the page has none.
+     */
+    public static function presented_slot(
+        int $cmid,
+        int $page,
+        int $attemptid,
+        array $solved = [],
+        int $requested = 0
+    ): int {
+        $resolved = self::resolve($cmid, $page, $attemptid, $solved);
+        if ($requested > 0 && in_array($requested, $resolved['playable'], true)) {
+            return $requested;
+        }
+        if ((int)$resolved['active'] > 0) {
+            return (int)$resolved['active'];
+        }
+        $playable = $resolved['playable'];
+        if ($playable) {
+            return (int)end($playable);
+        }
+        return (int)(reset($resolved['slots']) ?: 0);
+    }
+
+    /**
      * Choose the alternatives for this attempt.
      *
      * The choice has to be stable: a reload that produced a different question would lose the
@@ -180,8 +217,10 @@ final class page_group_resolver {
     /**
      * Resolve a staged quest: every stage in order, the first unsolved one is active.
      *
-     * Every stage stays playable rather than only the current one, so a player who has solved
-     * stage two can still look back at stage one. What advances is which stage is presented.
+     * Playable are the stages already solved - a player who has solved stage two can still look
+     * back at stage one - and the active stage. Stages after it are not: they used to be playable
+     * as well, so a stage two steps ahead could be answered, and rewarded, by posting its slot
+     * number, which skipped the quest's order entirely (re-audit N06).
      *
      * @param int[] $slots The page's slots in quiz order.
      * @param array $solved Slot numbers already solved.
@@ -189,11 +228,16 @@ final class page_group_resolver {
      */
     private static function resolve_quest(array $slots, array $solved): array {
         $unsolved = array_values(array_filter($slots, static fn(int $s): bool => empty($solved[$s])));
+        $active = (int)($unsolved[0] ?? 0);
+        $playable = array_values(array_filter(
+            $slots,
+            static fn(int $s): bool => !empty($solved[$s]) || $s === $active
+        ));
 
         return [
             'mode' => slot_config_schema::GROUP_MODE_QUEST,
             'slots' => $slots,
-            'playable' => $slots,
+            'playable' => $playable,
             'active' => (int)($unsolved[0] ?? 0),
             'total' => count($slots),
             'done' => count($slots) - count($unsolved),

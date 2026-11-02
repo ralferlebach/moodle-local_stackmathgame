@@ -92,6 +92,47 @@ final class branch_resolver {
     }
 
     /**
+     * Return the target of an explicitly configured rule for one outcome, without fallbacks.
+     *
+     * A wrong answer must not fall through to the linear default - that would walk the player past
+     * a question they got wrong - but a rule the author configured for it, a jump to a help scene
+     * or an early end, is the author's decision and has to be carried out (re-audit N06). This
+     * returns only what was configured for the outcome itself; "linear" counts as not configured.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $slot The slot the outcome happened on.
+     * @param string $outcome One of the slot_config_schema OUTCOME_* values.
+     * @return int|null The target slot, 0 for "end", or null when no explicit rule applies.
+     */
+    public static function configured_target(int $cmid, int $quizid, int $slot, string $outcome): ?int {
+        $config = flow_service::get_slot_config($cmid, $slot);
+        if (!$config) {
+            return null;
+        }
+        $rule = (array)($config['branching'][$outcome] ?? []);
+        $mode = (string)($rule['mode'] ?? slot_config_schema::BRANCH_MODE_LINEAR);
+        if ($mode === slot_config_schema::BRANCH_MODE_END) {
+            return 0;
+        }
+        if ($mode !== slot_config_schema::BRANCH_MODE_SLOT) {
+            return null;
+        }
+        return self::apply_rule(['branching' => [$outcome => $rule]], $outcome, $quizid);
+    }
+
+    /**
+     * Return the first slot after a given one in linear order, or 0 when there is none.
+     *
+     * @param int $quizid The quiz instance ID.
+     * @param int $slot The slot to start after.
+     * @return int The next slot, or 0.
+     */
+    public static function first_slot_after(int $quizid, int $slot): int {
+        return self::next_linear_slot($quizid, $slot);
+    }
+
+    /**
      * Load all slot configs for a quiz as a map of slotnumber to config array.
      *
      * Used by inject_game_assets to embed slot rules in the AMD bootstrap call.

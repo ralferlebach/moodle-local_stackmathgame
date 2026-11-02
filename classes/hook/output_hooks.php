@@ -182,10 +182,17 @@ class output_hooks {
                 'nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready', 'stageprogress',
                 'checkanswer', 'standardview', 'nextscene', 'previousscene', 'fairies', 'mana', 'tutorname',
                 'navstart', 'navfinish', 'navboss', 'navlocked', 'assetmissing',
+                'status_saving', 'status_saved', 'status_notsaved', 'status_refreshfailed',
+                'status_nofallback', 'status_editorlost', 'status_changedduringcheck',
             ],
             'local_stackmathgame'
         );
+        $attemptid = optional_param('attempt', 0, PARAM_INT);
         $PAGE->requires->js_call_amd('local_stackmathgame/game_engine', 'init', [[
+            // The question the server says this page presents (re-audit N06). Without it the
+            // runtime took the first question of the page, which on a quest or a page of
+            // alternatives is not the stage or the alternative the player is on.
+            'activeslot' => self::presented_slot($cmid, $quizid, $attemptid, (int)$USER->id),
             'cmid' => $cmid,
             'quizid' => $quizid,
             'instanceid' => $quizid,
@@ -198,6 +205,43 @@ class output_hooks {
             'themeAssetUrl' => $themeurl,
             'config' => json_decode((string)($config->configjson ?? '{}'), true) ?: [],
         ]]);
+    }
+
+    /**
+     * Resolve the slot an attempt page presents to its player.
+     *
+     * The page is the one attempt.php shows: the requested page, or the attempt's current page
+     * when none is requested. A slot named in the URL (smgslot, set by the game's own navigation)
+     * is honoured only when the player may play it.
+     *
+     * @param int $cmid The course-module ID.
+     * @param int $quizid The quiz instance ID.
+     * @param int $attemptid The attempt ID, 0 when unknown.
+     * @param int $userid The player.
+     * @return int The slot to present, 0 when it cannot be resolved.
+     */
+    public static function presented_slot(int $cmid, int $quizid, int $attemptid, int $userid): int {
+        global $DB;
+
+        if ($attemptid <= 0) {
+            return 0;
+        }
+        $attempt = $DB->get_record('quiz_attempts', ['id' => $attemptid], 'id, quiz, userid, currentpage');
+        if (!$attempt || (int)$attempt->quiz !== $quizid || (int)$attempt->userid !== $userid) {
+            return 0;
+        }
+        $page = optional_param('page', -1, PARAM_INT);
+        if ($page < 0) {
+            $page = (int)$attempt->currentpage;
+        }
+        $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz($userid, $quizid);
+        return \local_stackmathgame\local\service\page_group_resolver::presented_slot(
+            $cmid,
+            $page,
+            $attemptid,
+            \local_stackmathgame\local\service\profile_service::solved_slots($profile),
+            optional_param('smgslot', 0, PARAM_INT)
+        );
     }
 
     /**

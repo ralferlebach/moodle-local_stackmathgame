@@ -4,8 +4,10 @@
 
 | Suite | Tool | Coverage |
 |---|---|---|
-| `unit/` | PHPUnit | Service classes, bridges, shortcodes, validators |
-| `behat/` | Behat + Selenium | Navigation, Studio access, quiz settings UI |
+| `unit/` | PHPUnit | Service classes, bridges, shortcodes, validators, runtime endpoints |
+| `behat/` | Behat + Selenium | Navigation, page groups, Studio access, quiz settings UI |
+| `jest/` | Jest (jsdom) | `game_core`, `game_engine` (check flow under failure, unsaved state), RPG counter cache |
+| `playwright/` | Playwright | Smoke specs; `e2e/`: the UI-built journey and the verified play-through |
 
 ---
 
@@ -24,6 +26,8 @@
 | `quiz_configurator_test.php` | `local_stackmathgame_db` | 2 – High |
 | `design_validator_test.php` | Pure | 3 – Medium |
 | `design_exporter_test.php` | `local_stackmathgame_db` | 3 – Medium |
+| `runtime_endpoints_security_test.php` | `local_stackmathgame_db` | 1 – Critical (fragment refusals, logged payload, CSRF, quest stages) |
+| `eventlog_redaction_test.php` | `local_stackmathgame_db` | 1 – Critical (session keys in historic payloads) |
 | `config_manager_test.php` | Placeholder | — |
 | `definitions_test.php` | Placeholder | — |
 | `page_helper_test.php` | Placeholder | — |
@@ -106,3 +110,34 @@ job stays green without the optional plugins installed.
 | `demo_design_corrupt.zip` | Error: not a valid ZIP |
 
 No Moodle DB required — fixture-based tests run fast.
+
+---
+
+## Running Jest
+
+```bash
+cd tests/jest && npm install && npx jest
+```
+
+The AMD sources are evaluated as they ship (`amd_loader.js`), against stubs of Moodle's AJAX
+layer, the change checker and the mode loader, so every request can fail, succeed or hang on its
+own.
+
+---
+
+## The verified play-through (Playwright)
+
+`tests/playwright/e2e/rpg-verified-play.spec.js` plays a seeded quiz through the browser and
+compares every result with what the question engine stored. It runs `e2e/support/smg-e2e.php`
+with the `php` on the runner against the site's code:
+
+```bash
+cd tests/playwright && npm ci
+SMG_BASE_URL=http://127.0.0.1:8000 SMG_MOODLE_ROOT=/path/to/moodle \
+    npx playwright test --config=playwright.e2e.config.js rpg-verified-play
+```
+
+`SMG_CHROMIUM_PATH` points Playwright at an installed Chromium when the bundled one cannot be
+downloaded. The spec switches the STACK Math Editor on and off site-wide (`smg-e2e.php editor`);
+the editor tests are skipped, and say so, when the editor is not installed.
+

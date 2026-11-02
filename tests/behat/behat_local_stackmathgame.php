@@ -392,4 +392,105 @@ class behat_local_stackmathgame extends behat_base {
             );
         }
     }
+
+    /**
+     * Wait until STACK has validated what the answer field holds now.
+     *
+     * STACK validates an input while it is typed, and only a check that carries the validated
+     * value is graded; a check sent while the validation is still running is a validation only.
+     * The scenarios used to press "Check answer" straight after setting the field, so on a fast
+     * runner the check graded and on a slow one it merely validated - and "Next scene" appeared or
+     * did not (re-audit N06, the @smg_navtiming scenarios). Waiting for STACK makes one check grade,
+     * exactly as it does for a student who waits for the validation box.
+     *
+     * @When I wait until STACK has validated the answer
+     */
+    public function i_wait_until_stack_has_validated_the_answer(): void {
+        $this->spin(function () {
+            $state = $this->getSession()->evaluateScript(
+                "return (function() {
+                    var field = document.querySelector('.smg-rpg-panel [name\$=\"_ans1\"]')
+                        || document.querySelector('.que [name\$=\"_ans1\"]');
+                    var box = field ? document.getElementById(field.name + '_val') : null;
+                    if (!box) { return 'nobox'; }
+                    if (box.classList.contains('waiting') || box.classList.contains('loading')) { return 'busy'; }
+                    return box.textContent.trim() === '' ? 'empty' : 'done';
+                })();"
+            );
+            if ($state !== 'done') {
+                throw new \Exception('STACK has not validated the answer yet (' . $state . ').');
+            }
+            return true;
+        }, [], self::get_extended_timeout() * 2);
+    }
+
+    /**
+     * Check which question of the page the game presents.
+     *
+     * @Then the game presents slot :slot
+     * @param int $slot The slot number.
+     */
+    public function the_game_presents_slot(int $slot): void {
+        $this->spin(function () use ($slot) {
+            $id = (string)$this->getSession()->evaluateScript(
+                "return (document.querySelector('.que[data-smg-controlled=\"1\"]') || {id: ''}).id;"
+            );
+            if (!preg_match('/-' . $slot . '$/', $id)) {
+                throw new \Exception('The game presents "' . $id . '", not slot ' . $slot . '.');
+            }
+            return true;
+        });
+        // Only the presented question is on show; the other questions of the page are not.
+        $visible = (int)$this->getSession()->evaluateScript(
+            "return Array.from(document.querySelectorAll('.que')).filter(function(q) {
+                return !q.hidden && q.offsetParent !== null;
+            }).length;"
+        );
+        if ($visible > 1) {
+            throw new \Exception($visible . ' questions are on show; the game should present one.');
+        }
+    }
+
+    /**
+     * Make the questions on one quiz page a group.
+     *
+     * @Given the questions on page :page of quiz :quizname form a :mode
+     * @param int $page The one-based quiz page.
+     * @param string $quizname The quiz name.
+     * @param string $mode "quest" or "alternatives" (alternatives offer the first question only).
+     */
+    public function the_questions_on_page_form_a(int $page, string $quizname, string $mode): void {
+        global $DB;
+
+        $cmid = self::cmid_for_quiz_name($quizname);
+        $quizid = (int)$DB->get_field('course_modules', 'instance', ['id' => $cmid]);
+        $first = (int)$DB->get_field_sql(
+            'SELECT MIN(slot) FROM {quiz_slots} WHERE quizid = ? AND page = ?',
+            [$quizid, $page]
+        );
+        \local_stackmathgame\local\service\question_map_service::ensure_for_cmid($cmid);
+        $config = \local_stackmathgame\local\service\flow_service::get_slot_config($cmid, $first)
+            ?? \local_stackmathgame\local\service\slot_config_schema::defaults();
+        $config['group'] = ['mode' => $mode, 'pick' => 1, 'strategy' => 'first'];
+        $errors = \local_stackmathgame\local\service\flow_service::save_slot_config($cmid, $first, $config);
+        if ($errors) {
+            throw new \Exception(implode(' ', $errors));
+        }
+    }
+
+    /**
+     * Open the current attempt page again, asking for a given slot in the URL.
+     *
+     * What a player who edits the address bar does: the server decides whether that slot may be
+     * presented.
+     *
+     * @When I reopen the attempt page asking for slot :slot
+     * @param int $slot The slot asked for.
+     */
+    public function i_reopen_the_attempt_page_asking_for_slot(int $slot): void {
+        $url = new moodle_url($this->getSession()->getCurrentUrl());
+        $url->param('smgslot', $slot);
+        $this->getSession()->visit($url->out(false));
+        $this->wait_for_pending_js();
+    }
 }

@@ -232,6 +232,9 @@ jobs:
           SMG_BASE_URL: http://127.0.0.1:8000
           SMG_ADMIN_USER: admin
           SMG_ADMIN_PASS: 'Admin!23'
+          # The journeys read the question engine's record back through
+          # e2e/support/smg-e2e.php, which runs against this site's code (re-audit N09).
+          SMG_MOODLE_ROOT: ${{ github.workspace }}/moodle
         run: npm run e2e:rpg
 
       - name: Upload the recording and the result

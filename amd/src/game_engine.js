@@ -27,9 +27,9 @@
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_core', 'core_filters/events',
-    'core_form/changechecker'],
-    function($, Ajax, Notification, GameCore, FilterEvents, ChangeChecker) {
+define(['core/ajax', 'core/notification', 'local_stackmathgame/game_core', 'core_filters/events',
+    'core_form/changechecker', 'core/templates', 'core/fragment'],
+    function(Ajax, Notification, GameCore, FilterEvents, ChangeChecker, Templates, Fragment) {
 
     'use strict';
 
@@ -46,11 +46,25 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             nextnode: null,
             navigation: null,
             assets: {},
-            lastsubmit: null
+            lastsubmit: null,
+            // Whether the question on the page shows the state after the last answer. False when
+            // both refreshes failed: the answer is saved, the page still shows it as typed.
+            questionrefreshed: true
         },
         activeInput: null,
-        submitting: false
+        submitting: false,
+        // True once the page is being left; a pending re-initialisation must not reload it then.
+        leaving: false,
+        // What the server holds for every answer field on the page, by field key. Fields whose
+        // value differs from this are unsaved; the form is clean only when none does.
+        baseline: {}
     };
+
+    /** Input types that are page bookkeeping rather than something a player types. */
+    const NON_ANSWER_TYPES = ['hidden', 'submit', 'button', 'image', 'reset', 'file'];
+
+    /** Name pattern of a question type's own response field. */
+    const ANSWER_FIELD = /^q\d+:\d+_[^:-]/;
 
     // ── Utility functions ──────────────────────────────────────────────────
 
@@ -61,27 +75,27 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
      */
     function getAttemptId() {
         const params = new URLSearchParams(window.location.search);
-        const raw = params.get('attempt') || $('input[name="attempt"]').val() || '0';
+        const field = document.querySelector('input[name="attempt"]');
+        const raw = params.get('attempt') || (field ? field.value : '') || '0';
         return parseInt(raw, 10) || 0;
     }
 
     /**
-     * Return the controlled question element or the first question on the page.
+     * Return the question the game presents.
      *
      * @returns {Element|null} The question DOM element.
      */
     function getCurrentQuestion() {
-        return document.querySelector('.que[data-smg-controlled="1"]')
-            || document.querySelector('.que');
+        return GameCore.currentQuestion();
     }
 
     /**
-     * Return the slot number of the current question.
+     * Read the slot number of a question element.
      *
+     * @param {Element|null} question The question element.
      * @returns {number} The slot number, or 0.
      */
-    function getCurrentSlot() {
-        const question = getCurrentQuestion();
+    function slotOfQuestion(question) {
         if (!question) {
             return 0;
         }
@@ -102,23 +116,190 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
     }
 
     /**
+     * Return the slot number of the current question.
+     *
+     * @returns {number} The slot number, or 0.
+     */
+    function getCurrentSlot() {
+        return slotOfQuestion(getCurrentQuestion());
+    }
+
+    /**
+     * Mark the question the server resolved for this page as the one the game presents.
+     *
+     * A quiz page can hold several questions - the stages of a quest, a set of alternatives. The
+     * runtime used to take the first of them whatever the server had resolved (re-audit N06). The
+     * presented question is marked, the others are taken out of view: they belong to the attempt,
+     * so they stay in the form, but they are not on offer now.
+     *
+     * @param {number} activeslot The slot the server resolved, 0 when unknown.
+     * @returns {void}
+     */
+    function markActiveQuestion(activeslot) {
+        if (!activeslot) {
+            return;
+        }
+        const questions = Array.from(document.querySelectorAll('.que'));
+        const active = questions.find(function(question) {
+            return slotOfQuestion(question) === activeslot;
+        });
+        if (!active) {
+            return;
+        }
+        questions.forEach(function(question) {
+            if (question === active) {
+                question.setAttribute('data-smg-controlled', '1');
+                question.setAttribute('data-smg-slot', String(activeslot));
+                question.hidden = false;
+                question.classList.remove('smg-que-inactive');
+            } else {
+                question.removeAttribute('data-smg-controlled');
+                question.hidden = true;
+                question.classList.add('smg-que-inactive');
+            }
+        });
+    }
+
+    /**
+     * Return the elements that hold the current question's fields.
+     *
+     * The question, plus any part of it a mode has moved elsewhere on the page. A mode that lays
+     * the question out as a scene moves the answer field and the question's hidden inputs out of
+     * .que; looking in .que alone would then find nothing at all.
+     *
+     * @returns {Element[]} The roots.
+     */
+    function questionRoots() {
+        const question = getCurrentQuestion();
+        return (question ? [question] : []).concat(Array.from(document.querySelectorAll('[data-smg-question-part]')));
+    }
+
+    /**
+     * Return every element that holds answer fields on the page, whichever question they belong to.
+     *
+     * @returns {Element[]} The roots.
+     */
+    function pageRoots() {
+        return Array.from(document.querySelectorAll('.que')).concat(
+            Array.from(document.querySelectorAll('[data-smg-question-part]'))
+        );
+    }
+
+    /**
+     * Report whether a form control is something the player answers with.
+     *
+     * @param {Element} node The control.
+     * @returns {boolean} True for named, enabled answer fields of a question.
+     */
+    function isAnswerField(node) {
+        // A question type's own field: q{usage}:{slot}_{name}. Names starting with ":" or "-"
+        // belong to the question engine or the behaviour - the flag, the sequence check, the
+        // submit - and are not answers; the flag in particular is saved on its own.
+        if (!node.name || node.disabled || !ANSWER_FIELD.test(node.name)) {
+            return false;
+        }
+        const type = (node.type || '').toLowerCase();
+        return NON_ANSWER_TYPES.indexOf(type) === -1;
+    }
+
+    /**
+     * Build the key a field is tracked under: its name, and for a choice also its value.
+     *
+     * @param {Element} node The control.
+     * @returns {string} The key.
+     */
+    function fieldKey(node) {
+        return (node.type === 'checkbox' || node.type === 'radio') ? node.name + '#' + node.value : node.name;
+    }
+
+    /**
+     * Read what a field currently holds.
+     *
+     * @param {Element} node The control.
+     * @returns {string} The value; "1"/"0" for a choice.
+     */
+    function fieldValue(node) {
+        if (node.type === 'checkbox' || node.type === 'radio') {
+            return node.checked ? '1' : '0';
+        }
+        return node.value || '';
+    }
+
+    /**
+     * Write a value into a field.
+     *
+     * @param {Element} node The control.
+     * @param {string} value The value from fieldValue().
+     * @returns {void}
+     */
+    function setFieldValue(node, value) {
+        if (node.type === 'checkbox' || node.type === 'radio') {
+            node.checked = value === '1';
+        } else {
+            node.value = value;
+        }
+    }
+
+    /**
+     * Collect the answer fields under some roots.
+     *
+     * @param {Element[]} roots Where to look.
+     * @returns {Element[]} The fields, without duplicates.
+     */
+    function answerFields(roots) {
+        const fields = [];
+        roots.forEach(function(root) {
+            root.querySelectorAll('input, textarea, select').forEach(function(node) {
+                if (isAnswerField(node) && fields.indexOf(node) === -1) {
+                    fields.push(node);
+                }
+            });
+        });
+        return fields;
+    }
+
+    /**
+     * Take a snapshot of answer fields.
+     *
+     * @param {Element[]} roots Where to look.
+     * @returns {Object} Field key to value.
+     */
+    function snapshotFields(roots) {
+        const snapshot = {};
+        answerFields(roots).forEach(function(node) {
+            snapshot[fieldKey(node)] = fieldValue(node);
+        });
+        return snapshot;
+    }
+
+    /**
+     * List the answer fields whose value the server does not hold.
+     *
+     * @returns {string[]} The keys of unsaved fields.
+     */
+    function unsavedFields() {
+        const now = snapshotFields(pageRoots());
+        return Object.keys(now).filter(function(key) {
+            const saved = Object.prototype.hasOwnProperty.call(state.baseline, key) ? state.baseline[key] : '';
+            return now[key] !== saved;
+        });
+    }
+
+    /**
      * Collect all answer field values from the current question.
      *
      * @returns {Array<{name: string, value: string}>} Array of name/value pairs.
      */
     function collectAnswers() {
-        const question = getCurrentQuestion();
         const result = [];
-        if (!question) {
+        if (!getCurrentQuestion()) {
             return result;
         }
         const seen = new Set();
-        // The question, plus any part of it a mode has moved elsewhere on the page. A mode that
-        // lays the question out as a scene moves the answer field and the question's hidden
-        // inputs out of .que; collecting from .que alone would then submit nothing at all - not
-        // even the sequence check, without which Moodle rejects the attempt.
+        // Collected from the question and from every part a mode moved out of it - not even the
+        // sequence check would be sent otherwise, and Moodle rejects the attempt without it.
         const nodes = [];
-        [question].concat(Array.from(document.querySelectorAll('[data-smg-question-part]'))).forEach(function(root) {
+        questionRoots().forEach(function(root) {
             root.querySelectorAll('input, textarea, select').forEach(function(node) {
                 nodes.push(node);
             });
@@ -136,7 +317,10 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             seen.add(node.name);
             result.push({name: node.name, value: node.value || ''});
         });
-        ['attempt', 'thispage', 'nextpage', 'slots', 'sesskey'].forEach(function(name) {
+        // The session key is deliberately not among these. The request carries it as a parameter
+        // of the AJAX call, which is where require_sesskey() reads it; a copy among the answers
+        // only ever ended up in the event log (re-audit N01).
+        ['attempt', 'thispage', 'nextpage', 'slots'].forEach(function(name) {
             const field = document.querySelector('input[name="' + name + '"]');
             if (field) {
                 result.push({name: name, value: field.value || ''});
@@ -153,7 +337,21 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
      * @returns {Promise} The Ajax promise.
      */
     function call(methodname, args) {
-        return Ajax.call([{methodname: methodname, args: args}])[0];
+        return Promise.resolve(Ajax.call([{methodname: methodname, args: args}])[0]);
+    }
+
+    /**
+     * Run a request whose failure must not stop the game.
+     *
+     * @param {string} methodname The web service name.
+     * @param {Object} args The call arguments.
+     * @returns {Promise} Resolves to the response, or to null on failure.
+     */
+    function optionalCall(methodname, args) {
+        return call(methodname, args).catch(function(error) {
+            window.console.warn('[stackmathgame] ' + methodname + ' failed; continuing without it', error);
+            return null;
+        });
     }
 
     /**
@@ -171,38 +369,96 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
         }
     }
 
+    // ── Status ─────────────────────────────────────────────────────────────
+
+    /**
+     * Show what happened to the player's answer, next to the check control.
+     *
+     * A live region, so a screen reader announces it. Without it a failed save or a question
+     * that could not be refreshed looked exactly like success (re-audit N03).
+     *
+     * @param {string} key The language string key (status_*).
+     * @param {string} kind "info" or "error".
+     * @returns {void}
+     */
+    function showStatus(key, kind) {
+        let status = document.querySelector('.smg-runtime-status');
+        if (!status) {
+            status = document.createElement('div');
+            status.className = 'smg-runtime-status small mt-1';
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+        }
+        const check = document.querySelector('.smg-action-check');
+        if (check && check.parentNode && check.nextSibling !== status) {
+            check.parentNode.insertBefore(status, check.nextSibling);
+        } else if (!status.parentNode) {
+            document.body.appendChild(status);
+        }
+        status.setAttribute('data-smg-status', key);
+        status.classList.toggle('text-danger', kind === 'error');
+        status.textContent = M.util.get_string(key, 'local_stackmathgame');
+    }
+
+    // ── Unsaved-changes state ──────────────────────────────────────────────
+
+    /**
+     * Bring Moodle's change checker in line with what the server holds.
+     *
+     * The quiz watches #responseform and warns before leaving a page with unsaved changes. The
+     * game saves through a web service, so it has to tell the checker - but only what is true. The
+     * whole form used to be reset after every saved answer, although an answer saves one slot:
+     * another slot's edit, or an edit made while the request was running, then left without a
+     * warning and was lost (re-audit N04). Moodle 4.5's checker knows one flag per form, not per
+     * field, so the per-field truth is kept here and the flag follows it: clean only when every
+     * answer field on the page holds what the server holds.
+     *
+     * @returns {boolean} True when the form is clean.
+     */
+    function syncDirtyState() {
+        const form = document.getElementById('responseform');
+        const clean = unsavedFields().length === 0;
+        if (form) {
+            if (clean) {
+                ChangeChecker.resetFormDirtyState(form);
+            } else {
+                ChangeChecker.markFormAsDirty(form);
+            }
+        }
+        return clean;
+    }
+
     // ── Question refresh ───────────────────────────────────────────────────
 
     /**
-     * Try to refresh the question HTML from the fragment endpoint.
+     * Carry edits made while a check was running into the freshly rendered question.
      *
-     * @returns {Promise<boolean>} Resolves true when the question was refreshed.
+     * The fragment shows the state of the request that was sent. A value typed after it was sent
+     * is newer than that, and swapping the question in used to overwrite it with the older answer
+     * (re-audit N04). Such a value is put back into the replacement before it goes on the page,
+     * so an editor attaching to it starts from it, and it stays unsaved.
+     *
+     * @param {Element} replacement The freshly rendered question.
+     * @param {Object} sent The snapshot of the fields at the time the answer was sent.
+     * @returns {number} How many fields carried a newer value.
      */
-    function refreshQuestionFromFragment() {
-        const attemptid = getAttemptId();
-        const slot = getCurrentSlot();
-        if (!attemptid || !slot) {
-            return Promise.resolve(false);
+    function carryNewerEdits(replacement, sent) {
+        if (!sent) {
+            return 0;
         }
-        return call(
-            'local_stackmathgame_get_question_fragment',
-            {attemptid: attemptid, slot: slot}
-        ).then(function(response) {
-            if (!response || response.status !== 'ok' || !response.questionhtml) {
-                return false;
+        const live = snapshotFields(questionRoots());
+        let carried = 0;
+        answerFields([replacement]).forEach(function(node) {
+            const key = fieldKey(node);
+            if (!Object.prototype.hasOwnProperty.call(sent, key) || !Object.prototype.hasOwnProperty.call(live, key)) {
+                return;
             }
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(response.questionhtml, 'text/html');
-            const replacement = doc.querySelector('.que') || doc.body.firstElementChild;
-            const current = getCurrentQuestion();
-            if (replacement && current && current.parentNode) {
-                swapQuestion(current, replacement);
-                return true;
+            if (live[key] !== sent[key]) {
+                setFieldValue(node, live[key]);
+                carried++;
             }
-            return false;
-        }).catch(function() {
-            return false;
         });
+        return carried;
     }
 
     /**
@@ -211,62 +467,219 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
      * One route for both refresh paths, so both announce the new content the same way: through
      * Moodle's filter event, which is how MathJax learns there is maths to typeset and how any
      * input surface that follows Moodle's conventions learns there are new fields to enhance.
-     * The STACK Math Editor watches the page itself as well, so it needs no signal - but a
-     * question whose formulas stay as raw TeX after the first check is a question nobody reads.
      *
      * @param {Element} current The question on the page.
      * @param {Element} replacement The freshly rendered question.
+     * @param {Object} flow The check this refresh belongs to.
      * @returns {void}
      */
-    function swapQuestion(current, replacement) {
-        var hadSurface = GameCore.hasInputSurface(current);
+    function swapQuestion(current, replacement, flow) {
+        const hadSurface = GameCore.hasInputSurface(current);
+        // As rendered, the replacement is what the server holds for this slot.
+        Object.assign(state.baseline, snapshotFields([replacement]));
+        flow.carried = carryNewerEdits(replacement, flow.sent);
+        // A mode may have moved parts of the old question out of it - the RPG shows the fields in
+        // its panel - and those parts stay on the page until the mode mounts the new question.
+        // Until then the page holds every id twice, and getElementById() finds the old copy: the
+        // question's scripts bound STACK's validation to the old, soon removed, validation box,
+        // and the visible one never updated. The old copies give up their ids.
+        const freshIds = new Set(Array.from(replacement.querySelectorAll('[id]')).map(function(node) {
+            return node.id;
+        }));
+        document.querySelectorAll('[data-smg-question-part] [id]').forEach(function(node) {
+            if (freshIds.has(node.id)) {
+                node.setAttribute('data-smg-stale-id', node.id);
+                node.removeAttribute('id');
+            }
+        });
+        // The markers go with the question: without them the next lookup falls back to the first
+        // question of the page, which on a quest is not this one.
+        replacement.setAttribute('data-smg-controlled', '1');
+        replacement.setAttribute('data-smg-slot', String(slotOfQuestion(current) || flow.slot));
         current.parentNode.replaceChild(replacement, current);
         bindInputs();
         FilterEvents.notifyFilterContentUpdated([replacement]);
 
         // An input surface that does not follow replaced content - the STACK Math Editor before
-        // release 1.3 is one - leaves the fresh question with bare fields, and the student loses
-        // the editor after the first check. Given time to attach first, then the page is reloaded
-        // so every surface initialises again. The answer is already saved; the reloaded page shows
-        // the scene as solved. Surfaces that do follow replaced content never trigger this.
+        // release 1.3 is one - leaves the fresh question with bare fields. The page is reloaded so
+        // every surface initialises again, but only when that loses nothing: every field holds
+        // what the server holds and no check is running. Otherwise the reload would throw away an
+        // edit, so the field stays as it is and the player is told (re-audit N04).
         if (hadSurface) {
-            window.setTimeout(function() {
-                var now = getCurrentQuestion();
-                if (now === replacement && !GameCore.hasInputSurface(now)) {
-                    markSaved();
-                    window.location.reload();
-                }
-            }, 800);
+            watchForSurface(replacement, SURFACE_POLLS);
         }
+    }
+
+    /** How often a replaced question is checked for its input surface, 200 ms apart (3 s). */
+    const SURFACE_POLLS = 15;
+
+    /**
+     * Wait for an input surface to attach to a replaced question; reload only as a last resort.
+     *
+     * Checked repeatedly rather than once after a fixed delay: an editor that attaches a little
+     * later than that delay used to trigger the reload anyway, and a reload that fires while the
+     * player is already following the way on cancels their navigation - the browser journey caught
+     * exactly that on a narrow screen. The reload is skipped when the page is being left, while a
+     * check runs, or when an answer field holds something the server does not.
+     *
+     * @param {Element} replacement The question that was swapped in.
+     * @param {number} remaining How many checks are left.
+     * @returns {void}
+     */
+    function watchForSurface(replacement, remaining) {
+        window.setTimeout(function() {
+            const now = getCurrentQuestion();
+            if (state.leaving || now !== replacement || GameCore.hasInputSurface(now)) {
+                return;
+            }
+            // Not while the check that swapped the question is still running: its answer is not
+            // fully handled yet, and a reload then would cut it short. The wait starts counting
+            // once the check has finished.
+            if (state.submitting) {
+                watchForSurface(replacement, remaining);
+                return;
+            }
+            if (remaining > 1) {
+                watchForSurface(replacement, remaining - 1);
+                return;
+            }
+            if (syncDirtyState()) {
+                window.location.reload();
+            } else {
+                showStatus('status_editorlost', 'error');
+            }
+        }, 200);
+    }
+
+    /**
+     * Try to refresh the question HTML from the fragment endpoint.
+     *
+     * @param {Object} flow The check this refresh belongs to.
+     * @returns {Promise<boolean>} Resolves true when the question was refreshed.
+     */
+    function refreshQuestionFromFragment(flow) {
+        if (!flow.attemptid || !flow.slot) {
+            return Promise.resolve(false);
+        }
+        return call(
+            'local_stackmathgame_get_question_fragment',
+            {attemptid: flow.attemptid, slot: flow.slot}
+        ).then(function(response) {
+            if (!response || response.status !== 'ok' || !response.questionhtml) {
+                return false;
+            }
+            const doc = new DOMParser().parseFromString(response.questionhtml, 'text/html');
+            const replacement = doc.querySelector('.que') || doc.body.firstElementChild;
+            const current = getCurrentQuestion();
+            if (replacement && current && current.parentNode) {
+                swapQuestion(current, replacement, flow);
+                return runQuestionScripts(response.javascript || '');
+            }
+            return false;
+        }).catch(function() {
+            return false;
+        });
+    }
+
+    /**
+     * Run the scripts a refreshed question asked for, and wait until they have run.
+     *
+     * STACK binds its instant validation to the input elements inside the question's own div
+     * when it initialises. A swapped-in question has new elements and, without its scripts, no
+     * validation at all - every answer then needed a second check (re-audit N09). The wait
+     * matters as much: a mode may move the fields out of the question as soon as it is told
+     * about the answer, and STACK, initialising after that, would find nothing to bind to. The
+     * scripts announce themselves through M.util.js_pending; the wait ends when they have
+     * completed, or after a few seconds at most.
+     *
+     * @param {string} javascript The collected scripts, as script tags.
+     * @returns {Promise<boolean>} Resolves true once they have run.
+     */
+    function runQuestionScripts(javascript) {
+        if (!javascript) {
+            return Promise.resolve(true);
+        }
+        // Collected as script tags, like Moodle's fragment service returns them; turned into one
+        // runnable block the same way core/fragment does.
+        Templates.runTemplateJS(Fragment.processCollectedJavascript(javascript));
+        return waitForPageScripts().then(function() {
+            return true;
+        });
+    }
+
+    /**
+     * Wait until the scripts Moodle has queued for the page have run, a few seconds at most.
+     *
+     * Scripts announce themselves through M.util.js_pending and finish with js_complete. The
+     * question types initialise there - STACK binds its instant validation to the inputs inside
+     * the question - and a mode that moves the fields out of the question before that has
+     * happened leaves them without it. On a page load the game's own bootstrap used to win that
+     * race now and then, and STACK's validation was missing on exactly those pages (re-audit N09).
+     *
+     * @returns {Promise<void>} Resolves when nothing is pending, or after the cap.
+     */
+    function waitForPageScripts() {
+        return new Promise(function(resolve) {
+            const started = Date.now();
+            const poll = function() {
+                const pending = (typeof M !== 'undefined' && M.util && M.util.pending_js) || [];
+                const others = pending.filter(function(key) {
+                    return String(key).indexOf('local_stackmathgame') !== 0;
+                });
+                if (!others.length || Date.now() - started > 4000) {
+                    resolve();
+                    return;
+                }
+                window.setTimeout(poll, 50);
+            };
+            poll();
+        });
     }
 
     /**
      * Refresh the question by reloading the full page HTML.
      *
-     * @returns {Promise<void>}
+     * @param {Object} flow The check this refresh belongs to.
+     * @returns {Promise<boolean>} Resolves true when the question was refreshed.
      */
-    function refreshQuestionFromPage() {
+    function refreshQuestionFromPage(flow) {
         return fetch(window.location.href, {credentials: 'same-origin'})
             .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
                 return response.text();
             })
             .then(function(html) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const slot = getCurrentSlot();
-                const selector = slot ? '.que[data-smg-slot="' + slot + '"]' : '.que';
-                const replacement = doc.querySelector(selector) || doc.querySelector('.que');
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                // Found by slot: the page's markup knows nothing of the game's markers, and the
+                // first question of a page with several is not necessarily this one.
+                const replacement = Array.from(doc.querySelectorAll('.que')).find(function(question) {
+                    return slotOfQuestion(question) === flow.slot;
+                });
                 const current = getCurrentQuestion();
                 if (replacement && current && current.parentNode) {
-                    swapQuestion(current, replacement);
+                    swapQuestion(current, replacement, flow);
                     return true;
                 }
                 return false;
             })
             .catch(function(error) {
-                Notification.exception(error);
+                window.console.warn('[stackmathgame] the question could not be refreshed', error);
                 return false;
             });
+    }
+
+    /**
+     * Refresh the question after a saved answer: fragment first, then the whole page.
+     *
+     * @param {Object} flow The check.
+     * @returns {Promise<boolean>} Resolves true when the page shows the stored state.
+     */
+    function refreshQuestion(flow) {
+        return refreshQuestionFromFragment(flow).then(function(ok) {
+            return ok ? true : refreshQuestionFromPage(flow);
+        });
     }
 
     /**
@@ -284,39 +697,18 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
         });
     }
 
-    // ── Unsaved-changes state ──────────────────────────────────────────────
-
-    /**
-     * Tell Moodle's change checker that what the form shows is saved.
-     *
-     * The quiz watches #responseform for changes and warns before leaving a page with unsaved
-     * ones. The game saves through a web service rather than by submitting the form, so the form
-     * stayed "changed" after every successful check, and the way on to the next scene opened the
-     * browser's leave-page warning (issue #16). Called only once the server has stored the answer
-     * and the question on the page has been replaced with the stored state; an answer edited
-     * afterwards marks the form as changed again in the ordinary way.
-     *
-     * @returns {void}
-     */
-    function markSaved() {
-        var form = document.getElementById('responseform');
-        if (form) {
-            ChangeChecker.resetFormDirtyState(form);
-        }
-    }
-
     /**
      * Submit the answer the ordinary way, through the question's own check button.
      *
-     * Used when the server cannot process the answer without a page load. A plain reload would
-     * have thrown the typed answer away; a native submission saves it, and Moodle's change checker
-     * knows a submitted form is not being abandoned.
+     * Used when the server cannot process the answer without a page load. A native submission
+     * saves the typed answer, and Moodle's change checker knows a submitted form is not being
+     * abandoned.
      *
+     * @param {number} slot The slot being answered.
      * @returns {boolean} False when no native check button exists.
      */
-    function submitNatively() {
+    function submitNatively(slot) {
         var form = document.getElementById('responseform');
-        var slot = getCurrentSlot();
         var selector = 'input[type=submit][name$="-submit"]:not(.smg-action-check)';
         var candidates = Array.from(document.querySelectorAll(selector));
         var button = candidates.find(function(node) {
@@ -340,20 +732,6 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
         document.querySelectorAll('.smg-action-check').forEach(function(button) {
             button.disabled = busy;
             button.setAttribute('aria-busy', busy ? 'true' : 'false');
-        });
-    }
-
-    /**
-     * Run a follow-up request whose failure must not undo a recorded answer.
-     *
-     * @param {string} methodname The web service name.
-     * @param {Object} args The call arguments.
-     * @returns {Promise} Resolves to the response, or to null on failure.
-     */
-    function optionalCall(methodname, args) {
-        return call(methodname, args).catch(function(error) {
-            window.console.warn('[stackmathgame] ' + methodname + ' failed after a recorded answer', error);
-            return null;
         });
     }
 
@@ -404,10 +782,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
                         // needs it before any answer exists: an instruction scene asks for nothing
                         // and must offer its way forward immediately.
                         navigation: state.store.navigation,
-                        // Resolved once, here. The modes used to look for a data-smg-slot
-                        // attribute that nothing sets, found 0, and skipped everything that
-                        // depends on the current scene - the intro narrative never showed, and an
-                        // instruction scene had no way forward.
+                        // Resolved once, here, from the question the server says this page
+                        // presents.
                         currentslot: getCurrentSlot(),
                         // Assets are addressed by key, from the map the server resolved out of
                         // the design's package manifest. A mode must not build a path: doing so
@@ -431,10 +807,98 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
     // ── Answer submission ──────────────────────────────────────────────────
 
     /**
+     * Take the submit response: decide whether the answer was saved.
+     *
+     * @param {Object} flow The check.
+     * @param {Object} response The submit_answer response.
+     * @returns {boolean} True when the answer was recorded and the game continues.
+     */
+    function acceptSubmit(flow, response) {
+        if (!response || response.requiresnativefallback) {
+            // The server could not process the answer through the pageless path. The answer is
+            // submitted the ordinary way instead. Where the page has no native check button there
+            // is nothing to submit with, and the reload that used to follow threw the typed answer
+            // away (re-audit N03); the answer now stays in the field and the player is told.
+            if (submitNatively(flow.slot)) {
+                flow.native = true;
+                return false;
+            }
+            showStatus('status_nofallback', 'error');
+            syncDirtyState();
+            return false;
+        }
+        flow.response = response;
+        state.store.lastsubmit = response;
+        if (response.profile) {
+            state.store.profile = response.profile;
+        }
+        // What was sent is what the server now holds for this slot. Only this slot: other fields
+        // on the page keep their own saved state.
+        Object.assign(state.baseline, flow.sent);
+        return true;
+    }
+
+    /**
+     * Report a failed submit request: nothing was saved.
+     *
+     * @param {Object} flow The check.
+     * @param {*} error The failure.
+     * @returns {boolean} False, the game does not continue.
+     */
+    function rejectSubmit(flow, error) {
+        window.console.warn('[stackmathgame] submit_answer failed', error);
+        flow.failed = true;
+        showStatus('status_notsaved', 'error');
+        syncDirtyState();
+        return false;
+    }
+
+    /**
+     * Hand a recorded answer to the mode.
+     *
+     * A failure in the mode's rendering is reported and contained. It must not look like a failed
+     * save: the answer is recorded, and a retry from here would submit it a second time.
+     *
+     * @param {Object} flow The check.
+     * @returns {boolean} True when the mode took the answer.
+     */
+    function dispatchAnswer(flow) {
+        state.store.questionrefreshed = !!flow.refreshed;
+        if (!state.activeGame || typeof state.activeGame.onAnswer !== 'function') {
+            return false;
+        }
+        try {
+            state.activeGame.onAnswer(flow.response, state.store);
+            return true;
+        } catch (error) {
+            window.console.error('[stackmathgame] the game mode failed to show the answer', error);
+            flow.renderfailed = true;
+            return false;
+        }
+    }
+
+    /**
+     * Tell the player what became of a recorded answer, once everything else has run.
+     *
+     * @param {Object} flow The check.
+     * @returns {void}
+     */
+    function reportRecorded(flow) {
+        const clean = syncDirtyState();
+        if (!flow.refreshed || flow.renderfailed) {
+            showStatus('status_refreshfailed', 'error');
+        } else if (flow.carried || !clean) {
+            showStatus('status_changedduringcheck', 'info');
+        } else {
+            showStatus('status_saved', 'info');
+        }
+    }
+
+    /**
      * Handle the game-check button click: submit answers and dispatch to game module.
      *
      * @param {Event} [event] The click on the check control.
-     * @returns {void}
+     * @returns {Promise<Object|null>} Resolves to the submit response once everything has run.
      */
     function handleGameCheck(event) {
         // A submit button named like STACK's own Check buttons ("...-submit"), so that input
@@ -448,60 +912,67 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
         // One check at a time: a second click while the first is on its way would submit the
         // same answer twice against a sequence check that only the first can satisfy.
         if (state.submitting) {
-            return;
+            return Promise.resolve(null);
         }
-        const attemptid = getAttemptId();
-        const slot = getCurrentSlot();
+        const flow = {
+            attemptid: getAttemptId(),
+            slot: getCurrentSlot(),
+            response: null,
+            refreshed: false,
+            carried: 0
+        };
+        if (!flow.attemptid || !flow.slot) {
+            return Promise.resolve(null);
+        }
+        // The fields as they are sent. Edits made while the request runs differ from this, and
+        // that difference is what keeps them unsaved.
+        flow.sent = snapshotFields(questionRoots());
         const answers = collectAnswers();
-        if (!attemptid || !slot) {
-            return;
-        }
-        let response = null;
         setChecking(true);
-        call('local_stackmathgame_submit_answer', {
-            attemptid: attemptid,
-            slot: slot,
+        showStatus('status_saving', 'info');
+        return call('local_stackmathgame_submit_answer', {
+            attemptid: flow.attemptid,
+            slot: flow.slot,
             answers: answers
-        }).then(function(submitresponse) {
-            if (submitresponse && submitresponse.requiresnativefallback) {
-                // The server could not process the answer through the pageless path. The answer
-                // is submitted the ordinary way instead; continuing would show feedback for an
-                // answer that was never recorded, and reloading would lose it.
-                if (!submitNatively()) {
-                    window.location.reload();
-                }
-                return null;
+        }).then(function(response) {
+            return acceptSubmit(flow, response);
+        }, function(error) {
+            return rejectSubmit(flow, error);
+        }).then(function(accepted) {
+            return accepted ? refreshQuestion(flow) : false;
+        }).then(function(refreshed) {
+            flow.refreshed = !!refreshed;
+            return flow.response ? followUp(flow.response, flow.slot, flow.attemptid) : null;
+        }).then(function() {
+            if (flow.response) {
+                dispatchAnswer(flow);
+                reportRecorded(flow);
             }
-            // Held in the enclosing scope so the rest of the chain can stay flat. Nesting the
-            // follow-up calls inside this callback was the only reason they were nested at all.
-            response = submitresponse;
-            state.store.lastsubmit = response;
-            if (response.profile) {
-                state.store.profile = response.profile;
+            return flow.response;
+        }).catch(function(error) {
+            // Whatever failed here failed after the answer was recorded, or while telling the
+            // player it was not. Reported, never retried.
+            window.console.error('[stackmathgame] check failed', error);
+            if (flow.response) {
+                showStatus('status_refreshfailed', 'error');
+            } else {
+                Notification.exception(error);
             }
-            return refreshQuestionFromFragment().then(function(ok) {
-                return ok ? true : refreshQuestionFromPage();
-            }).then(function(refreshed) {
-                // The answer is stored. Only when the page also shows the stored state is the
-                // form clean; if the question could not be refreshed, what is on screen may
-                // differ from what was saved, and leaving keeps its warning.
-                if (refreshed) {
-                    markSaved();
-                }
-                return followUp(response, slot, attemptid);
-            });
-        }).catch(Notification.exception).then(function() {
-            setChecking(false);
-            return null;
+            return flow.response;
+        }).then(function(result) {
+            if (!flow.native) {
+                setChecking(false);
+            }
+            return result;
         });
     }
 
     /**
-     * Fetch what the mode needs after a recorded answer, then hand it over.
+     * Fetch what the mode needs after a recorded answer.
      *
      * Each request may fail on its own without taking the others, or the answer, with it: the
      * submit response already carries the authoritative navigation, so the way on opens even
-     * when the narrative or the prefetch is unavailable.
+     * when the narrative, the prefetch or the profile is unavailable.
      *
      * @param {Object} response The submit_answer response.
      * @param {number} slot The slot that was answered.
@@ -556,11 +1027,6 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             if (chapter && chapter.lines && chapter.lines.length) {
                 // Prepended, so the level intro reads before the outcome text.
                 state.store.narrative = chapter.lines.concat(state.store.narrative);
-            }
-
-            // Dispatch to the active game module.
-            if (state.activeGame && typeof state.activeGame.onAnswer === 'function') {
-                state.activeGame.onAnswer(response, state.store);
             }
             return true;
         });
@@ -632,17 +1098,21 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
     /**
      * Bootstrap all initial game data from the server, then load the game module.
      *
+     * Only the configuration is required. The profile, the opening narrative and the prefetch
+     * each make the game richer, and each used to be able to stop it from starting at all: one
+     * failing request rejected the whole bootstrap (re-audit N03).
+     *
      * @returns {Promise<void>}
      */
     function bootstrapData() {
         return Promise.all([
             call('local_stackmathgame_get_quiz_config', {quizid: state.config.quizid}),
-            call('local_stackmathgame_get_profile_state', {quizid: state.config.quizid}),
-            call('local_stackmathgame_get_narrative', {
+            optionalCall('local_stackmathgame_get_profile_state', {quizid: state.config.quizid}),
+            optionalCall('local_stackmathgame_get_narrative', {
                 quizid: state.config.quizid,
                 scene: 'world_enter'
             }),
-            call('local_stackmathgame_prefetch_next_node', {
+            optionalCall('local_stackmathgame_prefetch_next_node', {
                 quizid: state.config.quizid,
                 currentslot: getCurrentSlot() || 0,
                 attemptid: getAttemptId()
@@ -665,7 +1135,9 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             state.store.navigation = results[3] && results[3].navigation
                 ? results[3].navigation
                 : null;
-
+            // The question types initialise first; the mode may rearrange their markup.
+            return waitForPageScripts();
+        }).then(function() {
             ensureShell();
             bindInputs();
 
@@ -682,8 +1154,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
      *
      * Called by PHP via js_call_amd('local_stackmathgame/game_engine', 'init', [config]).
      *
-     * @param {Object} config Configuration object from PHP (quizid, cmid, etc.).
-     * @returns {void}
+     * @param {Object} config Configuration object from PHP (quizid, cmid, activeslot, etc.).
+     * @returns {Promise<void>} Resolves once the mode is loaded; rejections are already reported.
      */
     function init(config) {
         state.config = config || {};
@@ -691,10 +1163,27 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             state.config.quizid = state.config.instanceid;
         }
         if (!state.config.quizid) {
-            return;
+            return Promise.resolve();
         }
-        bootstrapData().catch(Notification.exception);
+        markActiveQuestion(parseInt(state.config.activeslot || 0, 10) || 0);
+        // Once the page is being left, nothing may reload it any more.
+        if (typeof window.addEventListener === 'function') {
+            window.addEventListener('pagehide', function() {
+                state.leaving = true;
+            });
+            window.addEventListener('beforeunload', function() {
+                state.leaving = true;
+            });
+        }
+        // The page as the server rendered it is the saved state of every field on it.
+        state.baseline = snapshotFields(pageRoots());
+        return bootstrapData().catch(Notification.exception);
     }
 
-    return {init: init};
+    return {
+        init: init,
+        // The check as a promise, for a caller that needs to know when it has finished - the
+        // unit tests do. The check control calls the same function.
+        check: handleGameCheck
+    };
 });

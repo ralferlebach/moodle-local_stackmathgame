@@ -139,7 +139,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         var bubble = document.createElement('div');
         bubble.className = 'smg-eg-bubble';
         bubble.style.display = 'none';
-        var first = document.querySelector('.que');
+        var first = GameCore.currentQuestion();
         if (first && first.parentNode) {
             first.parentNode.insertBefore(bubble, first);
         }

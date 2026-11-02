@@ -376,8 +376,24 @@ define([], function() {
         }
     }
 
+    /**
+     * Return the question the game presents on this page.
+     *
+     * The engine marks it once it knows which slot the server resolved (data-smg-controlled). A
+     * page can hold several questions - the stages of a quest, a set of alternatives - and the
+     * first one in the markup is not necessarily the one the player is on, so a mode must ask
+     * here rather than take the first .que (re-audit N06).
+     *
+     * @returns {Element|null} The presented question, or the first one before the engine marked any.
+     */
+    function currentQuestion() {
+        return document.querySelector('.que[data-smg-controlled="1"]')
+            || document.querySelector('.que');
+    }
+
     return {
         STACK_FIELDS: STACK_FIELDS,
+        currentQuestion: currentQuestion,
         isSlotSolved: isSlotSolved,
         hasInputSurface: hasInputSurface,
         hiddenWithin: hiddenWithin,

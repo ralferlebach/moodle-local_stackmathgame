@@ -306,4 +306,279 @@ final class quiz_settings_service_test extends advanced_testcase {
         $this->assertSame(['World 004'], array_column($result['labels'], 'name'));
         $this->assertFalse($result['more']);
     }
+
+    /**
+     * A fresh installation provides the default label, so a teacher can save without creating one.
+     *
+     * The two Behat scenarios that failed (re-audit N05) ran on a fresh site: the default label
+     * used to be created lazily by the first configuration write, opening the page writes nothing
+     * any more, and a teacher may not create labels - so the form had no label to offer and could
+     * never be saved. The installer creates it now; setUp() is bypassed here by deleting the one it
+     * made and re-running the installer's code path.
+     */
+    public function test_a_teacher_on_a_fresh_site_can_save(): void {
+        global $CFG, $DB;
+
+        $DB->delete_records('local_stackmathgame_label');
+        require_once($CFG->dirroot . '/local/stackmathgame/db/install.php');
+        xmldb_local_stackmathgame_install();
+        $this->assertTrue($DB->record_exists('local_stackmathgame_label', ['name' => 'default', 'status' => 1]));
+
+        $teacher = $this->getDataGenerator()->create_and_enrol(get_course($this->cm->course), 'editingteacher');
+        $this->setUser($teacher);
+        $this->assertFalse(has_capability('local/stackmathgame:managelabels', $this->context));
+
+        $record = quiz_settings_service::save((int)$this->cm->id, $this->data(), $this->context);
+
+        $this->assertSame(
+            (int)$DB->get_field('local_stackmathgame_label', 'id', ['name' => 'default']),
+            (int)$record->labelid
+        );
+        // No label was created by the teacher's save.
+        $this->assertSame(1, $DB->count_records('local_stackmathgame_label'));
+    }
+
+    /**
+     * An unchanged label is checked again: archived or deleted since, it is refused.
+     */
+    public function test_an_unchanged_label_is_rechecked(): void {
+        global $DB;
+
+        $cmid = (int)$this->cm->id;
+        $saved = quiz_settings_service::save($cmid, $this->data(), $this->context);
+        $DB->set_field('local_stackmathgame_label', 'status', 0, ['id' => $saved->labelid]);
+
+        $errors = quiz_settings_service::validate($cmid, $this->data(['labelid' => (int)$saved->labelid]), $this->context);
+        $this->assertArrayHasKey('labelid', $errors);
+
+        $DB->set_field('local_stackmathgame_label', 'status', 1, ['id' => $saved->labelid]);
+        $DB->set_field('local_stackmathgame_label', 'timedeleted', time(), ['id' => $saved->labelid]);
+        $errors = quiz_settings_service::validate($cmid, $this->data(['labelid' => (int)$saved->labelid]), $this->context);
+        $this->assertArrayHasKey('labelid', $errors);
+
+        $DB->delete_records('local_stackmathgame_label', ['id' => $saved->labelid]);
+        $errors = quiz_settings_service::validate($cmid, $this->data(['labelid' => (int)$saved->labelid]), $this->context);
+        $this->assertArrayHasKey('labelid', $errors);
+    }
+
+    /**
+     * Keep, clear and invalid design values are three different things.
+     */
+    public function test_design_keep_clear_and_invalid_are_distinguished(): void {
+        $this->assertSame([quiz_settings_service::DESIGN_KEEP, 0], quiz_settings_service::design_intent([]));
+        $this->assertSame([quiz_settings_service::DESIGN_KEEP, 0], quiz_settings_service::design_intent(['designid' => '']));
+        $this->assertSame([quiz_settings_service::DESIGN_KEEP, 0], quiz_settings_service::design_intent(['designid' => null]));
+        $this->assertSame([quiz_settings_service::DESIGN_CLEAR, 0], quiz_settings_service::design_intent(['designid' => 0]));
+        $this->assertSame([quiz_settings_service::DESIGN_CLEAR, 0], quiz_settings_service::design_intent(['designid' => '0']));
+        $this->assertSame([quiz_settings_service::DESIGN_SET, 7], quiz_settings_service::design_intent(['designid' => '7']));
+        $this->assertSame([quiz_settings_service::DESIGN_INVALID, 0], quiz_settings_service::design_intent(['designid' => -3]));
+        $this->assertSame([quiz_settings_service::DESIGN_INVALID, 0], quiz_settings_service::design_intent(['designid' => 'abc']));
+
+        $cmid = (int)$this->cm->id;
+        $designid = theme_manager::ensure_default_design();
+        quiz_settings_service::save($cmid, $this->data(['designid' => $designid]), $this->context);
+
+        // A negative id used to keep the old design silently; it is a field error now.
+        $errors = quiz_settings_service::validate($cmid, $this->data(['designid' => -1]), $this->context);
+        $this->assertArrayHasKey('designid_group', $errors);
+
+        // Absent keeps it.
+        $data = $this->data();
+        unset($data['designid']);
+        $this->assertSame($designid, (int)quiz_settings_service::save($cmid, $data, $this->context)->designid);
+
+        // 0 clears it for a draft ...
+        $this->assertSame(0, (int)quiz_settings_service::save($cmid, $this->data(['designid' => 0]), $this->context)->designid);
+        // ... and is refused for a running game.
+        $errors = quiz_settings_service::validate($cmid, $this->data(['designid' => 0, 'enabled' => 1]), $this->context);
+        $this->assertArrayHasKey('designid_group', $errors);
+    }
+
+    /**
+     * The first save stores what was submitted, not the defaults ensure_default() would add.
+     */
+    public function test_the_first_save_stores_a_draft_without_a_design(): void {
+        $cmid = (int)$this->cm->id;
+        $this->assertNull(quiz_configurator::get_plugin_config($cmid));
+
+        $record = quiz_settings_service::save($cmid, $this->data(['designid' => 0]), $this->context);
+
+        $this->assertSame(0, (int)$record->designid, 'The first save filled in the default design.');
+        $this->assertSame(1, (int)$record->requiresbehaviour);
+    }
+
+    /**
+     * The service checks the capability itself; the settings page is not the boundary.
+     */
+    public function test_the_service_checks_the_capability(): void {
+        global $DB;
+
+        $student = $this->getDataGenerator()->create_and_enrol(get_course($this->cm->course), 'student');
+        $this->setUser($student);
+
+        try {
+            quiz_settings_service::save((int)$this->cm->id, $this->data(['enabled' => 0]), $this->context);
+            $this->fail('A student saved game settings.');
+        } catch (\required_capability_exception $e) {
+            $this->assertFalse($DB->record_exists('local_stackmathgame', ['cmid' => $this->cm->id]));
+        }
+        $this->expectException(\required_capability_exception::class);
+        quiz_settings_service::validate((int)$this->cm->id, $this->data(), $this->context);
+    }
+
+    /**
+     * A context that is not the activity's is refused, whatever the caller may do there.
+     */
+    public function test_a_context_of_another_activity_is_refused(): void {
+        global $DB;
+
+        $other = $this->getDataGenerator()->create_module('quiz', ['course' => $this->cm->course]);
+
+        $contexts = [
+            \context_module::instance($other->cmid),
+            \context_course::instance($this->cm->course),
+            \context_system::instance(),
+        ];
+        foreach ($contexts as $context) {
+            try {
+                quiz_settings_service::save((int)$this->cm->id, $this->data(), $context);
+                $this->fail('A save in a foreign context was accepted.');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('err_contextmismatch', $e->errorcode);
+            }
+        }
+        $this->assertFalse($DB->record_exists('local_stackmathgame', ['cmid' => $this->cm->id]));
+    }
+
+    /**
+     * A failure after the label insert leaves neither a configuration nor an unassigned label.
+     */
+    public function test_a_failure_after_the_label_insert_leaves_nothing(): void {
+        global $DB;
+
+        // The advanced_testcase runs each test inside a transaction of its own; the service's
+        // transaction would then only be a nested one, whose rollback undoes nothing until the
+        // test ends. Without it the rollback is real, as it is on a site.
+        $this->preventResetByRollback();
+
+        $service = new class extends quiz_settings_service {
+            /**
+             * Fail the configuration write, after the label was inserted.
+             *
+             * @param int $cmid The course-module ID.
+             * @param array $values The values.
+             * @param int $userid The user.
+             * @return \stdClass Never.
+             */
+            protected static function write_config(int $cmid, array $values, int $userid): \stdClass {
+                global $DB;
+                // The label is there at this point - inside the transaction.
+                if (!$DB->record_exists('local_stackmathgame_label', ['name' => 'Brand new world'])) {
+                    throw new \coding_exception('The label should exist inside the transaction.');
+                }
+                throw new \dml_write_exception('injected failure after the label insert');
+            }
+        };
+        $labels = $DB->count_records('local_stackmathgame_label');
+
+        try {
+            $service::save((int)$this->cm->id, $this->data(['newlabel' => 'Brand new world']), $this->context);
+            $this->fail('The injected failure did not surface.');
+        } catch (\dml_write_exception $e) {
+            $this->assertStringContainsString('injected failure', $e->getMessage());
+        }
+
+        $this->assertSame($labels, $DB->count_records('local_stackmathgame_label'));
+        $this->assertFalse($DB->record_exists('local_stackmathgame_label', ['name' => 'Brand new world']));
+        $this->assertFalse($DB->record_exists('local_stackmathgame', ['cmid' => $this->cm->id]));
+    }
+
+    /**
+     * The retry after a lost race validates again before it writes.
+     *
+     * The race is simulated: the first write loses on a unique index, and by the time of the retry
+     * the other request has made the submitted label invalid. Only a second validation can notice.
+     */
+    public function test_the_retry_validates_again(): void {
+        global $DB;
+
+        $this->preventResetByRollback();
+
+        $service = new class extends quiz_settings_service {
+            /** @var int How often the configuration write was attempted. */
+            public static int $writes = 0;
+
+            /** @var int How often the settings were validated. */
+            public static int $validations = 0;
+
+            /**
+             * Validate; after the lost race the label has gone.
+             *
+             * @param int $cmid The course-module ID.
+             * @param array $data The data.
+             * @param \context $context The context.
+             * @return array The errors.
+             */
+            public static function validate(int $cmid, array $data, \context $context): array {
+                self::$validations++;
+                $errors = parent::validate($cmid, $data, $context);
+                if (self::$writes > 0) {
+                    $errors['labelid'] = 'archived by the concurrent request';
+                }
+                return $errors;
+            }
+
+            /**
+             * Lose the first race.
+             *
+             * @param int $cmid The course-module ID.
+             * @param array $values The values.
+             * @param int $userid The user.
+             * @return \stdClass The saved record.
+             */
+            protected static function write_config(int $cmid, array $values, int $userid): \stdClass {
+                self::$writes++;
+                throw new \dml_write_exception('lost the race');
+            }
+        };
+
+        try {
+            $service::save((int)$this->cm->id, $this->data(), $this->context);
+            $this->fail('The retry wrote although the data had become invalid meanwhile.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('err_settingsinvalid', $e->errorcode);
+        }
+        $this->assertSame(2, $service::$validations, 'The retry did not validate again.');
+        $this->assertSame(1, $service::$writes, 'The retry wrote without validating again.');
+        $this->assertFalse($DB->record_exists('local_stackmathgame', ['cmid' => $this->cm->id]));
+    }
+
+    /**
+     * The design picker loads a bounded list and never hides the current design.
+     */
+    public function test_designs_are_loaded_bounded(): void {
+        global $DB;
+
+        $template = $DB->get_record('local_stackmathgame_design', ['id' => theme_manager::ensure_default_design()]);
+        $ids = [];
+        for ($i = 0; $i < theme_manager::PICKER_LIMIT + 5; $i++) {
+            $copy = clone $template;
+            unset($copy->id);
+            $copy->name = sprintf('Design %03d', $i);
+            $copy->slug = 'bounded_' . $i;
+            $ids[] = (int)$DB->insert_record('local_stackmathgame_design', $copy);
+        }
+        // Sorts last by name, so it is outside the first page.
+        $last = end($ids);
+        $DB->set_field('local_stackmathgame_design', 'name', 'ZZZ last', ['id' => $last]);
+
+        [$designs, $more] = theme_manager::get_selectable();
+        $this->assertCount(theme_manager::PICKER_LIMIT, $designs);
+        $this->assertTrue($more);
+        $this->assertNotContains($last, array_map(static fn($d) => (int)$d->id, $designs));
+
+        [$designs] = theme_manager::get_selectable($last);
+        $this->assertContains($last, array_map(static fn($d) => (int)$d->id, $designs));
+        $this->assertCount(theme_manager::PICKER_LIMIT + 1, $designs);
+    }
 }

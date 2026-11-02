@@ -146,10 +146,16 @@ final class stack_submit_test extends advanced_testcase {
      * @return bool True when STACK can reach Maxima.
      */
     private static function configure_cas(): bool {
+        global $CFG;
+
         $maxima = trim((string)shell_exec('command -v maxima'));
         if ($maxima === '') {
             return false;
         }
+        // STACK's CAS helpers are not autoloaded. Without this the class only ran when an earlier
+        // test in the same process had happened to load them, and a run of this file alone - or
+        // in another order - skipped every test as "no Maxima".
+        require_once($CFG->dirroot . '/question/type/stack/stack/cas/installhelper.class.php');
 
         set_config('platform', 'linux', 'qtype_stack');
         set_config('maximacommand', $maxima, 'qtype_stack');
@@ -441,6 +447,41 @@ final class stack_submit_test extends advanced_testcase {
 
         $this->assertFalse($result['firstsolve']);
     }
+    /**
+     * The event log of a graded STACK answer holds the answer and no session key (re-audit N01).
+     *
+     * Checked on the payload actually written, with an artificial key the browser might send
+     * among the answers next to the real one the request is authorised with.
+     */
+    public function test_the_logged_payload_holds_no_session_key(): void {
+        global $DB;
+
+        $attemptobj = $this->start_attempt();
+        $_POST['sesskey'] = sesskey();
+        $qa = $attemptobj->get_question_attempt(1);
+        $answers = [
+            ['name' => $qa->get_qt_field_name('ans1'), 'value' => self::CORRECT_ANSWER],
+            ['name' => $qa->get_control_field_name('sequencecheck'), 'value' => (string)$qa->get_sequence_check_count()],
+            ['name' => 'sesskey', 'value' => 'Qx9SentKey'],
+            ['name' => 'sesskey', 'value' => sesskey()],
+            ['name' => 'slots', 'value' => '1'],
+        ];
+        submit_answer::execute((int)$attemptobj->get_attemptid(), 1, $answers);
+
+        $json = implode("\n", $DB->get_fieldset_select(
+            'local_stackmathgame_eventlog',
+            'payloadjson',
+            'eventtype = ?',
+            ['answer_submitted']
+        ));
+        $this->assertNotSame('', $json);
+        $this->assertStringNotContainsString(sesskey(), $json);
+        $this->assertStringNotContainsString('Qx9SentKey', $json);
+        $payload = json_decode($json, true);
+        $this->assertSame(self::CORRECT_ANSWER, $payload['answers']['ans1']);
+        $this->assertArrayNotHasKey('slots', $payload['answers']);
+    }
+
     /**
      * The fragment of an owned attempt renders, and names its inputs.
      *

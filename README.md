@@ -45,17 +45,23 @@ its `stackmatheditor:*` events - never at its internal markup:
   fields into the scene, which clipped editor toolbars and long equivalence chains (issue #15).
   An editor's internal elements - MathQuill captures keystrokes through a hidden textarea of its
   own - are never touched.
-* **Leaving after a check does not warn.** The game saves through a web service, so it tells
-  Moodle's change checker that the form is clean once the answer is stored and the question
-  shows the stored state. An editor that writes into the original field afterwards marks it as
-  changed again, as any edit does.
+* **Leaving after a check does not warn - unless something is unsaved.** The game saves through
+  a web service, so it tells Moodle's change checker what is true: the form is clean only when
+  every answer field on the page holds what the server holds. Another question's edit, or an edit
+  made while the check was running, keeps the warning. Such an edit also survives the refresh of
+  the question; it is put back into the fresh question before an editor attaches to it.
 * **Replaced questions are announced.** After every check the game swaps in a freshly rendered
-  question and raises Moodle's filter event for it. Release 1.3 of the editor watches the page
-  and attaches to the new question by itself.
+  question, runs the question's own scripts (STACK's instant validation among them) and raises
+  Moodle's filter event for it. Release 1.3 of the editor watches the page and attaches to the new
+  question by itself.
 * **Older editors are re-initialised.** Release 1.2.2 does not attach to replaced content. When a
-  swap leaves a question without the editor it had, the game reloads the page once the answer is
-  saved, so the editor initialises again; the scene then shows as solved. With 1.3 this never
-  happens.
+  swap leaves a question without the editor it had for three seconds after the check, the game
+  reloads the page so the editor initialises again - but only when nothing would be lost: never
+  while a check runs, never while the page is being left, and never over an unsaved value (the
+  player is told instead). With 1.3 this rarely happens.
+* **The player sees what happened.** A status line next to the check says whether the answer is
+  being saved, was saved, could not be saved, or was saved but the question could not be
+  refreshed. A failed save keeps the answer in the field; it is never reloaded away.
 * **Moods follow the field.** The tutor reacts to `input` events on the original field, which
   the editor raises for every change.
 
@@ -140,7 +146,7 @@ This plugin introduces these additional capabilities:
   quiz that uses it, so creating one adds to a site-wide namespace other courses share. That is a
   governance decision rather than a course setting, and editing teachers do not get it by default.
   *Selecting* an existing label needs only `configurequiz`, so a teacher can still set a quiz up
-  without it.
+  without it. The installer creates the label `default` for exactly that reason.
 
 
 Subplugins
@@ -174,8 +180,13 @@ The runtime is a chain, and every link matters:
 2. `game_engine.js` fetches the configuration, the profile, the narrative and the next node,
    then loads the mode subplugin's AMD module and hands it the resolved state.
 3. Answering calls a web service instead of submitting the page. The question is re-rendered
-   from a fragment endpoint, so feedback appears without a full reload.
-4. Branch resolution decides the next slot from the outcome and the slot's configuration.
+   from a fragment endpoint, so feedback appears without a full reload. The endpoint serves running
+   attempts only; a finished attempt is reviewed on Moodle's review page.
+4. Branch resolution decides the next slot from the outcome and the slot's configuration. A wrong
+   answer stays on the scene unless the author configured a rule for it (a help scene, an early
+   end). On a page with several questions the server decides which one is presented - the active
+   quest stage, the offered alternative - and the navigation carries that slot in the URL
+   (`smgslot`), honoured only when the player may play it.
 
 **Pitfalls worth knowing before debugging:**
 

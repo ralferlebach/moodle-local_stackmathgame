@@ -1,5 +1,78 @@
 # Changelog
 
+## 2026090251
+
+Re-audit of 2 November 2026 (findings N01, N03-N09) and the red CI run.
+
+### Security
+- Session keys are no longer stored (N01). The browser no longer sends its session key among the
+  answers, the server drops one that is sent anyway, and the event log keeps a positive list of
+  diagnostic fields only: the question's own response fields (with STACK's validation echoes) and
+  the sequence check, keyed by name. The request itself stays protected by `require_sesskey()`.
+  An upgrade step removes the session keys already logged: the old payloads lost their field
+  names, so every value of exactly the session-key shape (ten characters `[A-Za-z0-9]`) is removed
+  from logged answer lists; named shapes lose their `sesskey` entry. Rewritten rows carry
+  `sesskeyredacted: 1`. A genuine answer of that exact shape is removed as well; the authoritative
+  copy of every answer is the question attempt step.
+- The question fragment endpoint serves running attempts only (N08). A finished attempt is refused
+  (`attemptalreadyclosed`) - review is Moodle's review page, which applies the review options - and
+  so is a slot the player was not given (a hidden alternative, a future quest stage).
+- Game settings (N05): the service checks `local/stackmathgame:configurequiz` itself and refuses a
+  context that is not the activity's.
+
+### Fixed
+- Teachers on a fresh site could not save the game settings (N05, the two failing Behat
+  scenarios): the default label was only ever created lazily by the first configuration write,
+  and since opening the settings page writes nothing, a teacher - who may select but not create
+  labels - had no label to choose. The installer now creates it, and an upgrade step adds it to
+  existing sites.
+- Game settings (N05): an unchanged label is checked again (archived or deleted since -> field
+  error); keep, clear and invalid design values are told apart (absent keeps, `0` clears a draft,
+  negative or garbled is an error); the first save stores exactly the submitted values instead of
+  the defaults `ensure_default()` added; the retry after a lost race validates again; designs for
+  the picker are loaded bounded (50, plus the current one).
+- Navigation (N06): a rule the author configured for a wrong answer (jump to a help scene, early
+  end) is carried out; the default still keeps the player on the scene. Future quest stages are
+  no longer playable or writable. A finished group is left past its page instead of landing on an
+  alternative never offered. The server's presented slot is used at first render, on reload and
+  after a stage change; navigation URLs carry it as `smgslot`, honoured only when playable.
+- Check flow (N03): when both question refreshes fail, the question, the last input and a status
+  message stay; a rendering error in a mode never resubmits; the native fallback without a native
+  submit button keeps the answer instead of reloading the page; failing profile, narrative or
+  prefetch requests no longer stop the game from starting.
+- Unsaved changes (N04): the form is marked clean only when every answer field on the page holds
+  what the server holds - per field, not the whole form after one slot's answer. Edits made while a
+  check runs survive the refresh and stay unsaved. The re-initialisation reload for editors that
+  do not follow replaced content waits for the editor, never runs while a check is running or the
+  page is being left, and never discards an unsaved value.
+- RPG counters (N07): the cache is scoped by user and campaign, server state wins over a higher
+  cached value, and other players' entries are dropped from the tab.
+- STACK's instant validation after a check (found by the browser journey, N09): the fragment now
+  returns the question's own JavaScript, the engine runs it before the mode moves the fields, and
+  stale duplicate ids of the moved fields are dropped first. Without this every answer after the
+  first check needed a second check. On page load the engine also waits for the question types'
+  scripts before the mode rearranges the question.
+- ESLint (CI red): three warnings in `game_engine.js` (promise nesting, unreturned promise).
+
+### Added
+- A status line next to the check control (`status_*` strings): saving, saved, not saved, saved
+  but not refreshed, no fallback, editor lost, changed during the check.
+- Tests: Jest for the engine (failure injection, per-field dirty state, two slots, delayed
+  requests, editor on/off, presented slot) and for the RPG counter cache; PHPUnit for the fragment
+  endpoint, the event log payload, the upgrade clean-up, the settings service, wrong-answer rules,
+  quest stages and the presented slot; Behat: the three former `@smg_navtiming` scenarios run again
+  (they pressed "Check answer" before STACK had validated the input), plus a wrong-answer help path
+  and `page_groups.feature` (three-stage quest with reload, URL manipulation, alternatives).
+- `tests/playwright/e2e/rpg-verified-play.spec.js` with `support/smg-e2e.php` and `support/play.js`:
+  the RPG played by keyboard in MathQuill (editor on) and in STACK's own fields (editor off), wrong
+  then right, back and forward, reload, a four-line equivalence chain and the omitted first line,
+  a real attempt finish, every result compared with the stored question attempt steps; narrow
+  viewport and 200 % zoom. `rpg-full-ui.spec.js` answers through the visible field, checks once as
+  STACK's configuration requires, finishes the attempt for real and compares the stored answers.
+
+### Changed
+- CI: the `@smg_navtiming` exclusion is gone from both Behat runs.
+
 ## 2026090250
 
 ### Fixed

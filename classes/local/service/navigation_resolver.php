@@ -82,11 +82,27 @@ final class navigation_resolver {
             $outcome = slot_config_schema::OUTCOME_GRADEDRIGHT;
         }
 
-        // A wrong answer keeps the player on the scene. Resolving a target for it would let the
-        // client offer a way forward the moment an answer is graded wrong, which is the opposite
-        // of what a game wants: the retry is the point.
+        // A wrong answer keeps the player on the scene by default. Falling through to the linear
+        // rule would offer a way forward the moment an answer is graded wrong, which is the
+        // opposite of what a game wants: the retry is the point. A rule the author configured for
+        // a wrong answer is different - a jump to a help scene, or an early end - and is carried
+        // out. It used to be ignored: this returned "stay" before the rule was even read
+        // (re-audit N06).
         if ($outcome === slot_config_schema::OUTCOME_GRADEDWRONG) {
-            return self::payload(self::ACTION_STAY, 0, 0, $attemptid, $cmid);
+            $target = branch_resolver::configured_target($cmid, $quizid, $currentslot, $outcome);
+            if ($target === null) {
+                return self::payload(self::ACTION_STAY, 0, 0, $attemptid, $cmid);
+            }
+            if ($target === 0) {
+                return self::payload(self::ACTION_FINISH, 0, 0, $attemptid, $cmid);
+            }
+            return self::payload(
+                self::ACTION_CONTINUE,
+                $target,
+                self::page_for_slot($quizid, $target),
+                $attemptid,
+                $cmid
+            );
         }
 
         // A quiz page that is a group is finished before the run moves on. Stepping to the next
@@ -117,6 +133,14 @@ final class navigation_resolver {
             $outcome,
             $profile
         );
+        // A finished group is left, not re-entered. Linear order from a stage or an alternative
+        // lands on the next question of the same page - an alternative the player was never given,
+        // or a stage already done - so the way out of a group is the first slot after its page.
+        if ($group !== null && $group['mode'] !== slot_config_schema::GROUP_MODE_SCENES && $nextslot > 0) {
+            if (in_array($nextslot, $group['slots'], true)) {
+                $nextslot = branch_resolver::first_slot_after($quizid, (int)max($group['slots']));
+            }
+        }
 
         if ($nextslot <= 0) {
             return self::payload(self::ACTION_FINISH, 0, 0, $attemptid, $cmid);
@@ -206,9 +230,14 @@ final class navigation_resolver {
         $url = '';
         if ($attemptid > 0) {
             if ($action === self::ACTION_CONTINUE || $action === self::ACTION_SUBSTEP) {
+                // The slot travels with the page. A quiz page can hold several questions, and the
+                // page number alone left the runtime to pick the first of them - not the stage or
+                // the target the server had just resolved (re-audit N06). The attempt page checks
+                // the requested slot against what the player may play before honouring it.
                 $url = (new \moodle_url('/mod/quiz/attempt.php', [
                     'attempt' => $attemptid,
                     'page' => $nextpage,
+                    'smgslot' => $nextslot,
                 ]))->out(false);
             } else if ($action === self::ACTION_FINISH) {
                 $url = (new \moodle_url('/mod/quiz/summary.php', ['attempt' => $attemptid]))->out(false);

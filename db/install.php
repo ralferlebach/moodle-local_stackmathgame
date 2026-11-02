@@ -29,6 +29,11 @@
  */
 function xmldb_local_stackmathgame_install(): bool {
     \local_stackmathgame\game\theme_manager::seed_default_theme();
+    // The label every quiz starts with. A teacher may select an existing label but - without
+    // local/stackmathgame:managelabels - not create one, so a site without it leaves every teacher
+    // with a settings form that cannot be saved (re-audit N05). Created here, by the installer,
+    // rather than lazily on the first configuration write.
+    \local_stackmathgame\game\quiz_configurator::ensure_default_label();
     \local_stackmathgame\game\theme_manager::purge_cache();
     return true;
 }

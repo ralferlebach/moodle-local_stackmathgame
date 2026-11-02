@@ -176,7 +176,7 @@ define(['local_stackmathgame/game_core'], function(GameCore) {
         chat.appendChild(wrap);
         chat.appendChild(bubble);
 
-        var que = document.querySelector('.que');
+        var que = GameCore.currentQuestion();
         if (que && que.parentNode) {
             que.parentNode.insertBefore(chat, que.nextSibling);
         } else {

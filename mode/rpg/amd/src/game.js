@@ -137,6 +137,70 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
     }
 
 
+    /** Prefix of every counter cache entry in sessionStorage. */
+    var CACHE_PREFIX = 'smg_rpg_score:';
+
+    /**
+     * Build the storage key for the counters of one player in one campaign.
+     *
+     * Scoped by user as well as by campaign. sessionStorage belongs to the browser tab, not to
+     * the Moodle session: after a logout and a login as somebody else in the same tab the
+     * previous player's counters were still there under the same key, and were shown as the new
+     * player's (re-audit N07).
+     *
+     * @param {Object} config The engine configuration (userid, labelid, quizid).
+     * @returns {string} The key.
+     */
+    function cacheKeyFor(config) {
+        var cfg = config || {};
+        var campaign = cfg.labelid ? 'l' + cfg.labelid : 'q' + (cfg.quizid || 0);
+        return CACHE_PREFIX + 'u' + (parseInt(cfg.userid || 0, 10) || 0) + ':' + campaign;
+    }
+
+    /**
+     * Drop counter caches that belong to another player.
+     *
+     * @param {number} userid The current player.
+     * @returns {void}
+     */
+    function forgetOtherPlayers(userid) {
+        try {
+            var own = CACHE_PREFIX + 'u' + (parseInt(userid || 0, 10) || 0) + ':';
+            var stale = [];
+            for (var i = 0; i < sessionStorage.length; i++) {
+                var key = sessionStorage.key(i);
+                if (key && key.indexOf(CACHE_PREFIX) === 0 && key.indexOf(own) !== 0) {
+                    stale.push(key);
+                }
+            }
+            stale.forEach(function(key) {
+                sessionStorage.removeItem(key);
+            });
+        } catch (e) {
+            // Storage unavailable: there is nothing cached to leak either.
+            return;
+        }
+    }
+
+    /**
+     * Choose the counters to show: the server's whenever it has spoken.
+     *
+     * The counters are derived from the profile the server sends, and that is the record. A
+     * cached value is only a stand-in for a page that received no profile at all; it used to win
+     * whenever it was higher, so a stale or foreign cache could show more fairies than the
+     * player had ever freed (re-audit N07).
+     *
+     * @param {Object|null} server Counters derived from the server profile, null when none came.
+     * @param {Object|null} cached Counters from the cache, null when none.
+     * @returns {{mana: number, fairies: number}} The counters to show.
+     */
+    function chooseScore(server, cached) {
+        if (server) {
+            return server;
+        }
+        return cached || {mana: MANA_START, fairies: 0};
+    }
+
     /**
      * Read the cached counters for this campaign.
      *
@@ -485,17 +549,21 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
      * @returns {void}
      */
     function mountQuestion(que, parts) {
-        if (!que) {
+        var formulation = que ? que.querySelector('.formulation') : null;
+        if (!formulation) {
+            // Nothing new to mount. After every answer the engine replaces the whole .que with a
+            // freshly rendered one; when both refreshes fail it cannot, and the .que on the page
+            // is still the old one whose formulation already sits in the panel. Clearing the
+            // panel then threw away the question and the player's last input (re-audit N03), so
+            // the panel keeps what it shows until there is something to replace it with.
             return;
         }
-        // Called again after every answer: the engine replaces the whole .que with a freshly
-        // rendered one, so whatever an earlier mount moved out belongs to the old question and
-        // goes. The check control is the engine's single button and is kept.
+        // Whatever an earlier mount moved out belongs to the old question and goes. The check
+        // control is the engine's single button and is kept.
         var check = document.querySelector('.smg-action-check');
         parts.question.replaceChildren();
         parts.feedback.replaceChildren();
 
-        var formulation = que.querySelector('.formulation');
         if (formulation) {
             // The whole formulation, not a .qtext inside it: STACK writes the question text
             // straight into .formulation and has no .qtext. It also carries the hidden inputs -
@@ -534,7 +602,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
      * @returns {Object} References to the scene's parts.
      */
     function buildScene(gameState, assets, sceneType) {
-        var que = document.querySelector('.que');
+        var que = GameCore.currentQuestion();
         var meadow = MEADOW_TYPES.indexOf(sceneType) !== -1;
         var boss = sceneType === 'boss' && assets.golem_idle;
 
@@ -800,15 +868,11 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
         fitStage(parts);
         reportMissingAssets(assets, parts.stage);
 
-        var score = computeScore(gameState, slotMap);
-        var cacheKey = 'smg_rpg_score:' + (
-            (gameState.config && (gameState.config.labelid || gameState.config.quizid)) || 'unknown'
-        );
-        var cached = readCachedScore(cacheKey);
-        if (cached && cached.fairies > score.fairies) {
-            // Only ever ahead of the server, never behind.
-            score = cached;
-        }
+        var config = gameState.config || {};
+        forgetOtherPlayers(config.userid);
+        var cacheKey = cacheKeyFor(config);
+        var score = chooseScore(gameState.profile ? computeScore(gameState, slotMap) : null, readCachedScore(cacheKey));
+        writeCachedScore(cacheKey, score);
         updateHUD(parts, score);
 
         var intro = cfg.narrative && cfg.narrative.intro ? cfg.narrative.intro : '';
@@ -832,20 +896,27 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
              * @returns {void}
              */
             onAnswer: function(response) {
-                mountQuestion(document.querySelector('.que'), parts);
+                mountQuestion(GameCore.currentQuestion(), parts);
                 var slot = response.slot || currentSlot;
                 var slotCfg = slotMap[String(slot)] || GameCore.defaultConfig();
                 var type = slotCfg.scene && slotCfg.scene.type ? slotCfg.scene.type : 'challenge';
 
                 // Deliberately firstsolve, not cannext: cannext stays true for every later
                 // correct answer to a solved scene, and awarding on it let mana be farmed.
-                if (response.firstsolve) {
+                if (response.profile) {
+                    // The profile that came back with the answer is the server's record after
+                    // it: the counters are rebuilt from it rather than incremented on top of
+                    // whatever the page believed before.
+                    score = computeScore({profile: response.profile}, slotMap);
+                } else if (response.firstsolve) {
                     var gain = MANA_GAIN[type] !== undefined ? MANA_GAIN[type] : 10;
                     score.mana = Math.min(MANA_MAX, score.mana + gain);
                     score.fairies++;
-                    writeCachedScore(cacheKey, score);
+                }
+                if (response.firstsolve) {
                     defeatEnemy(parts, assets, true);
                 }
+                writeCachedScore(cacheKey, score);
                 updateHUD(parts, score);
 
                 var key = response.cannext ? 'success' : 'fail';
@@ -884,5 +955,12 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
         return el;
     }
 
-    return {init: init};
+    return {
+        init: init,
+        // Exposed for the unit tests of the counter cache (re-audit N07); not part of the mode
+        // contract, which is init() alone.
+        cacheKeyFor: cacheKeyFor,
+        chooseScore: chooseScore,
+        forgetOtherPlayers: forgetOtherPlayers
+    };
 });

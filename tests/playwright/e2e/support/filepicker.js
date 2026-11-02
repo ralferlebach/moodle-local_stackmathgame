@@ -50,7 +50,8 @@ async function uploadThroughFilepicker(page, file) {
 
     const nofile = page.getByText(/No files attached/i).first();
     const done = page.locator('.filepicker-filename, .fp-filename').first();
-    await expect(nofile.or(done)).toBeVisible({ timeout: 120000 });
+    // Both can be on the page at once while the picker updates; either one settles the wait.
+    await expect(nofile.or(done).first()).toBeVisible({ timeout: 120000 });
     if (!(await nofile.isVisible().catch(() => false))) {
       break;
     }

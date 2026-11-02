@@ -36,40 +36,39 @@ Feature: Branch navigation works for every branching mode
     And the STACK Math Game is enabled for quiz "Game Quiz"
     And the STACK CAS is ready
 
-  # Three scenarios are tagged @smg_navtiming and excluded from the CI run. The reward side is
-  # settled - the unit suite proves a correct answer is graded, paid and marked solved - but the
-  # "Next scene" control is written by the mode module after the submit round-trip finishes, and
-  # the step asserts on it before it appears. That is a synchronisation problem in the scenario,
-  # not a defect in the game; fixing it needs a wait-for-control step rather than a code change.
-  # The wrong-answer scenario, which guards against walking past a question, runs unconditionally.
+  # These three scenarios were tagged @smg_navtiming and excluded from CI. The cause was not the
+  # game but the scenarios: they pressed "Check answer" straight after setting the field, while
+  # STACK was still validating it. Such a check only validates; whether "Next scene" appeared
+  # depended on the runner's speed. They now wait for STACK's validation, as a student does, and
+  # follow the way on as the link it is.
 
-  @smg_navtiming
   Scenario: The default linear branching offers a way to the next scene
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I wait until STACK has validated the answer
     And I press "Check answer"
     Then I should see "Next scene"
 
-  @smg_navtiming
   Scenario: The last scene finishes the run rather than offering nothing
     Given slot 3 of quiz "Game Quiz" branches to "end" on "gradedright"
     And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I follow the game navigation to slot 3
     And I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I wait until STACK has validated the answer
     And I press "Check answer"
     Then I should see "Finish the run"
 
-  @smg_navtiming
   Scenario: An explicit slot jump is followed
     Given slot 1 of quiz "Game Quiz" branches to slot 3 on "gradedright"
     And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
+    And I wait until STACK has validated the answer
     And I press "Check answer"
-    And I press "Next scene"
-    Then I should see "Scene three"
+    And I click on "Next scene" "link"
+    Then the game presents slot 3
 
   Scenario: A wrong answer offers no way forward
     # The retry is the point of the scene. Offering a way on would let a player walk past every
@@ -77,6 +76,19 @@ Feature: Branch navigation works for every branching mode
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^2"
+    And I wait until STACK has validated the answer
     And I press "Check answer"
-    Then I should not see "Next scene"
+    Then I should see "Your answer is not an odd function"
+    And I should not see "Next scene"
     And I should not see "Finish the run"
+
+  Scenario: A help path configured for a wrong answer is taken
+    # re-audit N06: the resolver returned "stay" for every wrong answer before it read the rule.
+    Given slot 1 of quiz "Game Quiz" branches to slot 3 on "gradedwrong"
+    And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
+    And I press "Attempt quiz"
+    When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^2"
+    And I wait until STACK has validated the answer
+    And I press "Check answer"
+    And I click on "Next scene" "link"
+    Then the game presents slot 3

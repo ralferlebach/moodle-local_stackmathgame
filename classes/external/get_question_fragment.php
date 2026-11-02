@@ -77,8 +77,35 @@ class get_question_fragment extends \core_external\external_api {
         if ((int)$attemptobj->get_userid() !== (int)$USER->id || !$attemptobj->is_own_attempt()) {
             throw new \moodle_exception('notyourattempt', 'quiz');
         }
+        // The runtime endpoint serves the attempt being played, nothing else (re-audit N08). A
+        // finished attempt is reviewed through Moodle's own review page, which applies the quiz's
+        // review options - which feedback, marks and right answers a student may see, and when.
+        // Rendering a finished attempt here bypassed them: render_question() with $reviewing set
+        // to false shows the attempt as if it were still running. The write endpoint refused
+        // finished attempts already; the read endpoint now does the same.
+        if ($attemptobj->is_finished()) {
+            throw new \moodle_exception('attemptalreadyclosed', 'quiz');
+        }
         if (!in_array((int)$slot, array_map('intval', $attemptobj->get_slots()), true)) {
             throw new \moodle_exception('err_unknownslot', 'local_stackmathgame', '', $slot);
+        }
+        // A slot of the attempt is not necessarily one the player was given: a hidden alternative
+        // or a quest stage not yet reached is refused here exactly as submit_answer refuses it,
+        // or its question text could be read ahead by asking for its number.
+        $profile = \local_stackmathgame\local\service\profile_service::get_or_create_for_quiz(
+            (int)$USER->id,
+            (int)$attemptobj->get_quizid()
+        );
+        if (
+            !\local_stackmathgame\local\service\page_group_resolver::is_slot_playable(
+                (int)$cm->id,
+                \local_stackmathgame\local\service\navigation_resolver::page_for_slot((int)$cm->instance, (int)$slot),
+                (int)$slot,
+                (int)$attemptid,
+                \local_stackmathgame\local\service\profile_service::solved_slots($profile)
+            )
+        ) {
+            throw new \moodle_exception('err_slotnotoffered', 'local_stackmathgame', '', $slot);
         }
 
         $qa           = $attemptobj->get_question_attempt($slot);
@@ -88,6 +115,7 @@ class get_question_fragment extends \core_external\external_api {
         ]);
         $renderer     = $PAGE->get_renderer('mod_quiz');
         $questionhtml = '';
+        $javascript   = '';
         $status       = 'fallback';
 
         try {
@@ -96,7 +124,15 @@ class get_question_fragment extends \core_external\external_api {
             // threw a TypeError on every call; a second path through get_question_usage(), which
             // Moodle reserves for unit tests, then failed as well. The endpoint therefore never
             // returned a fragment, and the engine quietly reloaded the whole page after every check.
+            //
+            // The JavaScript the question asks for while it renders is collected and returned with
+            // it, as Moodle's own fragment and dynamic-form services do. STACK binds its instant
+            // validation to the input elements when the page loads; a swapped-in question has new
+            // elements and, without this, no validation at all - every answer then needed a second
+            // check, which the browser journey found (re-audit N09).
+            $PAGE->start_collecting_javascript_requirements();
             $questionhtml = (string)$attemptobj->render_question($slot, false, $renderer, $url);
+            $javascript = (string)$PAGE->requires->get_end_code();
             if ($questionhtml !== '') {
                 $status = 'ok';
             }
@@ -118,6 +154,7 @@ class get_question_fragment extends \core_external\external_api {
             'state'         => (string)$qa->get_state(),
             'sequencecheck' => (int)$qa->get_sequence_check_count(),
             'questionhtml'  => (string)$questionhtml,
+            'javascript'    => $javascript,
             'inputnames'    => array_values($inputnames),
         ];
     }
@@ -136,6 +173,12 @@ class get_question_fragment extends \core_external\external_api {
             'state'         => new \core_external\external_value(PARAM_TEXT, 'Question state'),
             'sequencecheck' => new \core_external\external_value(PARAM_INT, 'Sequence check count'),
             'questionhtml'  => new \core_external\external_value(PARAM_RAW, 'Rendered question html if available'),
+            'javascript'    => new \core_external\external_value(
+                PARAM_RAW,
+                'JavaScript the question requires, to run once the html is on the page',
+                VALUE_DEFAULT,
+                ''
+            ),
             'inputnames'    => new \core_external\external_multiple_structure(
                 new \core_external\external_value(PARAM_RAW_TRIMMED, 'Known question input name')
             ),

@@ -139,7 +139,11 @@ class submit_answer extends \core_external\external_api {
         $flatpayload = [];
         foreach ($answers as $answer) {
             $name = (string)($answer['name'] ?? '');
-            if ($name === '') {
+            // The session key is a credential, not an answer. The request itself is protected by
+            // require_sesskey() above, which reads the key from the request parameters; a copy
+            // inside the answers is never needed, and keeping one here is how it used to end up
+            // in the event log (re-audit N01).
+            if ($name === '' || $name === 'sesskey') {
                 continue;
             }
             $flatpayload[$name] = (string)($answer['value'] ?? '');
@@ -149,9 +153,6 @@ class submit_answer extends \core_external\external_api {
         }
         if (!isset($flatpayload['attempt'])) {
             $flatpayload['attempt'] = (string)$attemptid;
-        }
-        if (!isset($flatpayload['sesskey'])) {
-            $flatpayload['sesskey'] = sesskey();
         }
         // A bare "-submit" is the quiz-wide button, not the per-question one. The question engine
         // looks for the behaviour field of THIS question attempt - q{usageid}:{slot}_-submit -
@@ -163,11 +164,6 @@ class submit_answer extends \core_external\external_api {
         $submitfield = $qasubmit->get_behaviour_field_name('submit');
         $flatpayload[$submitfield] = '1';
         $flatpayload['-submit'] = '1';
-
-        $externaldata = [];
-        foreach ($flatpayload as $name => $value) {
-            $externaldata[] = ['name' => (string)$name, 'value' => (string)$value];
-        }
 
         $processed = false;
         $failurereason = '';
@@ -367,7 +363,10 @@ class submit_answer extends \core_external\external_api {
             [
                 'attemptid'     => $attemptid,
                 'slot'          => $slot,
-                'answers'       => array_values($flatpayload),
+                // A positive list, not the request: only this question's own response fields
+                // and its sequence check, keyed by name. Everything else the browser sent - the
+                // session key above all, but also page bookkeeping - stays out of the log.
+                'answers'       => self::diagnostic_answers($qa, $flatpayload),
                 'questionid'    => (int)$qa->get_question()->id,
                 'processed'     => $processed,
                 'previousstate' => $previousstate,
@@ -396,15 +395,17 @@ class submit_answer extends \core_external\external_api {
             'questionid'    => (int)$qa->get_question()->id,
             'state'         => $state,
             'sequencecheck' => (int)$qa->get_sequence_check_count(),
-            'answers'       => array_map(
+            'answers'       => array_values(array_map(
                 static function (array $answer): array {
                     return [
                         'name'  => (string)$answer['name'],
                         'value' => (string)$answer['value'],
                     ];
                 },
-                $answers
-            ),
+                array_filter($answers, static function (array $answer): bool {
+                    return (string)($answer['name'] ?? '') !== 'sesskey';
+                })
+            )),
             'inputnames'    => api::answer_input_names($qa),
             'previousstate' => $previousstate,
             'message'       => $message,
@@ -430,6 +431,50 @@ class submit_answer extends \core_external\external_api {
                 $attemptid
             ),
         ];
+    }
+
+    /**
+     * Reduce a submitted payload to the fields worth keeping for diagnosis.
+     *
+     * The event log keeps what a teacher or developer needs to understand a submission: the
+     * question's own response fields (with STACK's validation echoes) and the sequence check. It is
+     * a positive list on purpose. The previous form logged the whole request with its keys thrown
+     * away, which put the session key into the database next to the answer (re-audit N01) - and a
+     * negative list would have to be extended every time a client sends something new.
+     *
+     * @param \question_attempt $qa The question attempt that was submitted.
+     * @param array $flatpayload The submitted fields, prefixed name => value.
+     * @return array Unprefixed field name => value, only for allowed fields.
+     */
+    public static function diagnostic_answers(\question_attempt $qa, array $flatpayload): array {
+        $prefix = $qa->get_field_prefix();
+        $allowed = [];
+        // What the question type itself declares as its response, plus the input names the game
+        // reports elsewhere - for STACK the two agree; for other types the first is the one known
+        // before an answer exists.
+        $inputs = array_merge(
+            array_map('strval', array_keys((array)$qa->get_question()->get_expected_data())),
+            api::answer_input_names($qa)
+        );
+        foreach (array_unique($inputs) as $input) {
+            $allowed[$input] = true;
+            // STACK echoes the validated form of each input; it says what was actually graded.
+            $allowed[$input . '_val'] = true;
+        }
+        $allowed[':sequencecheck'] = true;
+
+        $result = [];
+        foreach ($flatpayload as $name => $value) {
+            $name = (string)$name;
+            if (strpos($name, $prefix) !== 0) {
+                continue;
+            }
+            $field = substr($name, strlen($prefix));
+            if (isset($allowed[$field])) {
+                $result[$field] = (string)$value;
+            }
+        }
+        return $result;
     }
 
     /**

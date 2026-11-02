@@ -61,7 +61,7 @@ $PAGE->activityheader->disable();
 // Read only: opening or cancelling this page writes nothing. Defaults for an activity without a
 // configuration are computed, and the row is created by the first save.
 $config          = \local_stackmathgame\game\quiz_settings_service::current_values($cmid);
-$designs         = \local_stackmathgame\game\theme_manager::get_all_enabled();
+[$designs]       = \local_stackmathgame\game\theme_manager::get_selectable((int)$config->designid);
 $canselectdesign = has_capability('local/stackmathgame:selectdesign', $context);
 $canmanagelabels = has_capability('local/stackmathgame:managelabels', $context);
 

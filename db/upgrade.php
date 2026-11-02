@@ -217,5 +217,19 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026090250, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026090251) {
+        // Session keys are no longer logged with an answer, and the ones already logged are
+        // removed (re-audit N01). The rule is documented at the helper.
+        local_stackmathgame_redact_eventlog_sesskeys();
+
+        // Fresh installations never had the default label: it was created lazily the first time
+        // a configuration row was written, and since opening the settings page writes nothing, a
+        // teacher on a new site had no label to choose and could not save (re-audit N05). The
+        // installer now creates it; this brings existing sites level.
+        \local_stackmathgame\game\quiz_configurator::ensure_default_label();
+
+        upgrade_plugin_savepoint(true, 2026090251, 'local', 'stackmathgame');
+    }
+
     return true;
 }

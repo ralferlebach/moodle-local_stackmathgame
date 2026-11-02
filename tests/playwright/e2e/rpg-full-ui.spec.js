@@ -1,8 +1,12 @@
 /**
  * The whole RPG, built and played through the interface and nothing else.
  *
- * From the first login onwards there is no seeding, no CLI, no web service and no SQL. Everything
- * a real administrator, teacher or participant would do is done by clicking it.
+ * From the first login onwards nothing is seeded, and nothing is written through a CLI, a web
+ * service or SQL. Everything a real administrator, teacher or participant would do is done by
+ * clicking it - and typing: answers go into the visible field, MathQuill or STACK's own, never into
+ * a hidden input by script (re-audit N09). At the very end the question engine's record is READ
+ * through support/smg-e2e.php and compared with what the participant saw; that needs the site's
+ * code at SMG_MOODLE_ROOT and php on the runner.
  *
  * One test rather than several. The steps depend on each other - a quiz cannot be configured
  * before it exists, a game cannot be played before it is configured - so separate tests would
@@ -23,6 +27,7 @@ const diag = require('./support/artifact-summary');
 // everything mode-specific - where the controls are, what the counters are - is in its profile.
 const game = require(`./support/games/${process.env.SMG_GAME || 'rpg'}`);
 const { clickVisible } = require('./support/visible');
+const play = require('./support/play');
 const fs = require('fs');
 const path = require('path');
 
@@ -72,10 +77,13 @@ const QUESTIONS = [
   // A welcome page: its input is hidden by the question itself, so it is not answered but
   // left - which is what the instruction scene type is for.
   { name: 'SMG Fixture 01 - Welcome to the Game', answer: [], instruction: true },
-  { name: 'SMG Fixture 02 - One Plus One', answer: ['1+1=2'] },
-  { name: 'SMG Fixture 03 - Two Times Two', answer: ['2*2=4'] },
-  { name: 'SMG Fixture 04 - Three Cubed', answer: ['3^3=27'] },
-  { name: 'SMG Fixture 05 - Equivalence Reasoning', answer: ['1+2*27', '1+54', '55'], appendToFirstLine: true },
+  // mustverify is the fixture's own setting: whether STACK makes the student confirm the input.
+  // Only then is there a validation to wait for; either way one check grades.
+  { name: 'SMG Fixture 02 - One Plus One', answer: ['1+1=2'], mustverify: false },
+  { name: 'SMG Fixture 03 - Two Times Two', answer: ['2*2=4'], mustverify: false },
+  { name: 'SMG Fixture 04 - Three Cubed', answer: ['3^3=27'], mustverify: false },
+  { name: 'SMG Fixture 05 - Equivalence Reasoning', answer: ['1+2*27', '1+54', '55'], appendToFirstLine: true,
+    mustverify: true },
 ];
 
 /** The fixture file the questions are imported from. */
@@ -86,27 +94,27 @@ const FIXTURE = require('path').resolve(__dirname, '..', '..', 'fixtures', 'e2e_
 test.setTimeout(20 * 60 * 1000);
 
 /**
- * Enter an answer into a STACK field, whether or not an editor stands in front of it.
+ * Type an answer into the visible field of the presented question, as a participant does.
  *
- * A visible field is filled like a student would. A hidden one is the interface of an input
- * surface - the STACK Math Editor documents it as such: a script writes the value into the
- * original field and dispatches input and change, and the editor takes the value over. Filling
- * the editor's own widget instead would test that plugin's internals, which are not this
- * suite's to depend on.
+ * With the STACK Math Editor in front of the field that is its MathQuill field (one row per line
+ * for an equivalence chain); without it, STACK's own field. The previous version wrote the value
+ * into the hidden original input by script, which tested nothing a participant does.
  *
- * @param {import('@playwright/test').Locator} field The original STACK input or textarea.
- * @param {string} value The answer.
+ * @param {import('@playwright/test').Page} page The page.
+ * @param {string[]} lines The answer, one entry per line.
+ * @returns {Promise<string>} What STACK's field holds afterwards.
  */
-async function answerField(field, value) {
-  if (await field.isVisible()) {
-    await field.fill(value);
-    return;
+async function answerVisibly(page, lines) {
+  const editor = await page.locator(play.within('.sme-mq-container .mq-editable-field, .sme-equiv-row'))
+    .first().isVisible().catch(() => false);
+  if (lines.length > 1) {
+    await play.typeChain(page, editor, lines);
+  } else {
+    await play.typeAnswer(page, editor, editor ? play.keysFor(lines[0]) : lines);
   }
-  await field.evaluate((el, v) => {
-    el.value = v;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
+  await expect.poll(async () => (await play.stackField(page).inputValue()).split(/\r?\n/),
+    { message: 'The answer did not reach STACK\'s field', timeout: 10000 }).toEqual(lines);
+  return play.stackField(page).inputValue();
 }
 
 test.describe('StackMathGame RPG, built and played through the interface', () => {
@@ -131,6 +139,8 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       }
     });
     const done = [];
+    // What the participant's visible field held at each check, by quest.
+    const typed = [];
     const courseid = COURSE_ID;
     let cmid = 0;
     let scenes = [];
@@ -266,52 +276,49 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
           continue;
         }
 
-        // An algebraic input is a text field, an equivalence-reasoning input a textarea - so
-        // both are looked for. Waiting for the field is what tells "the game reached this quest"
-        // from "the game is stuck on the last one".
-        // Not scoped to .que: a mode may lay the question out as a scene and move the field into
-        // it. And not required to be visible: an input surface such as the STACK Math Editor
-        // keeps the original field as its interface and hides it behind its own editor.
-        const input = page.locator('input[id$="_ans1"], textarea[id$="_ans1"]').first();
+        // Waiting for the field is what tells "the game reached this quest" from "the game is
+        // stuck on the last one". The field is the original STACK input, which an editor may hide.
         await expect(
-          input,
+          play.stackField(page),
           `Quest ${i + 1} has no STACK input - the game did not reach it`
         ).toBeAttached({ timeout: 60000 });
 
         const question = QUESTIONS[i];
-        let value = question.answer.join('\n');
+        let lines = question.answer;
         if (question.appendToFirstLine) {
           // STACK prefills the first line of an equivalence chain ("firstline"), and the steps
           // continue below it. Overwriting it would remove the line the chain starts from.
-          const prefilled = (await input.inputValue()).trim();
-          value = [prefilled, ...question.answer].filter(Boolean).join('\n');
+          const prefilled = (await play.stackField(page).inputValue()).split(/\r?\n/)[0].trim();
+          lines = [prefilled, ...question.answer].filter(Boolean);
         }
 
-        // Twice: STACK grades only after the student has confirmed how the input was read.
-        for (const pass of [1, 2]) {
-          await answerField(input, value);
-          await page.locator('.smg-action-check, .que input[type="submit"]').first().click();
-          await page.waitForTimeout(pass === 1 ? 2000 : 4000);
-          if (pass === 1) {
-            await reference(page, `q${i + 1}-b-validated`);
-          }
-        }
+        // One check, after STACK has validated where its configuration asks for it. The previous
+        // version checked twice whatever STACK said.
+        typed[i] = await answerVisibly(page, lines);
+        await play.waitForValidation(page, question.mustverify);
+        await reference(page, `q${i + 1}-b-validated`);
+        expect(await play.check(page), `Quest ${i + 1} was not saved`).toBe('status_saved');
+        await expect(
+          page.locator('.smg-rpg-feedback .stackprtfeedback, .que[data-smg-controlled="1"] .stackprtfeedback').first(),
+          `STACK's feedback for quest ${i + 1} is not shown`
+        ).toBeVisible({ timeout: 60000 });
         await reference(page, `q${i + 1}-c-solved`);
 
         if (!leaveWarningTested && i < QUESTIONS.length - 1) {
           leaveWarningTested = true;
           // An edit that was not checked is protected: leaving asks first, and staying keeps it.
           const before = page.url();
-          await answerField(input, `${value}+0`);
+          const edited = lines.length === 1 ? [`${lines[0]}+0`] : [...lines.slice(0, -1), `${lines[lines.length - 1]}+0`];
+          await answerVisibly(page, edited);
           expectLeaveWarning = true;
           await game.nextControl(page).click();
           await page.waitForTimeout(1500);
           expectLeaveWarning = false;
           expect(page.url(), 'Leaving with an unchecked edit did not stay on the page').toBe(before);
           // Checked again, the edit is saved, and the way on is clear again.
-          await answerField(input, value);
-          await page.locator('.smg-action-check').first().click();
-          await page.waitForTimeout(4000);
+          typed[i] = await answerVisibly(page, lines);
+          await play.waitForValidation(page, question.mustverify);
+          expect(await play.check(page)).toBe('status_saved');
         }
 
         if (i < QUESTIONS.length - 1) {
@@ -337,35 +344,40 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       }
     });
 
-    await step('The run reaches its end', async () => {
+    await step('The run reaches its end and the attempt is finished', async () => {
       // "Finish" rather than "next": the last scene is configured to end the run, so a control
       // that still offers another scene would mean the branching never noticed the end.
       await expect(
         page.locator('.smg-runtime-shell').first(),
         'The game shell disappeared before the end of the run'
       ).toBeAttached();
-
       // By its label first: the RPG renders the same navigation element for "next" and "finish"
       // and changes only its text and target, while a hidden twin from the previous scene can
-      // still sit in the DOM. A class-based .first() picked that twin and waited for it forever.
+      // still sit in the DOM.
       await clickVisible(
         page.getByRole('link', { name: /Finish the run|Finish/i })
           .or(page.locator('a.smg-rpg-next[href*="summary.php"], a[href*="summary.php"]')),
         'The last quest offers no way to finish the run',
         60000
       );
+      // The attempt is really finished, through the summary page, as a participant finishes it.
+      // An attempt summary on the quiz page proved nothing: an unfinished attempt shows one too.
+      await play.submitFromSummary(page);
     });
 
-    await step('Moodle records the attempt', async () => {
-      await page.goto(`/mod/quiz/view.php?id=${cmid}`);
-      // The text= engine cannot be mixed into a CSS selector list, which is what the first version
-      // did - Playwright rejected the whole locator before looking at the page.
-      await expect(
-        page.locator('table.quizattemptsummary, .quizattemptsummary')
-          .or(page.getByText(/Summary of your previous attempts|Your final grade|Attempt 1/i))
-          .first(),
-        'The quiz view shows no attempt for this participant'
-      ).toBeVisible({ timeout: 60000 });
+    await step('The question engine stored what the participant saw', async () => {
+      const state = play.helper('state', PLAYER_USER, String(cmid));
+      expect(state.state, 'The attempt is not finished').toBe('finished');
+      for (let i = 0; i < QUESTIONS.length; i++) {
+        const slot = state.slots[i + 1];
+        expect(slot, `No question attempt for quest ${i + 1}`).toBeTruthy();
+        if (QUESTIONS[i].instruction) {
+          continue;
+        }
+        expect(slot.vars.ans1, `Quest ${i + 1}: the stored answer is not the visible one`).toBe(typed[i]);
+        expect(slot.state, `Quest ${i + 1} is not graded right`).toBe('gradedright');
+      }
+      expect(state.sumgrades, 'The attempt has no grade').not.toBeNull();
     });
 
     await step('Nothing broke quietly along the way', async () => {

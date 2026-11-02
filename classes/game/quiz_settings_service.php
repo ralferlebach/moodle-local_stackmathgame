@@ -74,6 +74,66 @@ class quiz_settings_service {
         ];
     }
 
+    /** The submitted design leaves the stored one as it is (field absent or empty). */
+    const DESIGN_KEEP = 'keep';
+
+    /** The submitted design is a positive id to store. */
+    const DESIGN_SET = 'set';
+
+    /** The submitted design is 0: a draft without a design. */
+    const DESIGN_CLEAR = 'clear';
+
+    /** The submitted design is neither absent, 0 nor a positive id. */
+    const DESIGN_INVALID = 'invalid';
+
+    /**
+     * Classify the submitted design field.
+     *
+     * Keep, clear and invalid used to be one case: every non-positive value silently kept the old
+     * design, so a negative or garbled id was "accepted" and a draft could not drop its design
+     * (re-audit N05). They are now told apart.
+     *
+     * @param array $data The submitted values.
+     * @return array [one of the DESIGN_* constants, the design id (0 unless DESIGN_SET)].
+     */
+    public static function design_intent(array $data): array {
+        if (!array_key_exists('designid', $data) || $data['designid'] === null || $data['designid'] === '') {
+            return [self::DESIGN_KEEP, 0];
+        }
+        $raw = $data['designid'];
+        if (is_int($raw) || (is_string($raw) && preg_match('/^-?\d+$/', trim($raw)))) {
+            $id = (int)$raw;
+            if ($id > 0) {
+                return [self::DESIGN_SET, $id];
+            }
+            if ($id === 0) {
+                return [self::DESIGN_CLEAR, 0];
+            }
+        }
+        return [self::DESIGN_INVALID, 0];
+    }
+
+    /**
+     * Refuse a context that does not belong to the activity, and a user who may not configure it.
+     *
+     * The service is a public operation, called by the settings page but callable from anywhere.
+     * Relying on the page's require_capability() made the page the security boundary; a caller
+     * passing another activity's context - or a context of its own choosing - could otherwise
+     * save settings for a quiz it may not configure (re-audit N05).
+     *
+     * @param int $cmid The course-module ID.
+     * @param \context $context The context the caller claims for it.
+     * @return void
+     * @throws \moodle_exception When the context is not this activity's.
+     * @throws \required_capability_exception Without local/stackmathgame:configurequiz.
+     */
+    public static function require_access(int $cmid, \context $context): void {
+        if ((int)$context->contextlevel !== CONTEXT_MODULE || (int)$context->instanceid !== $cmid || $cmid <= 0) {
+            throw new \moodle_exception('err_contextmismatch', 'local_stackmathgame');
+        }
+        require_capability('local/stackmathgame:configurequiz', $context);
+    }
+
     /**
      * Validate submitted settings.
      *
@@ -84,6 +144,8 @@ class quiz_settings_service {
      */
     public static function validate(int $cmid, array $data, \context $context): array {
         global $DB;
+
+        self::require_access($cmid, $context);
 
         $errors = [];
         $current = self::current_values($cmid);
@@ -115,8 +177,10 @@ class quiz_settings_service {
             $labelid = (int)($data['labelid'] ?? 0);
             if ($labelid <= 0) {
                 $errors['labelid'] = get_string('err_labelrequired', 'local_stackmathgame');
-            } else if ($labelid !== (int)$current->labelid) {
-                // An unchanged label is kept as it is; a newly chosen one must exist and be active.
+            } else {
+                // Checked even when unchanged: a label archived or deleted since the last save is
+                // no longer one a quiz may be saved with, and "it was fine before" is not a reason
+                // to keep writing it (re-audit N05).
                 $label = $DB->get_record('local_stackmathgame_label', ['id' => $labelid]);
                 if (!$label || !self::label_is_active($label)) {
                     $errors['labelid'] = get_string('err_labelinvalid', 'local_stackmathgame');
@@ -125,16 +189,28 @@ class quiz_settings_service {
         }
 
         // Design: required for a running game, optional for a draft.
-        $designid = (int)($data['designid'] ?? 0);
-        if ($designid > 0 && $designid !== (int)$current->designid) {
-            if (!has_capability('local/stackmathgame:selectdesign', $context)) {
-                $errors['designid_group'] = get_string('err_designnotallowed', 'local_stackmathgame');
-            } else if (!$DB->record_exists('local_stackmathgame_design', ['id' => $designid, 'isactive' => 1])) {
+        [$intent, $designid] = self::design_intent($data);
+        $storeddesign = (int)$current->designid;
+        if ($intent === self::DESIGN_INVALID) {
+            $errors['designid_group'] = get_string('err_designinvalid', 'local_stackmathgame');
+        } else if ($intent === self::DESIGN_SET) {
+            if ($designid !== $storeddesign) {
+                if (!has_capability('local/stackmathgame:selectdesign', $context)) {
+                    $errors['designid_group'] = get_string('err_designnotallowed', 'local_stackmathgame');
+                } else if (!$DB->record_exists('local_stackmathgame_design', ['id' => $designid, 'isactive' => 1])) {
+                    $errors['designid_group'] = get_string('err_designinvalid', 'local_stackmathgame');
+                }
+            } else if (!$DB->record_exists('local_stackmathgame_design', ['id' => $designid])) {
+                // The stored design was deleted since: saving it again would store a dangling id.
                 $errors['designid_group'] = get_string('err_designinvalid', 'local_stackmathgame');
             }
+        } else if ($intent === self::DESIGN_CLEAR && $storeddesign > 0) {
+            if (!has_capability('local/stackmathgame:selectdesign', $context)) {
+                $errors['designid_group'] = get_string('err_designnotallowed', 'local_stackmathgame');
+            }
         }
-        $effectivedesign = $designid > 0 ? $designid : (int)$current->designid;
-        if ($enabled && $effectivedesign <= 0) {
+        $effectivedesign = self::effective_design($intent, $designid, $storeddesign);
+        if ($enabled && $effectivedesign <= 0 && !isset($errors['designid_group'])) {
             $errors['designid_group'] = get_string('err_designrequired', 'local_stackmathgame');
         }
 
@@ -156,11 +232,30 @@ class quiz_settings_service {
     }
 
     /**
+     * Resolve the design a save will store.
+     *
+     * @param string $intent One of the DESIGN_* constants.
+     * @param int $designid The submitted id, when $intent is DESIGN_SET.
+     * @param int $stored The stored design id, 0 when none.
+     * @return int The design id to store; 0 for none.
+     */
+    private static function effective_design(string $intent, int $designid, int $stored): int {
+        if ($intent === self::DESIGN_SET) {
+            return $designid;
+        }
+        if ($intent === self::DESIGN_CLEAR) {
+            return 0;
+        }
+        return $stored;
+    }
+
+    /**
      * Validate and save submitted settings atomically.
      *
      * Label and configuration are written in one transaction. A concurrent save of the same new
-     * label or the same activity loses the race on a unique index; the whole save is then
-     * repeated once, and the repetition finds the row the other request wrote.
+     * label or the same activity loses the race on a unique index; the save is then validated
+     * again - the other request may have changed what is valid, for instance by archiving the
+     * label - and repeated once, and the repetition finds the row the other request wrote.
      *
      * @param int $cmid The course-module ID.
      * @param array $data The submitted values.
@@ -169,14 +264,28 @@ class quiz_settings_service {
      * @throws \moodle_exception When the data is invalid.
      */
     public static function save(int $cmid, array $data, \context $context): \stdClass {
-        $errors = self::validate($cmid, $data, $context);
+        self::assert_valid($cmid, $data, $context);
+        try {
+            return static::save_in_transaction($cmid, $data);
+        } catch (\dml_write_exception $e) {
+            self::assert_valid($cmid, $data, $context);
+            return static::save_in_transaction($cmid, $data);
+        }
+    }
+
+    /**
+     * Throw when the submitted settings are not valid.
+     *
+     * @param int $cmid The course-module ID.
+     * @param array $data The submitted values.
+     * @param \context $context The activity context.
+     * @return void
+     * @throws \moodle_exception When the data is invalid.
+     */
+    private static function assert_valid(int $cmid, array $data, \context $context): void {
+        $errors = static::validate($cmid, $data, $context);
         if ($errors) {
             throw new \moodle_exception('err_settingsinvalid', 'local_stackmathgame', '', implode(' ', $errors));
-        }
-        try {
-            return self::save_in_transaction($cmid, $data);
-        } catch (\dml_write_exception $e) {
-            return self::save_in_transaction($cmid, $data);
         }
     }
 
@@ -187,12 +296,12 @@ class quiz_settings_service {
      * @param array $data The validated values.
      * @return \stdClass The saved configuration record.
      */
-    private static function save_in_transaction(int $cmid, array $data): \stdClass {
+    protected static function save_in_transaction(int $cmid, array $data): \stdClass {
         global $DB, $USER;
 
         $transaction = $DB->start_delegated_transaction();
         try {
-            $record = self::write($cmid, $data, (int)$USER->id);
+            $record = static::write($cmid, $data, (int)$USER->id);
         } catch (\Throwable $e) {
             // Rolls back label and configuration together, then rethrows.
             $transaction->rollback($e);
@@ -209,7 +318,7 @@ class quiz_settings_service {
      * @param int $userid The saving user.
      * @return \stdClass The saved configuration record.
      */
-    private static function write(int $cmid, array $data, int $userid): \stdClass {
+    protected static function write(int $cmid, array $data, int $userid): \stdClass {
         $current = self::current_values($cmid);
 
         $newlabel = self::normalise_label_name((string)($data['newlabel'] ?? ''));
@@ -217,17 +326,64 @@ class quiz_settings_service {
             $match = self::find_label_by_name($newlabel);
             $labelid = $match ? (int)$match->id : self::create_label($newlabel, $userid);
         } else {
-            $labelid = (int)($data['labelid'] ?? 0) ?: (int)$current->labelid;
+            $labelid = (int)($data['labelid'] ?? 0);
         }
-        $designid = (int)($data['designid'] ?? 0) ?: (int)$current->designid;
+        [$intent, $designid] = self::design_intent($data);
 
-        $values = [
+        return static::write_config($cmid, [
             'labelid' => $labelid,
-            'designid' => $designid,
+            'designid' => self::effective_design($intent, $designid, (int)$current->designid),
             'enabled' => empty($data['enabled']) ? 0 : 1,
             'teacherdisplayname' => trim((string)($data['teacherdisplayname'] ?? '')),
-        ];
-        return quiz_configurator::save_for_quiz($cmid, $values);
+        ], $userid);
+    }
+
+    /**
+     * Insert or update the configuration row with exactly the validated values.
+     *
+     * Written directly rather than through quiz_configurator::save_for_quiz(): that goes through
+     * ensure_default(), which on a first save inserts the default label and design before the
+     * update, and treats a design of 0 as "keep" - so a draft saved without a design came back with
+     * the default one, and a failed save could leave a row the teacher never asked for.
+     *
+     * @param int $cmid The course-module ID.
+     * @param array $values labelid, designid, enabled, teacherdisplayname.
+     * @param int $userid The saving user.
+     * @return \stdClass The saved configuration record.
+     */
+    protected static function write_config(int $cmid, array $values, int $userid): \stdClass {
+        global $DB;
+
+        $now = time();
+        $record = quiz_configurator::get_plugin_config($cmid);
+        if (!$record) {
+            $cm = quiz_configurator::get_supported_cm($cmid);
+            $DB->insert_record('local_stackmathgame', (object)[
+                'courseid' => (int)$cm->course,
+                'cmid' => $cmid,
+                'labelid' => (int)$values['labelid'],
+                'designid' => (int)$values['designid'],
+                'enabled' => (int)$values['enabled'],
+                'requiresbehaviour' => 1,
+                'configjson' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'teacherdisplayname' => $values['teacherdisplayname'],
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'createdby' => $userid > 0 ? $userid : null,
+                'modifiedby' => $userid > 0 ? $userid : null,
+            ]);
+        } else {
+            $DB->update_record('local_stackmathgame', (object)[
+                'id' => (int)$record->id,
+                'labelid' => (int)$values['labelid'],
+                'designid' => (int)$values['designid'],
+                'enabled' => (int)$values['enabled'],
+                'teacherdisplayname' => $values['teacherdisplayname'],
+                'timemodified' => $now,
+                'modifiedby' => $userid > 0 ? $userid : null,
+            ]);
+        }
+        return quiz_configurator::get_plugin_config($cmid);
     }
 
     /**

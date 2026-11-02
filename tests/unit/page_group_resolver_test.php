@@ -20,6 +20,7 @@ use local_stackmathgame\local\service\flow_service;
 use local_stackmathgame\local\service\navigation_resolver;
 use local_stackmathgame\local\service\page_group_resolver;
 use local_stackmathgame\local\service\profile_service;
+use local_stackmathgame\local\service\question_map_service;
 use local_stackmathgame\local\service\slot_config_schema;
 use local_stackmathgame\tests\game_quiz_testcase;
 
@@ -201,6 +202,69 @@ final class page_group_resolver_test extends game_quiz_testcase {
     }
 
     /**
+     * Stages after the active one are not playable (re-audit N06).
+     *
+     * They used to be, so posting the number of stage three answered - and rewarded - it while
+     * stage one was still open.
+     */
+    public function test_future_quest_stages_are_not_playable(): void {
+        $this->set_group(slot_config_schema::GROUP_MODE_QUEST);
+
+        $fresh = page_group_resolver::resolve($this->fixturecmid, 0, 1);
+        $this->assertSame([1], $fresh['playable']);
+        $this->assertFalse(page_group_resolver::is_slot_playable($this->fixturecmid, 0, 2, 1));
+        $this->assertFalse(page_group_resolver::is_slot_playable($this->fixturecmid, 0, 3, 1));
+
+        $middle = page_group_resolver::resolve($this->fixturecmid, 0, 1, [1 => true]);
+        $this->assertSame([1, 2], $middle['playable']);
+        $this->assertFalse(page_group_resolver::is_slot_playable($this->fixturecmid, 0, 3, 1, [1 => true]));
+
+        $done = page_group_resolver::resolve($this->fixturecmid, 0, 1, [1 => true, 2 => true, 3 => true]);
+        $this->assertSame([1, 2, 3], $done['playable']);
+    }
+
+    /**
+     * The presented slot is the server's choice, at first render, on reload and after a stage.
+     */
+    public function test_the_presented_slot_follows_the_resolution(): void {
+        $this->set_group(slot_config_schema::GROUP_MODE_QUEST);
+        $cmid = $this->fixturecmid;
+
+        // First render: stage one. A reload with the same progress gives the same answer.
+        $this->assertSame(1, page_group_resolver::presented_slot($cmid, 0, 1));
+        $this->assertSame(1, page_group_resolver::presented_slot($cmid, 0, 1));
+        // After stage one: stage two, without any slot in the URL.
+        $this->assertSame(2, page_group_resolver::presented_slot($cmid, 0, 1, [1 => true]));
+        // A solved stage may be asked for explicitly; a future one may not - manipulating the URL
+        // falls back to the active stage.
+        $this->assertSame(1, page_group_resolver::presented_slot($cmid, 0, 1, [1 => true], 1));
+        $this->assertSame(2, page_group_resolver::presented_slot($cmid, 0, 1, [1 => true], 3));
+        $this->assertSame(2, page_group_resolver::presented_slot($cmid, 0, 1, [1 => true], 99));
+        // A finished quest shows its last stage, not its first.
+        $this->assertSame(3, page_group_resolver::presented_slot($cmid, 0, 1, [1 => true, 2 => true, 3 => true]));
+    }
+
+    /**
+     * Only an offered alternative is presented, whatever the URL asks for.
+     */
+    public function test_the_presented_alternative_is_an_offered_one(): void {
+        $this->set_group(slot_config_schema::GROUP_MODE_ALTERNATIVES, 1, slot_config_schema::PICK_FIRST);
+
+        $this->assertSame(1, page_group_resolver::presented_slot($this->fixturecmid, 0, 5));
+        $this->assertSame(1, page_group_resolver::presented_slot($this->fixturecmid, 0, 5, [], 2));
+        $this->assertSame(1, page_group_resolver::presented_slot($this->fixturecmid, 0, 5, [1 => true]));
+    }
+
+    /**
+     * Separate scenes on one page honour a requested slot, and default to the first unsolved.
+     */
+    public function test_separate_scenes_present_the_requested_or_first_unsolved_slot(): void {
+        $this->assertSame(1, page_group_resolver::presented_slot($this->fixturecmid, 0, 1));
+        $this->assertSame(2, page_group_resolver::presented_slot($this->fixturecmid, 0, 1, [1 => true]));
+        $this->assertSame(3, page_group_resolver::presented_slot($this->fixturecmid, 0, 1, [], 3));
+    }
+
+    /**
      * Picking more alternatives than the page holds is clamped, not an error.
      */
     public function test_picking_too_many_is_clamped(): void {
@@ -276,6 +340,80 @@ final class page_group_resolver_test extends game_quiz_testcase {
         );
 
         $this->assertNotSame('substep', $decision['action']);
+    }
+
+    /**
+     * Three stages in order, then the quest's external branch: out of the page, not back into it.
+     */
+    public function test_a_three_stage_quest_leaves_its_page_after_the_last_stage(): void {
+        global $DB;
+
+        // A fourth question on its own page after the quest.
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $quiz = $DB->get_record('quiz', ['id' => $this->fixturequizid], '*', MUST_EXIST);
+        $question = $questiongenerator->create_question('shortanswer', null, ['category' => $category->id]);
+        quiz_add_quiz_question($question->id, $quiz, 2);
+        question_map_service::ensure_for_cmid($this->fixturecmid);
+        $this->set_group(slot_config_schema::GROUP_MODE_QUEST);
+
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+        $steps = [];
+        foreach ([1, 2, 3] as $stage) {
+            $decision = navigation_resolver::resolve(
+                $this->fixturecmid,
+                $this->fixturequizid,
+                $stage,
+                slot_config_schema::OUTCOME_GRADEDRIGHT,
+                $profile,
+                11
+            );
+            $steps[] = [$decision['action'], $decision['nextslot']];
+            profile_service::apply_progress((int)$profile->id, [
+                'progress' => ['slots' => [(string)$stage => ['solved' => 1]]],
+            ]);
+            $profile = profile_service::get_or_create_for_quiz((int)$profile->userid, $this->fixturequizid);
+        }
+
+        $this->assertSame([['substep', 2], ['substep', 3], ['continue', 4]], $steps);
+    }
+
+    /**
+     * A finished set of alternatives moves past the page, not to an alternative never offered.
+     */
+    public function test_finished_alternatives_leave_the_page(): void {
+        global $DB;
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category();
+        $quiz = $DB->get_record('quiz', ['id' => $this->fixturequizid], '*', MUST_EXIST);
+        $question = $questiongenerator->create_question('shortanswer', null, ['category' => $category->id]);
+        quiz_add_quiz_question($question->id, $quiz, 2);
+        question_map_service::ensure_for_cmid($this->fixturecmid);
+        $this->set_group(slot_config_schema::GROUP_MODE_ALTERNATIVES, 1, slot_config_schema::PICK_FIRST);
+        $profile = profile_service::get_or_create_for_quiz(
+            (int)$this->getDataGenerator()->create_user()->id,
+            $this->fixturequizid
+        );
+
+        // Slot 1 is the offered alternative. Linear from it would be slot 2 - on the same page and
+        // never offered.
+        $decision = navigation_resolver::resolve(
+            $this->fixturecmid,
+            $this->fixturequizid,
+            1,
+            slot_config_schema::OUTCOME_GRADEDRIGHT,
+            $profile,
+            11
+        );
+
+        $this->assertSame('continue', $decision['action']);
+        $this->assertSame(4, $decision['nextslot']);
     }
 
     /**

@@ -38,9 +38,12 @@ const vm = require('vm');
  *
  * @param {string} relativePath Path to the source file, relative to the plugin root.
  * @param {Object} dependencies Map of AMD dependency name to the stub to inject.
+ * @param {Object} globals Further globals the module reads (M, fetch, require, a stand-in
+ *     window, ...). They override the defaults below, so a test can replace window with an object
+ *     whose location it controls - jsdom's own cannot be reloaded or observed.
  * @returns {*} Whatever the module's factory returned.
  */
-function loadAmd(relativePath, dependencies = {}) {
+function loadAmd(relativePath, dependencies = {}, globals = {}) {
   const pluginRoot = path.resolve(__dirname, '..', '..');
   const source = fs.readFileSync(path.join(pluginRoot, relativePath), 'utf8');
 
@@ -66,6 +69,7 @@ function loadAmd(relativePath, dependencies = {}) {
     },
   };
 
+  Object.assign(sandbox, globals);
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox, { filename: relativePath });
 

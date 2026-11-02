@@ -159,6 +159,36 @@ class theme_manager {
         return array_values($DB->get_records('local_stackmathgame_design', ['isactive' => 1], 'name ASC'));
     }
 
+    /** How many designs the quiz settings picker offers at most, like the label search. */
+    const PICKER_LIMIT = 50;
+
+    /**
+     * Return the designs a teacher can pick from, bounded.
+     *
+     * The settings page loaded every active design with all its columns - package JSON included -
+     * to render a thumbnail picker; a site with many designs paid for that on every visit
+     * (re-audit N05). The list is now bounded like the label search, and the design the quiz
+     * already uses is always included, so a bounded list never hides the current choice.
+     *
+     * @param int $includeid A design ID to include even beyond the limit, 0 for none.
+     * @param int $limit The maximum number of designs besides $includeid.
+     * @return array [\stdClass[] designs ordered by name, bool whether more exist].
+     */
+    public static function get_selectable(int $includeid = 0, int $limit = self::PICKER_LIMIT): array {
+        global $DB;
+        $records = $DB->get_records('local_stackmathgame_design', ['isactive' => 1], 'name ASC, id ASC', '*', 0, $limit + 1);
+        $more = count($records) > $limit;
+        $designs = array_slice($records, 0, $limit, true);
+        if ($includeid > 0 && !isset($designs[$includeid])) {
+            $current = $DB->get_record('local_stackmathgame_design', ['id' => $includeid, 'isactive' => 1]);
+            if ($current) {
+                $designs[(int)$current->id] = $current;
+                uasort($designs, static fn($a, $b) => strcmp((string)$a->name, (string)$b->name));
+            }
+        }
+        return [array_values($designs), $more];
+    }
+
     /**
      * Ensure the rpg_default design exists and return its ID.
      *

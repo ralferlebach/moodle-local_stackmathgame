@@ -43,6 +43,9 @@ module.exports = defineConfig({
     video: process.env.SMG_NO_RECORD ? 'off' : 'on',
     screenshot: 'on',
     trace: process.env.SMG_NO_RECORD ? 'off' : 'on',
+    // A Chromium that is already installed, instead of the one this Playwright release downloads.
+    // For local runs on a machine without network access to the browser CDN; unset in CI.
+    ...(process.env.SMG_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.SMG_CHROMIUM_PATH } } : {}),
     actionTimeout: 60000,
     navigationTimeout: 90000,
   },
