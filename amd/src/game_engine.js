@@ -27,8 +27,9 @@
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_core', 'core_filters/events'],
-    function($, Ajax, Notification, GameCore, FilterEvents) {
+define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_core', 'core_filters/events',
+    'core_form/changechecker'],
+    function($, Ajax, Notification, GameCore, FilterEvents, ChangeChecker) {
 
     'use strict';
 
@@ -47,7 +48,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             assets: {},
             lastsubmit: null
         },
-        activeInput: null
+        activeInput: null,
+        submitting: false
     };
 
     // ── Utility functions ──────────────────────────────────────────────────
@@ -231,6 +233,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             window.setTimeout(function() {
                 var now = getCurrentQuestion();
                 if (now === replacement && !GameCore.hasInputSurface(now)) {
+                    markSaved();
                     window.location.reload();
                 }
             }, 800);
@@ -256,10 +259,14 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
                 const current = getCurrentQuestion();
                 if (replacement && current && current.parentNode) {
                     swapQuestion(current, replacement);
+                    return true;
                 }
-                return true;
+                return false;
             })
-            .catch(Notification.exception);
+            .catch(function(error) {
+                Notification.exception(error);
+                return false;
+            });
     }
 
     /**
@@ -274,6 +281,79 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             input.addEventListener('focus', function() {
                 state.activeInput = input;
             });
+        });
+    }
+
+    // ── Unsaved-changes state ──────────────────────────────────────────────
+
+    /**
+     * Tell Moodle's change checker that what the form shows is saved.
+     *
+     * The quiz watches #responseform for changes and warns before leaving a page with unsaved
+     * ones. The game saves through a web service rather than by submitting the form, so the form
+     * stayed "changed" after every successful check, and the way on to the next scene opened the
+     * browser's leave-page warning (issue #16). Called only once the server has stored the answer
+     * and the question on the page has been replaced with the stored state; an answer edited
+     * afterwards marks the form as changed again in the ordinary way.
+     *
+     * @returns {void}
+     */
+    function markSaved() {
+        var form = document.getElementById('responseform');
+        if (form) {
+            ChangeChecker.resetFormDirtyState(form);
+        }
+    }
+
+    /**
+     * Submit the answer the ordinary way, through the question's own check button.
+     *
+     * Used when the server cannot process the answer without a page load. A plain reload would
+     * have thrown the typed answer away; a native submission saves it, and Moodle's change checker
+     * knows a submitted form is not being abandoned.
+     *
+     * @returns {boolean} False when no native check button exists.
+     */
+    function submitNatively() {
+        var form = document.getElementById('responseform');
+        var slot = getCurrentSlot();
+        var selector = 'input[type=submit][name$="-submit"]:not(.smg-action-check)';
+        var candidates = Array.from(document.querySelectorAll(selector));
+        var button = candidates.find(function(node) {
+            return !slot || node.name.indexOf(':' + slot + '_') !== -1;
+        }) || candidates[0];
+        if (!form || !button || typeof form.requestSubmit !== 'function') {
+            return false;
+        }
+        form.requestSubmit(button);
+        return true;
+    }
+
+    /**
+     * Mark the check control as busy or ready.
+     *
+     * @param {boolean} busy Whether an answer is being checked.
+     * @returns {void}
+     */
+    function setChecking(busy) {
+        state.submitting = busy;
+        document.querySelectorAll('.smg-action-check').forEach(function(button) {
+            button.disabled = busy;
+            button.setAttribute('aria-busy', busy ? 'true' : 'false');
+        });
+    }
+
+    /**
+     * Run a follow-up request whose failure must not undo a recorded answer.
+     *
+     * @param {string} methodname The web service name.
+     * @param {Object} args The call arguments.
+     * @returns {Promise} Resolves to the response, or to null on failure.
+     */
+    function optionalCall(methodname, args) {
+        return call(methodname, args).catch(function(error) {
+            window.console.warn('[stackmathgame] ' + methodname + ' failed after a recorded answer', error);
+            return null;
         });
     }
 
@@ -365,6 +445,11 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        // One check at a time: a second click while the first is on its way would submit the
+        // same answer twice against a sequence check that only the first can satisfy.
+        if (state.submitting) {
+            return;
+        }
         const attemptid = getAttemptId();
         const slot = getCurrentSlot();
         const answers = collectAnswers();
@@ -372,16 +457,19 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             return;
         }
         let response = null;
+        setChecking(true);
         call('local_stackmathgame_submit_answer', {
             attemptid: attemptid,
             slot: slot,
             answers: answers
         }).then(function(submitresponse) {
             if (submitresponse && submitresponse.requiresnativefallback) {
-                // The server could not process the answer through the pageless path. Reloading
-                // the ordinary quiz page is the honest outcome: continuing would show feedback
-                // for an answer that was never recorded.
-                window.location.reload();
+                // The server could not process the answer through the pageless path. The answer
+                // is submitted the ordinary way instead; continuing would show feedback for an
+                // answer that was never recorded, and reloading would lose it.
+                if (!submitNatively()) {
+                    window.location.reload();
+                }
                 return null;
             }
             // Held in the enclosing scope so the rest of the chain can stay flat. Nesting the
@@ -391,32 +479,54 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
             if (response.profile) {
                 state.store.profile = response.profile;
             }
-            return refreshQuestionFromFragment();
-        }).then(function(ok) {
-            if (!ok) {
-                return refreshQuestionFromPage();
-            }
+            return refreshQuestionFromFragment().then(function(ok) {
+                return ok ? true : refreshQuestionFromPage();
+            }).then(function(refreshed) {
+                // The answer is stored. Only when the page also shows the stored state is the
+                // form clean; if the question could not be refreshed, what is on screen may
+                // differ from what was saved, and leaving keeps its warning.
+                if (refreshed) {
+                    markSaved();
+                }
+                return followUp(response, slot, attemptid);
+            });
+        }).catch(Notification.exception).then(function() {
+            setChecking(false);
             return null;
-        }).then(function() {
-            return Promise.all([
-                call('local_stackmathgame_get_narrative', {
-                    quizid: state.config.quizid,
-                    scene: response.cannext ? 'victory' : 'defeat'
-                }),
-                call('local_stackmathgame_prefetch_next_node', {
-                    quizid: state.config.quizid,
-                    currentslot: slot,
-                    // The outcome and the attempt are what let the server resolve the branch and
-                    // build a usable URL. Without them the endpoint fell back to "next unsolved
-                    // slot in map order" and ignored the branching entirely.
-                    outcome: response.cannext ? 'gradedright' : 'gradedwrong',
-                    attemptid: attemptid
-                }),
-                call('local_stackmathgame_get_profile_state', {
-                    quizid: state.config.quizid
-                })
-            ]);
-        }).then(function(results) {
+        });
+    }
+
+    /**
+     * Fetch what the mode needs after a recorded answer, then hand it over.
+     *
+     * Each request may fail on its own without taking the others, or the answer, with it: the
+     * submit response already carries the authoritative navigation, so the way on opens even
+     * when the narrative or the prefetch is unavailable.
+     *
+     * @param {Object} response The submit_answer response.
+     * @param {number} slot The slot that was answered.
+     * @param {number} attemptid The attempt.
+     * @returns {Promise<boolean>}
+     */
+    function followUp(response, slot, attemptid) {
+        return Promise.all([
+            optionalCall('local_stackmathgame_get_narrative', {
+                quizid: state.config.quizid,
+                scene: response.cannext ? 'victory' : 'defeat'
+            }),
+            optionalCall('local_stackmathgame_prefetch_next_node', {
+                quizid: state.config.quizid,
+                currentslot: slot,
+                // The outcome and the attempt are what let the server resolve the branch and
+                // build a usable URL. Without them the endpoint fell back to "next unsolved
+                // slot in map order" and ignored the branching entirely.
+                outcome: response.cannext ? 'gradedright' : 'gradedwrong',
+                attemptid: attemptid
+            }),
+            optionalCall('local_stackmathgame_get_profile_state', {
+                quizid: state.config.quizid
+            })
+        ]).then(function(results) {
             state.store.narrative =
                 results[0] && results[0].lines ? results[0].lines : [];
 
@@ -433,13 +543,12 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
                 state.store.design = results[2].design || state.store.design;
             }
             // A new level opens: the chapter narrative is fetched once, here, rather than by each
-            // mode. Kept as its own link in the chain rather than nested inside the previous one,
-            // so the mode is dispatched to exactly once, after everything it needs has arrived.
+            // mode, and before the mode is dispatched to, so it is dispatched to exactly once.
             var nav = state.store.navigation;
             if (!nav || !nav.enterslevel) {
                 return null;
             }
-            return call('local_stackmathgame_get_narrative', {
+            return optionalCall('local_stackmathgame_get_narrative', {
                 quizid: state.config.quizid,
                 scene: 'chapter_start'
             });
@@ -454,7 +563,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'local_stackmathgame/game_co
                 state.activeGame.onAnswer(response, state.store);
             }
             return true;
-        }).catch(Notification.exception);
+        });
     }
 
     // ── Bootstrap ──────────────────────────────────────────────────────────

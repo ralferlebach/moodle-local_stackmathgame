@@ -35,3 +35,28 @@ Feature: STACK Math Game quiz settings configuration
     # from the "gamesettings" string, which is English on an English test site.
     When I am on the "Test Quiz" "mod_quiz > Edit" page
     Then I should see "Game settings" in the quiz tertiary nav
+
+  Scenario: A new label typed while another label is selected is the one saved
+    # Issue #14: the default label is preselected, and a name typed under "Or create a new label"
+    # used to be dropped silently while the page still reported that the changes were saved.
+    Given I log out
+    And I log in as "admin"
+    And I am on the "Test Quiz" "local_stackmathgame > Game settings" page
+    When I set the field "Or create a new label" to "Algebra Term 1"
+    And I press "Save changes"
+    Then I should see "Changes saved"
+    And I should see "Algebra Term 1" in the "Current label" "form_row"
+
+  Scenario: A label name of spaces only is refused at the field
+    Given I log out
+    And I log in as "admin"
+    And I am on the "Test Quiz" "local_stackmathgame > Game settings" page
+    When I set the field "Or create a new label" to "   "
+    And I press "Save changes"
+    Then I should see "The label name cannot consist of spaces only."
+    And I should not see "Changes saved"
+
+  Scenario: Cancelling the settings returns to the quiz
+    When I am on the "Test Quiz" "local_stackmathgame > Game settings" page
+    And I press "Cancel"
+    Then I should see "Test Quiz"

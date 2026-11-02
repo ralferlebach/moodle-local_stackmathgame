@@ -113,6 +113,23 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
   test('an administrator builds an RPG and a participant plays it to the end', async ({ page }) => {
     const stamp = Date.now();
     const trouble = diag.watchForTrouble(page, BASE_URL);
+    // Issue #16: moving on after a saved answer must not ask whether to leave the page, and
+    // leaving with an unsaved edit must. Every leave-page dialog is recorded and judged at the end;
+    // an unexpected one is accepted so the journey can go on and report it.
+    const leaveWarnings = [];
+    let expectLeaveWarning = false;
+    let leaveWarningTested = false;
+    page.on('dialog', async (dialog) => {
+      if (dialog.type() !== 'beforeunload') {
+        return;
+      }
+      leaveWarnings.push({ url: page.url(), expected: expectLeaveWarning });
+      if (expectLeaveWarning) {
+        await dialog.dismiss();
+      } else {
+        await dialog.accept();
+      }
+    });
     const done = [];
     const courseid = COURSE_ID;
     let cmid = 0;
@@ -281,6 +298,22 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
         }
         await reference(page, `q${i + 1}-c-solved`);
 
+        if (!leaveWarningTested && i < QUESTIONS.length - 1) {
+          leaveWarningTested = true;
+          // An edit that was not checked is protected: leaving asks first, and staying keeps it.
+          const before = page.url();
+          await answerField(input, `${value}+0`);
+          expectLeaveWarning = true;
+          await game.nextControl(page).click();
+          await page.waitForTimeout(1500);
+          expectLeaveWarning = false;
+          expect(page.url(), 'Leaving with an unchecked edit did not stay on the page').toBe(before);
+          // Checked again, the edit is saved, and the way on is clear again.
+          await answerField(input, value);
+          await page.locator('.smg-action-check').first().click();
+          await page.waitForTimeout(4000);
+        }
+
         if (i < QUESTIONS.length - 1) {
           const next = game.nextControl(page);
           await expect(
@@ -339,6 +372,15 @@ test.describe('StackMathGame RPG, built and played through the interface', () =>
       // Collected across the whole journey. None of these raise an exception, and all of them
       // matter here: a 404 for a sprite is invisible in the page, and a broken AMD module simply
       // means nothing happens.
+      const unexpected = leaveWarnings.filter((w) => !w.expected);
+      expect(
+        unexpected.map((w) => w.url),
+        'The browser asked whether to leave a page whose answer was already saved'
+      ).toEqual([]);
+      expect(
+        leaveWarnings.filter((w) => w.expected).length,
+        'Leaving with an unchecked edit did not warn'
+      ).toBe(1);
       const report = diag.describeTrouble(trouble);
       expect(report, `The browser reported problems during the journey:\n\n${report}`).toBe('');
     });

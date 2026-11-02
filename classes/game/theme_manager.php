@@ -129,6 +129,27 @@ class theme_manager {
     }
 
     /**
+     * Return the preview image of a design, resolved as the game resolves its artwork.
+     *
+     * The settings form used to build a path under pix/themes/ from a filename column, which no
+     * package fills; bundled packages and uploaded designs both name their preview as the
+     * "thumbnail" asset instead.
+     *
+     * @param \stdClass $design The design record.
+     * @return string The URL, or an empty string when the design has no preview.
+     */
+    public static function preview_url(\stdClass $design): string {
+        $assets = package_registry::build_runtime_assets(
+            (string)($design->modecomponent ?? ''),
+            (string)($design->slug ?? '')
+        );
+        if (!$assets && empty($design->isbundled)) {
+            $assets = \local_stackmathgame\local\packaging\design_assets::runtime_assets($design);
+        }
+        return (string)($assets['thumbnail'] ?? '');
+    }
+
+    /**
      * Return all active design records, ordered by name.
      *
      * @return \stdClass[] Array of design records.

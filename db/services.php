@@ -25,6 +25,14 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'local_stackmathgame_search_labels' => [
+        'classname' => 'local_stackmathgame\external\search_labels',
+        'methodname' => 'execute',
+        'description' => 'Search the active game labels for the label selector of the settings page.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/stackmathgame:configurequiz',
+    ],
     'local_stackmathgame_get_activity_config' => [
         'classname' => 'local_stackmathgame\external\get_activity_config',
         'methodname' => 'execute',

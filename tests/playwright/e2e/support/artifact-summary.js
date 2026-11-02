@@ -49,7 +49,17 @@ function watchForTrouble(page, baseurl) {
   });
 
   page.on('pageerror', (error) => {
-    collected.pageErrors.push(error.message);
+    // Moodle core, not this plugin: adding questions from the bank on the quiz structure page
+    // raises an uncaught error with the bare message "'')" and no stack in Moodle 4.5.15+ (build
+    // 20261030). Checked by switching this plugin's only script on that page off - the error stays.
+    // Only that message on that page is excluded; any other error there still counts.
+    if (error.message === "'')" && /\/mod\/quiz\/edit\.php/.test(page.url())) {
+      return;
+    }
+    // With the page and the first frame of the stack: an error whose message is empty - a
+    // rejected promise with no reason - is otherwise reported as '' and cannot be traced.
+    const where = (error.stack || '').split('\n').slice(0, 3).join(' | ');
+    collected.pageErrors.push(`${error.message || '(no message)'} on ${page.url()} ${where}`.trim());
   });
 
   page.on('requestfailed', (request) => {
@@ -60,6 +70,13 @@ function watchForTrouble(page, baseurl) {
 
   page.on('response', (response) => {
     if (!response.url().startsWith(baseurl)) {
+      return;
+    }
+    // Moodle core, not this plugin: the question bank's category filter reads a user preference
+    // through the REST API before it has ever been set, and an unset preference is answered with
+    // 400. It happens once per fresh site, on the question bank page, and the filter then sets it.
+    if (response.status() === 400
+        && /\/user\/current\/preferences\/qbank_managecategories_includesubcategories_filter_default$/.test(response.url())) {
       return;
     }
     if (response.status() >= 400) {

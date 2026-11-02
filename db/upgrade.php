@@ -203,5 +203,19 @@ function xmldb_local_stackmathgame_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026032850, 'local', 'stackmathgame');
     }
 
+    if ($oldversion < 2026090250) {
+        // One configuration per activity. Sites upgraded from the old quizcfg table got this index
+        // in 2026032827; sites installed fresh never did, and two simultaneous first saves could
+        // insert two rows for the same activity. Duplicates are reduced to the most recently
+        // modified row before the index is added (issue #14).
+        $table = new xmldb_table('local_stackmathgame');
+        $index = new xmldb_index('lsmg_cfg_cmid_uix', XMLDB_INDEX_UNIQUE, ['cmid']);
+        if (!$dbman->index_exists($table, $index)) {
+            local_stackmathgame_upgrade_dedupe_config_cmid();
+            $dbman->add_index($table, $index);
+        }
+        upgrade_plugin_savepoint(true, 2026090250, 'local', 'stackmathgame');
+    }
+
     return true;
 }

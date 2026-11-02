@@ -206,21 +206,15 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             '.smg-rpg-panel button[type=submit]:not(.smg-action-check){display:none!important;}',
             '.que .smg-rpg-panel .formulation h1,.que .smg-rpg-panel .formulation h2,',
             '.que .smg-rpg-panel .formulation h3{font-size:1.3rem;margin:0 0 .3rem;}',
-            // Answer area floating in the scene, top left.
-            '.smg-rpg-answer:empty{display:none;}',
-            '.smg-rpg-panel .smg-action-check{margin-top:.6rem;}',
-            '.smg-rpg-answer{position:absolute;left:2.7%;top:24%;width:27%;z-index:3;display:flex;',
-            'flex-direction:column;align-items:flex-start;gap:.35cqw;}',
-            '.smg-rpg-answer input[type=text],.smg-rpg-answer textarea{width:100%;font-size:1.55cqw;',
-            'padding:.45cqw .6cqw;border:1px solid #aaa;border-radius:3px;background:#fff;}',
-            '.smg-rpg-answer .stackinputfeedback{width:90%;background:#ececec;border-radius:1.3cqw;',
-            'padding:1.1cqw;font-size:1.9cqw;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.35);',
-            // Capped so field, button and validation together end above the wooden arrows;
-            // a longer chain scrolls inside the box.
-            'max-height:19cqw;overflow:auto;}',
-            '.smg-rpg-answer .stackinputfeedback:empty{display:none;}',
-            '.smg-rpg-answer .smg-action-check{min-width:7.5cqw;min-height:5.2cqw;font-size:1.3cqw;',
-            'background:#ececec;color:#333;border:1px solid #666;border-radius:.6cqw;}',
+            // Question, answer, check and feedback form one block in the panel (issue #15). In the
+            // scene they were clipped: a 27% column inside an overflow:hidden stage has no room for
+            // an editor toolbar or a multi-line equivalence chain, and STACK's feedback had nowhere
+            // to go at all.
+            '.smg-rpg-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:.6rem;}',
+            '.smg-rpg-actions:empty,.smg-rpg-actions[hidden]{display:none;}',
+            '.smg-rpg-feedback:empty{display:none;}',
+            '.smg-rpg-feedback{margin-top:.6rem;}',
+            '.smg-rpg-feedback .outcome{margin:0;}',
             // Characters and props.
             '.smg-rpg-sprite{position:absolute;overflow:hidden;z-index:2;}',
             '.smg-rpg-sprite .smg-rpg-strip{height:100%;background-repeat:no-repeat;',
@@ -229,8 +223,6 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             '.smg-rpg-player{left:3.5%;bottom:21%;height:25%;',
             'transition:left 1.2s ease-in-out,bottom 1.2s ease-in-out;}',
             '.smg-rpg-player.is-center{left:47%;bottom:22%;}',
-            // Out of the way of a tall validation - an equivalence chain - rather than behind it.
-            '.smg-rpg-player.is-shifted:not(.is-center){left:32%;}',
             '.smg-rpg-meadow .smg-rpg-player{left:45%;bottom:17%;height:22%;}',
             '.smg-rpg-enemy{right:3%;bottom:24%;height:36%;transition:opacity .8s;}',
             '.smg-rpg-enemy.is-gone{opacity:0;pointer-events:none;}',
@@ -266,10 +258,26 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             'background:center/contain no-repeat;display:block;}',
             '.smg-rpg-arrow.is-back{left:3%;transform:scaleX(-1);}',
             '.smg-rpg-arrow.is-next{right:3%;}',
-            '.smg-rpg-arrow.is-locked,.smg-rpg-sign-right.is-locked{filter:grayscale(1) brightness(1.35);',
-            'pointer-events:none;}',
+            '.smg-rpg-arrow.is-locked,.smg-rpg-sign-right.is-locked{filter:grayscale(1) brightness(1.35);}',
             '.smg-rpg-arrow:focus-visible,.smg-rpg-sign-right:focus-visible{outline:3px solid #fff;',
             'outline-offset:3px;}',
+            // What each control does, written out: an arrow alone did not say whether it meant
+            // back, on or finish, nor why it was grey.
+            '.smg-rpg-navcaption{position:absolute;left:50%;top:100%;transform:translateX(-50%);',
+            'margin-top:.3cqw;white-space:nowrap;color:#fff;font-size:max(11px,1.35cqw);line-height:1.2;',
+            'text-shadow:0 1px 3px #000,0 0 2px #000;text-align:center;pointer-events:none;}',
+            // Aligned to the scene's outer edge rather than centred under the arrow, so a caption
+            // longer than its arrow stays inside the scene on a narrow screen. The back arrow is
+            // mirrored, so its "right" is the visual left, and the text is mirrored back.
+            '.smg-rpg-arrow.is-next .smg-rpg-navcaption{left:auto;right:0;transform:none;text-align:right;}',
+            '.smg-rpg-arrow.is-back .smg-rpg-navcaption{left:auto;right:0;transform:scaleX(-1);text-align:left;}',
+            '.smg-rpg-navcaption small{display:block;font-size:.85em;opacity:.9;}',
+            '.smg-rpg-sign-right .smg-rpg-navcaption{top:auto;bottom:100%;margin:0 0 .3cqw;}',
+            '.smg-rpg-arrow.is-locked,.smg-rpg-sign-right.is-locked{cursor:not-allowed;}',
+            // Artwork that failed to load, said as such - a placeholder design shows its labels on
+            // purpose; a broken package shows this.
+            '.smg-rpg-assetwarning{position:absolute;right:1%;top:1%;z-index:5;background:#fff3cd;',
+            'color:#664d03;border-radius:.4cqw;padding:.3cqw .6cqw;font-size:max(12px,1.2cqw);}',
             // Narrative line, over the top of the scene.
             '.smg-rpg-bubble{position:absolute;left:50%;top:3%;transform:translateX(-50%);z-index:4;',
             'max-width:70%;background:#f7ebd8;border-radius:1.4cqw;padding:1cqw 1.8cqw;',
@@ -292,9 +300,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             // is already saved when it is checked.
             '.smg-rpg-active #responseform .submitbtns,.smg-rpg-active .mod_quiz-next-nav,',
             '.smg-rpg-active .mod_quiz-prev-nav{display:none!important;}',
-            '.smg-rpg-active .smg-runtime-actions{display:none;}',
-            '.smg-rpg-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);',
-            'white-space:nowrap;}'
+            '.smg-rpg-active .smg-runtime-actions{display:none;}'
         ].join('');
         var style = document.createElement('style');
         style.id = 'smg-rpg-styles';
@@ -371,24 +377,77 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
     }
 
     /**
-     * Build a navigation arrow.
+     * Write a navigation control's caption and accessible name.
+     *
+     * The caption is visible text under the control, the name is what a screen reader says. Both
+     * state the action and, while the way is closed, why.
+     *
+     * @param {Element} el The control.
+     * @param {string} label What the control does.
+     * @param {boolean} locked Whether the way is closed.
+     * @returns {void}
+     */
+    function setNavCaption(el, label, locked) {
+        var caption = el.querySelector('.smg-rpg-navcaption');
+        if (!caption) {
+            caption = document.createElement('span');
+            caption.className = 'smg-rpg-navcaption';
+            el.appendChild(caption);
+        }
+        var lockedText = M.util.get_string('navlocked', 'local_stackmathgame');
+        caption.replaceChildren(document.createTextNode(label));
+        if (locked) {
+            var reason = document.createElement('small');
+            reason.textContent = lockedText;
+            caption.appendChild(reason);
+        }
+        el.setAttribute('aria-label', locked ? label + '. ' + lockedText : label);
+        el.setAttribute('data-smg-navlabel', label);
+    }
+
+    /**
+     * Open or close a navigation control.
+     *
+     * A closed control stays in the tab order with aria-disabled, so keyboard and screen reader
+     * users learn that it exists and why it does nothing yet; only an open one is a link.
+     *
+     * @param {HTMLAnchorElement} el The control.
+     * @param {string|null} url Where it leads, or null to close it.
+     * @param {string} label What the control does.
+     * @returns {void}
+     */
+    function setNavState(el, url, label) {
+        var open = !!url;
+        el.classList.toggle('is-locked', !open);
+        if (open) {
+            el.href = url;
+            el.removeAttribute('aria-disabled');
+            el.removeAttribute('role');
+            el.removeAttribute('tabindex');
+        } else {
+            el.removeAttribute('href');
+            el.setAttribute('aria-disabled', 'true');
+            el.setAttribute('role', 'link');
+            el.setAttribute('tabindex', '0');
+        }
+        setNavCaption(el, label, !open);
+    }
+
+    /**
+     * Create a wooden arrow, closed until the server opens it.
      *
      * @param {Object|undefined} asset The arrow artwork.
-     * @param {string} direction "next" or "back".
-     * @param {string} label The accessible name.
-     * @returns {HTMLAnchorElement} The arrow link.
+     * @param {string} direction "back" or "next".
+     * @param {string} label What the control does.
+     * @returns {HTMLAnchorElement} The control.
      */
     function makeArrow(asset, direction, label) {
         var a = document.createElement('a');
-        a.className = 'smg-rpg-arrow is-' + direction + ' is-locked' + (direction === 'next' ? ' smg-rpg-next' : '');
+        a.className = 'smg-rpg-arrow is-' + direction + (direction === 'next' ? ' smg-rpg-next' : '');
         if (asset) {
             a.style.backgroundImage = 'url("' + asset.url + '")';
         }
-        a.setAttribute('aria-disabled', 'true');
-        var text = document.createElement('span');
-        text.className = 'smg-rpg-sr';
-        text.textContent = label;
-        a.appendChild(text);
+        setNavState(a, null, label);
         return a;
     }
 
@@ -407,117 +466,63 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             return;
         }
         var open = !!(decision && decision.hasNext && decision.url);
-        el.classList.toggle('is-locked', !open);
         el.classList.toggle('smg-nav-finish', !!(decision && decision.isEnd));
-        if (open) {
-            el.href = decision.url;
-            el.removeAttribute('aria-disabled');
-        } else {
-            el.removeAttribute('href');
-            el.setAttribute('aria-disabled', 'true');
-        }
-        var label = el.querySelector('.smg-rpg-sr');
-        if (label && decision && decision.label) {
-            label.textContent = decision.label;
-        }
+        var label = (decision && decision.label) || el.getAttribute('data-smg-navlabel') || '';
+        setNavState(el, open ? decision.url : null, label);
     }
 
     /**
-     * Move the question into the scene.
+     * Put the question into the panel, whole.
      *
-     * The question text goes into the parchment panel above the stage; the answer field, STACK's
-     * validation and the check control float in the scene. Everything stays inside the quiz form,
-     * so the answer is still submitted the ordinary way.
+     * Question text, inputs - with whatever editor a site adds to them -, STACK's validation and
+     * feedback, the check control and Moodle's outcome stay together as STACK rendered them
+     * (issue #15). Splitting the fields off into the scene tore editors apart, clipped toolbars
+     * and long equivalence chains, and left the feedback hidden with the rest of the question.
+     * Nothing leaves the quiz form, so the answer is still submitted the ordinary way.
      *
      * @param {Element} que The question element.
-     * @param {Element} panel The parchment panel.
-     * @param {Element} answer The answer area in the stage.
-     * @param {Object} [memory] What earlier mounts on this page learned; shared between calls.
+     * @param {Object} parts The scene parts.
      * @returns {void}
      */
-    function mountQuestion(que, panel, answer, memory) {
+    function mountQuestion(que, parts) {
         if (!que) {
             return;
         }
-        memory = memory || {};
         // Called again after every answer: the engine replaces the whole .que with a freshly
         // rendered one, so whatever an earlier mount moved out belongs to the old question and
         // goes. The check control is the engine's single button and is kept.
         var check = document.querySelector('.smg-action-check');
-        panel.replaceChildren();
-        if (answer) {
-            answer.replaceChildren();
-        }
+        parts.question.replaceChildren();
+        parts.feedback.replaceChildren();
 
         var formulation = que.querySelector('.formulation');
-        var moved = 0;
-        var enhanced = 0;
-        var feedbacks = [];
-        if (answer && formulation) {
-            // STACK's own fields only, recognised by the question-engine name every one of them
-            // carries (q<usage>:<slot>_<input>). A bare "textarea" also matched the hidden textarea
-            // MathQuill uses to capture keystrokes inside its editor: the RPG moved it out into the
-            // scene, keyboard capture broke, and the last character of every answer was lost.
-            formulation.querySelectorAll(GameCore.STACK_FIELDS).forEach(function(field) {
-                // Only a field that is itself visible moves into the scene. A hidden one belongs to
-                // whoever hid it: the question (a welcome page hides its input), an input surface
-                // such as the STACK Math Editor (which keeps the original field as its interface and
-                // places its own editor beside it), or a JSXGraph board bound to it. Moving the bare
-                // field would tear it away from its editor, which would stay behind in the panel.
-                // Decided by visibility, not by any other plugin's markup, which is theirs to change.
-                if (GameCore.hiddenWithin(field, que)) {
-                    // A field its question hides on purpose (a welcome page) is not an editor's.
-                    if (!field.closest('.d-none')) {
-                        enhanced++;
-                    }
-                    return;
-                }
-                // Once this page has shown an editor, fields stay in the panel for good. After a
-                // check the fresh question arrives before the editor has attached to it again;
-                // moving its field then would put the editor in the scene on the second attempt
-                // and in the panel on the first.
-                if (memory.enhanced) {
-                    enhanced++;
-                    return;
-                }
-                answer.appendChild(field);
-                moved++;
-                var feedback = formulation.querySelector('#' + CSS.escape(field.id + '_val'))
-                    || formulation.querySelector('.stackinputfeedback');
-                if (feedback) {
-                    feedbacks.push(feedback);
-                }
-            });
-        }
-        // Field, check control, then the validation: the control stays next to the field it
-        // checks, and a long validation - an equivalence chain - grows downwards without
-        // pushing the control out of reach.
-        feedbacks.forEach(function(feedback) {
-            answer.appendChild(feedback);
-        });
-        if (check && answer && moved) {
-            answer.insertBefore(check, feedbacks.length ? feedbacks[0] : null);
-        }
-        // The whole formulation goes into the panel, not a .qtext inside it: STACK writes the
-        // question text straight into .formulation and has no .qtext at all. The formulation also
-        // carries the hidden inputs - the sequence check among them - which the engine collects
-        // from the panel because the panel is marked as a part of the question.
         if (formulation) {
-            panel.appendChild(formulation);
+            // The whole formulation, not a .qtext inside it: STACK writes the question text
+            // straight into .formulation and has no .qtext. It also carries the hidden inputs -
+            // the sequence check among them - which the engine collects from the panel because
+            // the panel is marked as a part of the question.
+            parts.question.appendChild(formulation);
         }
-        // Answering happens in the panel when an editor holds the field there: the check control
-        // goes with it, or the student would have an editor and nothing to check it with.
-        if (check && !moved && enhanced) {
-            panel.appendChild(check);
+        if (check) {
+            parts.actions.appendChild(check);
         }
-        if (enhanced) {
-            memory.enhanced = true;
+        // Nothing to check on a page without an answer field - a welcome or briefing page hides
+        // its input on purpose. A field hidden by an editor still counts: the editor is the input.
+        var answerable = !!formulation && Array.from(formulation.querySelectorAll(GameCore.STACK_FIELDS))
+            .some(function(field) {
+                return !field.closest('.d-none');
+            });
+        parts.actions.hidden = !answerable;
+        // Moodle's outcome: general and specific feedback, the right answer where the review
+        // options show it. Moved, not copied, so it is announced once and not hidden with .que.
+        var outcome = que.querySelector('.outcome');
+        if (outcome) {
+            parts.feedback.appendChild(outcome);
         }
         // Moved content is new content as far as Moodle's filters are concerned. Without this the
         // maths stays as raw \\(...\\) source: MathJax typeset the page before the question was
         // moved, and does not look again unless told to.
-        var updated = [panel].concat(answer ? [answer] : []);
-        FilterEvents.notifyFilterContentUpdated(updated);
+        FilterEvents.notifyFilterContentUpdated([parts.panel]);
     }
 
     /**
@@ -548,7 +553,21 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             stage.style.backgroundImage = 'url("' + bg.url + '")';
         }
 
-        var parts = {panel: panel, stage: stage, meadow: meadow, que: que};
+        // The panel's three parts: the question as STACK rendered it, the check control, and a
+        // live region for the outcome, which is announced when it changes after a check.
+        var question = document.createElement('div');
+        question.className = 'smg-rpg-question';
+        var actions = document.createElement('div');
+        actions.className = 'smg-rpg-actions';
+        var feedback = document.createElement('div');
+        feedback.className = 'smg-rpg-feedback';
+        feedback.setAttribute('aria-live', 'polite');
+        panel.appendChild(question);
+        panel.appendChild(actions);
+        panel.appendChild(feedback);
+
+        var parts = {panel: panel, stage: stage, meadow: meadow, que: que,
+            question: question, actions: actions, feedback: feedback};
 
         parts.player = makeSprite(assets.elf_idle, 'smg-rpg-player', 0.776);
         stage.appendChild(parts.player);
@@ -569,11 +588,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             stage.appendChild(makeProp(assets.sign_info, 'smg-rpg-sign-info'));
             // On the meadow the signpost is the way on, as in the original.
             parts.next = makeProp(assets.sign_right, 'smg-rpg-sign-right is-locked smg-rpg-next', 'a');
-            parts.next.setAttribute('aria-disabled', 'true');
-            var label = document.createElement('span');
-            label.className = 'smg-rpg-sr';
-            label.textContent = M.util.get_string('nextscene', 'local_stackmathgame');
-            parts.next.appendChild(label);
+            setNavState(parts.next, null, M.util.get_string('nextscene', 'local_stackmathgame'));
             stage.appendChild(parts.next);
         } else {
             var enemyKey = boss ? 'golem' : 'troll';
@@ -584,11 +599,6 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             tag.textContent = '?';
             parts.enemy.appendChild(tag);
             stage.appendChild(parts.enemy);
-
-            parts.answer = document.createElement('div');
-            parts.answer.className = 'smg-rpg-answer';
-            parts.answer.setAttribute('data-smg-question-part', '');
-            stage.appendChild(parts.answer);
 
             parts.hud = document.createElement('div');
             parts.hud.className = 'smg-rpg-hud';
@@ -621,8 +631,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             document.body.appendChild(panel);
             document.body.appendChild(stage);
         }
-        parts.memory = {};
-        mountQuestion(que, panel, parts.answer || null, parts.memory);
+        mountQuestion(que, parts);
         document.body.classList.add('smg-rpg-active');
         return parts;
     }
@@ -666,37 +675,6 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
     }
 
     /**
-     * Keep the elf out from under the answer area.
-     *
-     * The validation of an equivalence chain grows one line per step and can reach down over the
-     * elf, who then stands behind a grey box. Cutting the validation short would hide what the
-     * student needs to read; moving the elf does not. Measured whenever the answer area changes
-     * size, because the height depends on the answer.
-     *
-     * @param {Object} parts The scene parts.
-     * @returns {void}
-     */
-    function keepPlayerClear(parts) {
-        if (!parts.answer || !parts.player) {
-            return;
-        }
-        // Only the vertical edges are compared. In his usual place the elf always stands under the
-        // answer column, and the shift moves him sideways only - so his top edge is the same in
-        // both places. Measuring his horizontal position instead would read a position still in
-        // transition and flip the class back and forth.
-        var check = function() {
-            var answer = parts.answer.getBoundingClientRect();
-            var player = parts.player.getBoundingClientRect();
-            parts.player.classList.toggle('is-shifted', answer.bottom > player.top);
-        };
-        check();
-        if (window.ResizeObserver) {
-            new window.ResizeObserver(check).observe(parts.answer);
-        }
-        window.addEventListener('resize', check);
-    }
-
-    /**
      * Point the back arrow at the previous page of the attempt.
      *
      * @param {Object} parts The scene parts.
@@ -712,9 +690,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             return;
         }
         url.searchParams.set('page', String(page - 1));
-        parts.back.href = url.toString();
-        parts.back.classList.remove('is-locked');
-        parts.back.removeAttribute('aria-disabled');
+        setNavState(parts.back, url.toString(), M.util.get_string('previousscene', 'local_stackmathgame'));
     }
 
     /**
@@ -770,6 +746,41 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
     }
 
     /**
+     * Say so when artwork fails to load.
+     *
+     * The bundled default design is a set of labelled placeholders on purpose; a package whose
+     * files are missing looks broken in the same way. A failed image is reported in the console
+     * with its key and once on the stage, so the two can be told apart.
+     *
+     * @param {Object} assets Assets by key.
+     * @param {Element} stage The stage.
+     * @returns {void}
+     */
+    function reportMissingAssets(assets, stage) {
+        var shown = false;
+        Object.keys(assets).forEach(function(key) {
+            var asset = assets[key];
+            if (!asset || !asset.url) {
+                return;
+            }
+            var probe = new Image();
+            probe.onerror = function() {
+                window.console.warn('[stackmathgame] Design asset could not be loaded: ' + key + ' (' + asset.url + ')');
+                if (shown) {
+                    return;
+                }
+                shown = true;
+                var note = document.createElement('div');
+                note.className = 'smg-rpg-assetwarning';
+                note.setAttribute('role', 'status');
+                note.textContent = M.util.get_string('assetmissing', 'local_stackmathgame');
+                stage.appendChild(note);
+            };
+            probe.src = asset.url;
+        });
+    }
+
+    /**
      * Start the mode on the current page.
      *
      * @param {Object} gameState The state handed over by the engine.
@@ -787,7 +798,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
         var parts = buildScene(gameState, assets, sceneType);
         wireBackArrow(parts);
         fitStage(parts);
-        keepPlayerClear(parts);
+        reportMissingAssets(assets, parts.stage);
 
         var score = computeScore(gameState, slotMap);
         var cacheKey = 'smg_rpg_score:' + (
@@ -821,7 +832,7 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
              * @returns {void}
              */
             onAnswer: function(response) {
-                mountQuestion(document.querySelector('.que'), parts.panel, parts.answer || null, parts.memory);
+                mountQuestion(document.querySelector('.que'), parts);
                 var slot = response.slot || currentSlot;
                 var slotCfg = slotMap[String(slot)] || GameCore.defaultConfig();
                 var type = slotCfg.scene && slotCfg.scene.type ? slotCfg.scene.type : 'challenge';

@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026090250
+
+### Fixed
+- Behat: the branch-navigation scenarios pressed STACK's own "Check" button, which the game
+  hides, instead of the game's "Check answer" button.
+- "Game settings" was missing from the quiz's "More" menu (#13). The navigation callback read the
+  activity from `$PAGE->cm`, which is still empty while the secondary navigation is built.
+- Game settings (#14): a new label name typed while a label was selected was dropped although
+  the page reported success. The typed name now wins; a name matching an active label joins it,
+  one matching an archived label is refused. Names and display names are length-checked, label
+  and configuration are saved in one transaction, and activation is checked against the
+  submitted design. A draft can be saved without a design. Opening or cancelling the page writes
+  nothing; contradictory `cmid`/`quizid` parameters are refused instead of falling back to the
+  quizid, and the page no longer deletes anything. Design previews resolve like the runtime.
+- Fresh installations lacked the unique index on the configuration's `cmid` (upgraded sites had
+  it); duplicates are reduced to the latest row before the index is added.
+- RPG (#15): question, inputs with or without an editor, validation, the check button and
+  Moodle's outcome now stay together in the panel. In the scene they were clipped and the
+  feedback was hidden. Navigation arrows carry visible captions and say why they are locked;
+  locked controls stay reachable by keyboard. Artwork that fails to load is reported.
+- Leaving a scene after a saved answer opened the browser's "leave page?" dialog (#16). The quiz
+  form is marked clean once the answer is stored and the question shows the stored state;
+  unsaved edits remain protected. A second click while a check is running is ignored; a failing
+  follow-up request no longer blocks the way on; the native fallback submits the form instead of
+  reloading it.
+
+### Changed
+- CI (#12): the release gate and the version-lockstep job are gone; `ci-complete` summarises the
+  test jobs only.
+
+### Added
+- Label selector backed by a server-side search (`local_stackmathgame_search_labels`).
+
 ## 2026090248
 
 ### Fixed

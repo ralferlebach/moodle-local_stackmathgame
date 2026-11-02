@@ -33,8 +33,29 @@ async function uploadThroughFilepicker(page, file) {
     await uploadRepo.click();
   }
 
-  await page.locator('input[type="file"]').first().setInputFiles(file);
-  await page.getByRole('button', { name: /Upload this file/i }).first().click();
+  // The upload pane is built after the repository link is clicked, and an earlier, hidden pane
+  // can still hold a file input of its own. Filled too early, or into that one, the upload is
+  // sent empty and Moodle answers "No files attached". So: the input inside the visible upload
+  // form, checked to hold the file, and the upload repeated if Moodle still saw none.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const form = page.locator('.fp-upload-form:visible').first();
+    await expect(form, 'The upload pane of the file picker did not open').toBeVisible({ timeout: 30000 });
+    const input = form.locator('input[type="file"]').first();
+    await input.setInputFiles(file);
+    await expect.poll(
+      () => input.evaluate((el) => (el.files ? el.files.length : 0)),
+      { message: 'The file did not reach the file picker', timeout: 10000 }
+    ).toBe(1);
+    await page.getByRole('button', { name: /Upload this file/i }).first().click();
+
+    const nofile = page.getByText(/No files attached/i).first();
+    const done = page.locator('.filepicker-filename, .fp-filename').first();
+    await expect(nofile.or(done)).toBeVisible({ timeout: 120000 });
+    if (!(await nofile.isVisible().catch(() => false))) {
+      break;
+    }
+    await page.getByRole('button', { name: /^OK$/ }).first().click().catch(() => {});
+  }
 
   await expect(
     page.locator('.filepicker-filename, .fp-filename').first(),

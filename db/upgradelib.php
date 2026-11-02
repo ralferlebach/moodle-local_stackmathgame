@@ -85,3 +85,33 @@ function local_stackmathgame_upgrade_questionmap_cmid(): void {
         $dbman->add_index($table, $cmidtypeindex);
     }
 }
+
+/**
+ * Keep one configuration row per course module before the unique cmid index is added.
+ *
+ * The most recently modified row stays, because it holds what a teacher saved last.
+ *
+ * @return void
+ */
+function local_stackmathgame_upgrade_dedupe_config_cmid(): void {
+    global $DB;
+
+    $dupes = $DB->get_records_sql(
+        'SELECT cmid, COUNT(1) AS n
+           FROM {local_stackmathgame}
+       GROUP BY cmid
+         HAVING COUNT(1) > 1'
+    );
+    foreach ($dupes as $dupe) {
+        $rows = $DB->get_records(
+            'local_stackmathgame',
+            ['cmid' => $dupe->cmid],
+            'timemodified DESC, id DESC',
+            'id'
+        );
+        array_shift($rows);
+        if ($rows) {
+            $DB->delete_records_list('local_stackmathgame', 'id', array_keys($rows));
+        }
+    }
+}

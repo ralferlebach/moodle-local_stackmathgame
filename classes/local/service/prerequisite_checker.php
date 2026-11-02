@@ -63,11 +63,18 @@ final class prerequisite_checker {
      * Run every prerequisite check for an activity.
      *
      * @param int $cmid The course-module ID.
+     * @param int|null $designid A design about to be saved, checked instead of the stored one.
      * @return array[] List of checks, each with keys: key, status, label, message, fixurl.
      */
-    public static function check(int $cmid): array {
+    public static function check(int $cmid, ?int $designid = null): array {
         $cm = quiz_configurator::get_supported_cm($cmid);
         $config = quiz_configurator::get_plugin_config($cmid);
+        if ($designid !== null) {
+            // An activity without a saved configuration gets the defaults a first save writes,
+            // so every check sees the same fields as for a stored record.
+            $defaults = ['requiresbehaviour' => 1, 'enabled' => 0];
+            $config = (object)array_merge($defaults, (array)($config ?? []), ['designid' => $designid]);
+        }
 
         $checks = [];
         $checks[] = self::check_plugin('qbehaviour_stackmathgame', 'prereq_plugin_behaviour');
@@ -102,11 +109,12 @@ final class prerequisite_checker {
      * Return the blocking checks only.
      *
      * @param int $cmid The course-module ID.
+     * @param int|null $designid A design about to be saved, checked instead of the stored one.
      * @return array[] The subset of checks with STATUS_ERROR.
      */
-    public static function get_blockers(int $cmid): array {
+    public static function get_blockers(int $cmid, ?int $designid = null): array {
         return array_values(array_filter(
-            self::check($cmid),
+            self::check($cmid, $designid),
             static fn(array $check): bool => $check['status'] === self::STATUS_ERROR
         ));
     }
@@ -222,7 +230,7 @@ final class prerequisite_checker {
     private static function check_behaviour(\stdClass $cm, ?\stdClass $config): array {
         global $DB;
 
-        if ($config && (int)$config->requiresbehaviour === 0) {
+        if ($config && (int)($config->requiresbehaviour ?? 1) === 0) {
             return self::result(
                 'behaviour',
                 self::STATUS_WARNING,

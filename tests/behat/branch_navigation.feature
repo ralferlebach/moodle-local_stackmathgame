@@ -48,7 +48,7 @@ Feature: Branch navigation works for every branching mode
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
-    And I press "Check"
+    And I press "Check answer"
     Then I should see "Next scene"
 
   @smg_navtiming
@@ -58,7 +58,7 @@ Feature: Branch navigation works for every branching mode
     And I press "Attempt quiz"
     When I follow the game navigation to slot 3
     And I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
-    And I press "Check"
+    And I press "Check answer"
     Then I should see "Finish the run"
 
   @smg_navtiming
@@ -67,7 +67,7 @@ Feature: Branch navigation works for every branching mode
     And I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^3"
-    And I press "Check"
+    And I press "Check answer"
     And I press "Next scene"
     Then I should see "Scene three"
 
@@ -77,6 +77,6 @@ Feature: Branch navigation works for every branching mode
     Given I am on the "Game Quiz" "mod_quiz > View" page logged in as "student1"
     And I press "Attempt quiz"
     When I set the field with xpath "//input[contains(@id, '_ans1')]" to "x^2"
-    And I press "Check"
+    And I press "Check answer"
     Then I should not see "Next scene"
     And I should not see "Finish the run"

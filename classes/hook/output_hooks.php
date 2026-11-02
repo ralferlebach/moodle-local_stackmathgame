@@ -181,7 +181,7 @@ class output_hooks {
             [
                 'nextquestion', 'finishpractice', 'checkanswerhidden', 'gamestatusready', 'stageprogress',
                 'checkanswer', 'standardview', 'nextscene', 'previousscene', 'fairies', 'mana', 'tutorname',
-                'navstart', 'navfinish', 'navboss',
+                'navstart', 'navfinish', 'navboss', 'navlocked', 'assetmissing',
             ],
             'local_stackmathgame'
         );

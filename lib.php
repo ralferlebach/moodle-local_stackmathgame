@@ -80,23 +80,27 @@ function local_stackmathgame_extend_settings_navigation(
     settings_navigation $settingsnav,
     context $context
 ): void {
-    global $PAGE;
-
-    if (empty($PAGE->cm) || $PAGE->cm->modname !== 'quiz') {
+    // The activity comes from the context Moodle hands over, not from $PAGE->cm. When the
+    // secondary navigation of a quiz page is built, $PAGE->cm is not populated yet, so a check on
+    // it returned early on every quiz page and the entry never appeared under "More" (issue #13).
+    if ($context->contextlevel !== CONTEXT_MODULE) {
         return;
     }
+    $cm = get_coursemodule_from_id('quiz', (int)$context->instanceid, 0, false, IGNORE_MISSING);
+    if (!$cm) {
+        return;
+    }
+    // Shown whether or not the game is enabled and whatever question behaviour the quiz uses:
+    // the settings page is where a teacher learns what is still missing.
     if (!has_capability('local/stackmathgame:configurequiz', $context)) {
         return;
     }
     $modulesettings = $settingsnav->find('modulesettings', settings_navigation::TYPE_SETTING);
-    if (!$modulesettings) {
+    if (!$modulesettings || $modulesettings->get('local_stackmathgame_settings')) {
         return;
     }
 
-    $cmid = (int)$PAGE->cm->id;
-    $url = new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => $cmid]);
-
-    // Add the link to the settings navigation tree (gear menu / admin block).
+    $url = new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => (int)$cm->id]);
     $modulesettings->add(
         get_string('gamesettings', 'local_stackmathgame'),
         $url,

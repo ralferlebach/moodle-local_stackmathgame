@@ -222,7 +222,10 @@ final class flow_service {
         $quizid = (int)$cm->instance;
 
         $sections = $DB->get_records('quiz_sections', ['quizid' => $quizid], 'firstslot ASC');
-        $slots = self::get_slots($cmid);
+        // The slot numbers straight from the quiz. get_slots() synchronises the question map
+        // first, which writes - and this is read by the prerequisite panel, so merely opening the
+        // game settings created a configuration and a map (issue #14).
+        $slotnumbers = array_keys(question_map_service::get_quiz_slot_records($quizid));
 
         // Moodle always has a section starting at slot 1, usually without a heading. An unnamed
         // first section is the quiz itself, not a level, so it gets no title rather than an
@@ -234,7 +237,7 @@ final class flow_service {
 
         $levels = [];
         $current = null;
-        foreach ($slots as $slotnumber => $slot) {
+        foreach ($slotnumbers as $slotnumber) {
             if (isset($boundaries[$slotnumber]) || $current === null) {
                 $heading = $boundaries[$slotnumber] ?? '';
                 $current = [

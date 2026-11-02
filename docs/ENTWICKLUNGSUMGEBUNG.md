@@ -179,13 +179,14 @@ existiert `stackmathgame-capacity-race.js`.
 | Workflow | Auslöser | Zweck |
 |---|---|---|
 | `moodle-plugin-ci-dev.yml` | Push auf `development` | Schnelles paralleles Feedback |
-| `moodle-plugin-ci-main.yml` | Push/PR auf `main` | Volle Matrix + Release-Gates |
+| `moodle-plugin-ci-main.yml` | Push/PR auf `main` | Volle Matrix, Release-Archiv, Coverage |
 | `playwright.yml` | manuell | Browser-Journeys und axe |
 | `load-k6.yml`, `load-jmeter.yml` | manuell | Lasttests |
 
-`moodle-plugin-ci-main.yml` ist der maßgebliche Release-Gate: Matrix, Versions-Gleichstand,
-Release-Artefakt, Coverage-Untergrenze (50 %) und die Prüfung auf veraltete Dateien. Der Job
-`ci-complete` ist der Status-Check für den Branch-Schutz.
+`moodle-plugin-ci-main.yml` führt die volle Matrix aus, prüft den Inhalt des Release-Archivs, die
+Coverage-Untergrenze (50 %) und veraltete Dateien. Der Job `ci-complete` fasst nur diese Testjobs
+zusammen und ist der Status-Check für den Branch-Schutz. Formale Freigaben — Reifegrad,
+Versions-Gleichstand mit `qbehaviour_stackmathgame`, Sign-offs — blockieren die CI nicht (Issue #12).
 
 ---
 
@@ -236,7 +237,7 @@ Before changing code:
    construct an asset path in JavaScript.
 9. Use POST + sesskey + a context-appropriate capability for every mutation. Ask capabilities in
    the context the action belongs to, not in the system context.
-10. make check is a fast local pre-check; GitHub CI is the authoritative release gate. Run the
+10. make check is a fast local pre-check; GitHub CI is the authoritative test run. Run the
     checks inside a Moodle tree — several sniffs stay silent on a standalone directory, so
     "green locally" outside a tree means nothing.
 

@@ -23,96 +23,57 @@
  */
 
 require('../../config.php');
-require_once($CFG->libdir . '/adminlib.php');
 
-// Both cmid and quizid are optional; at least one must be provided.
-// Internal work is always done with cmid.
+// The activity is addressed by cmid; a bare quizid is accepted for old links. Both together must
+// name the same activity: a mismatch used to fall back to the quizid and opened - and saved - the
+// settings of a different quiz than the one in the cmid (issue #14).
 $cmid   = optional_param('cmid', 0, PARAM_INT);
 $quizid = optional_param('quizid', 0, PARAM_INT);
 
 if ($cmid <= 0 && $quizid <= 0) {
     throw new moodle_exception('invalidparameter', 'error');
 }
-
-// Resolve course-module: cmid takes priority, else derive from quizid.
-$cm = null;
 if ($cmid > 0) {
-    $cm = get_coursemodule_from_id('quiz', $cmid, 0, IGNORE_MISSING);
-    if ($cm && $quizid > 0 && (int)$cm->instance !== $quizid) {
-        // Mismatch between supplied cmid and quizid.
-        $cm = null;
+    $cm = get_coursemodule_from_id('quiz', $cmid, 0, false, MUST_EXIST);
+    if ($quizid > 0 && (int)$cm->instance !== $quizid) {
+        throw new moodle_exception('invalidparameter', 'error');
     }
-}
-if (!$cm && $quizid > 0) {
-    $cm = get_coursemodule_from_instance('quiz', $quizid, 0, IGNORE_MISSING);
-}
-
-// Handle case where the quiz no longer has a course-module (deleted).
-if (!$cm) {
-    $PAGE->set_url(new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => $cmid]));
-    $PAGE->set_context(context_system::instance());
-    $PAGE->set_title(get_string('gamesettings', 'local_stackmathgame'));
-    $PAGE->set_heading(get_string('gamesettings', 'local_stackmathgame'));
-    require_login();
-
-    try {
-        if ($quizid > 0) {
-            $DB->delete_records('local_stackmathgame', ['cmid' => $cmid]);
-        }
-    } catch (Throwable $e) {
-        debugging('Could not remove orphaned quizcfg: ' . $e->getMessage(), DEBUG_DEVELOPER);
-    }
-
-    echo $OUTPUT->header();
-    echo $OUTPUT->notification(
-        get_string('quiznotfound', 'local_stackmathgame', $quizid ?: $cmid),
-        \core\output\notification::NOTIFY_WARNING
-    );
-    echo html_writer::div(
-        html_writer::link(
-            new moodle_url('/'),
-            get_string('returnhome', 'local_stackmathgame'),
-            ['class' => 'btn btn-secondary']
-        ),
-        'mt-3'
-    );
-    echo $OUTPUT->footer();
-    exit;
+} else {
+    $cm = get_coursemodule_from_instance('quiz', $quizid, 0, false, MUST_EXIST);
 }
 
-// Work internally with cmid throughout.
-$cmid   = (int)$cm->id;
-$quizid = (int)$cm->instance;
-$course  = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
+$cmid    = (int)$cm->id;
+$quizid  = (int)$cm->instance;
+$course  = get_course((int)$cm->course);
 $context = context_module::instance($cmid);
 
 require_login($course, false, $cm);
 require_capability('local/stackmathgame:configurequiz', $context);
 
-$pageurl = new moodle_url('/local/stackmathgame/quiz_settings.php', [
-    'cmid'   => $cmid,
-    'quizid' => $quizid,
-]);
+$pageurl = new moodle_url('/local/stackmathgame/quiz_settings.php', ['cmid' => $cmid]);
 
 $PAGE->set_url($pageurl);
 $PAGE->set_context($context);
 $PAGE->set_title(get_string('gamesettings', 'local_stackmathgame'));
 $PAGE->set_heading(format_string($course->fullname));
+$PAGE->activityheader->disable();
 
-$config          = \local_stackmathgame\game\quiz_configurator::ensure_default($cmid);
+// Read only: opening or cancelling this page writes nothing. Defaults for an activity without a
+// configuration are computed, and the row is created by the first save.
+$config          = \local_stackmathgame\game\quiz_settings_service::current_values($cmid);
 $designs         = \local_stackmathgame\game\theme_manager::get_all_enabled();
 $canselectdesign = has_capability('local/stackmathgame:selectdesign', $context);
 $canmanagelabels = has_capability('local/stackmathgame:managelabels', $context);
 
-$labelrecords = $DB->get_records(
-    'local_stackmathgame_label',
-    ['status' => 1],
-    'name ASC',
-    'id,name'
-);
+// Only the current label is handed to the selector; the others are searched on the server.
 $labeloptions = [];
-foreach ($labelrecords as $lrec) {
-    $labeloptions[(int)$lrec->id] = format_string($lrec->name);
+$currentlabelname = '';
+if (!empty($config->labelid)) {
+    $currentlabel = $DB->get_record('local_stackmathgame_label', ['id' => (int)$config->labelid], 'id, name');
+    if ($currentlabel) {
+        $currentlabelname = format_string($currentlabel->name);
+        $labeloptions[(int)$currentlabel->id] = $currentlabelname;
+    }
 }
 
 // Rendered here rather than inside the form: the form must not run database checks of its own,
@@ -120,72 +81,50 @@ foreach ($labelrecords as $lrec) {
 // game is not starting.
 $renderer = $PAGE->get_renderer('local_stackmathgame');
 $prerequisitehtml = $renderer->render(
-    \local_stackmathgame\output\prerequisite_panel::for_cmid($cmid)
+    \local_stackmathgame\output\prerequisite_panel::for_cmid($cmid, (int)$config->designid)
 );
 
 $customdata = [
-    'config'          => $config,
+    'config'           => $config,
     'prerequisitehtml' => $prerequisitehtml,
-    'designs'         => $designs,
-    'labeloptions'    => $labeloptions,
-    'canselectdesign' => $canselectdesign,
-    'canmanagelabels' => $canmanagelabels,
-    'quizid'          => $quizid,
-    'cmid'            => $cmid,
+    'designs'          => $designs,
+    'labeloptions'     => $labeloptions,
+    'currentlabelname' => $currentlabelname,
+    'canselectdesign'  => $canselectdesign,
+    'canmanagelabels'  => $canmanagelabels,
+    'quizid'           => $quizid,
+    'cmid'             => $cmid,
 ];
 
-$form      = new \local_stackmathgame\form\quiz_settings_form(null, $customdata);
+$form      = new \local_stackmathgame\form\quiz_settings_form($pageurl, $customdata);
 $returnurl = new moodle_url('/mod/quiz/view.php', ['id' => $cmid]);
 
 if ($form->is_cancelled()) {
     redirect($returnurl);
 }
 
+$saveerror = null;
 if ($data = $form->get_data()) {
-    $newlabelname = trim((string)($data->newlabel ?? ''));
-    $labelid      = (int)($data->labelid ?? 0);
-
-    if ($newlabelname !== '' && $labelid <= 0) {
-        $existing = $DB->get_record('local_stackmathgame_label', ['name' => $newlabelname], 'id');
-        if ($existing) {
-            $labelid = (int)$existing->id;
-        } else {
-            $now          = time();
-            $safeidnumber = clean_param(
-                str_replace(' ', '_', strtolower($newlabelname)),
-                PARAM_ALPHANUMEXT
-            );
-            $base   = $safeidnumber;
-            $suffix = 1;
-            while ($DB->record_exists('local_stackmathgame_label', ['idnumber' => $safeidnumber])) {
-                $safeidnumber = $base . '_' . $suffix++;
-            }
-            $labelid = (int)$DB->insert_record('local_stackmathgame_label', (object)[
-                'name'         => $newlabelname,
-                'idnumber'     => $safeidnumber,
-                'description'  => '',
-                'status'       => 1,
-                'timecreated'  => $now,
-                'timemodified' => $now,
-                'createdby'    => (int)$USER->id,
-                'timedeleted'  => null,
-            ]);
-        }
-        $data->labelid = $labelid;
+    try {
+        \local_stackmathgame\game\quiz_settings_service::save($cmid, (array)$data, $context);
+        // Said only after label and configuration are both written.
+        redirect(
+            $pageurl,
+            get_string('changessaved'),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
+    } catch (moodle_exception $e) {
+        // The form is shown again with what the teacher entered; nothing was written.
+        $saveerror = $e->getMessage();
     }
-
-    \local_stackmathgame\game\quiz_configurator::save_for_quiz($cmid, (array)$data);
-
-    redirect(
-        $pageurl,
-        get_string('changessaved'),
-        null,
-        \core\output\notification::NOTIFY_SUCCESS
-    );
 }
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gamesettings', 'local_stackmathgame'));
+if ($saveerror !== null) {
+    echo $OUTPUT->notification($saveerror, \core\output\notification::NOTIFY_ERROR);
+}
 // The game itself loads nothing from elsewhere; Moodle's MathJax filter may. Said here, where the
 // game is set up, because it is a site setting the plugin must not change on its own.
 $mathjaxhost = \local_stackmathgame\local\service\site_check::mathjax_external_host();

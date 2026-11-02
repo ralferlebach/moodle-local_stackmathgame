@@ -24,7 +24,8 @@
 
 namespace local_stackmathgame\form;
 
-use local_stackmathgame\local\service\prerequisite_checker;
+use local_stackmathgame\game\quiz_settings_service;
+use local_stackmathgame\game\theme_manager;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -69,14 +70,20 @@ class quiz_settings_form extends \moodleform {
             ['size' => 50]
         );
         $mform->setType('teacherdisplayname', PARAM_TEXT);
+        $mform->addRule('teacherdisplayname', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
         $mform->setDefault('teacherdisplayname', (string)($config->teacherdisplayname ?? ''));
         $mform->addHelpButton('teacherdisplayname', 'teacherdisplayname', 'local_stackmathgame');
 
         $mform->addElement('header', 'labelheader', get_string('labelsettings', 'local_stackmathgame'));
 
+        // Searched on the server as the teacher types: labels are site-wide and a site can hold
+        // far more of them than one page should carry. The options passed here are only the
+        // current label, so it shows as selected.
         $autocompleteoptions = [
             'multiple' => false,
             'noselectionstring' => get_string('choosedots'),
+            'ajax' => 'local_stackmathgame/label_search',
+            'data-cmid' => (int)$customdata['cmid'],
         ];
         $mform->addElement(
             'autocomplete',
@@ -88,6 +95,14 @@ class quiz_settings_form extends \moodleform {
         $mform->addHelpButton('labelid', 'label', 'local_stackmathgame');
         if (!empty($config->labelid)) {
             $mform->setDefault('labelid', (int)$config->labelid);
+        }
+        if (!empty($customdata['currentlabelname'])) {
+            $mform->addElement(
+                'static',
+                'currentlabel',
+                get_string('currentlabel', 'local_stackmathgame'),
+                s($customdata['currentlabelname'])
+            );
         }
         // Selecting an existing label stays available to anyone who may configure the quiz.
         // Freezing this too would leave a teacher unable to save at all, because a label is
@@ -103,6 +118,7 @@ class quiz_settings_form extends \moodleform {
             ]
         );
         $mform->setType('newlabel', PARAM_TEXT);
+        $mform->addRule('newlabel', get_string('maximumchars', '', 100), 'maxlength', 100, 'client');
         $mform->addHelpButton('newlabel', 'newlabel', 'local_stackmathgame');
         // Creating one is the restricted half: a new label adds to a site-wide namespace that
         // other courses share, which is a governance decision rather than a course setting.
@@ -178,35 +194,15 @@ class quiz_settings_form extends \moodleform {
      * @return array Validation errors keyed by field name.
      */
     public function validation($data, $files): array {
-        $errors   = parent::validation($data, $files);
-        $designid = (int)($data['designid'] ?? 0);
-        $labelid  = (int)($data['labelid'] ?? 0);
-        $newlabel = trim((string)($data['newlabel'] ?? ''));
-
-        if ($designid <= 0) {
-            $errors['designid_group'] = get_string('err_designrequired', 'local_stackmathgame');
-        }
-        if ($labelid <= 0 && $newlabel === '') {
-            $errors['labelid'] = get_string('err_labelrequired', 'local_stackmathgame');
-        }
-
-        // Enabling a game that cannot start produces a quiz that silently behaves like an
-        // ordinary quiz, and a teacher with no reason to suspect the activity rather than the
-        // plugin. Saving the rest of the settings stays possible - only the switch is refused,
-        // so the configuration can be prepared before the blocker is cleared.
-        $cmid = (int)($data['cmid'] ?? 0);
-        if (!empty($data['enabled']) && $cmid > 0) {
-            $blockers = prerequisite_checker::get_blockers($cmid);
-            if ($blockers) {
-                $errors['enabled'] = get_string(
-                    'err_prerequisitesunmet',
-                    'local_stackmathgame',
-                    implode(' ', array_column($blockers, 'message'))
-                );
-            }
-        }
-
-        return $errors;
+        $errors = parent::validation($data, $files);
+        // One set of rules for the form and the save: the service applies them again on the
+        // server, because a form is not a security boundary.
+        $cmid = (int)$this->_customdata['cmid'];
+        return array_merge($errors, quiz_settings_service::validate(
+            $cmid,
+            (array)$data,
+            \context_module::instance($cmid)
+        ));
     }
 
     /**
@@ -216,23 +212,21 @@ class quiz_settings_form extends \moodleform {
      * @return string HTML tile markup.
      */
     private function render_design_tile(\stdClass $design): string {
-        if (!empty($design->thumbnailfilename) && !empty($design->slug)) {
-            $imgurl = new \moodle_url(
-                '/local/stackmathgame/pix/themes/' .
-                rawurlencode((string)$design->slug) . '/' .
-                rawurlencode((string)$design->thumbnailfilename)
-            );
+        // Resolved the way the game resolves its artwork, so the preview shows what the game
+        // will show - for bundled packages and uploaded ones alike.
+        $previewurl = theme_manager::preview_url($design);
+        if ($previewurl !== '') {
             $thumb = \html_writer::empty_tag('img', [
-                'src'   => $imgurl,
+                'src'   => $previewurl,
                 'alt'   => format_string((string)$design->name),
                 'style' => 'display:block;width:160px;height:90px;object-fit:cover;' .
                            'border-radius:8px;margin-bottom:8px;',
             ]);
         } else {
-            $thumb = \html_writer::div('', '', [
+            $thumb = \html_writer::div(get_string('nopreview', 'local_stackmathgame'), 'text-muted small', [
                 'style' => 'display:flex;align-items:center;justify-content:center;' .
                            'width:160px;height:90px;border-radius:8px;margin-bottom:8px;' .
-                           'background:#f5f5f5;font-size:32px;',
+                           'background:#f5f5f5;',
             ]);
         }
         $mode = '';

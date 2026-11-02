@@ -29,6 +29,7 @@
         <KEY NAME="modifiedby_fk" TYPE="foreign" FIELDS="modifiedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
+        <INDEX NAME="lsmg_cfg_cmid_uix" UNIQUE="true" FIELDS="cmid"/>
         <INDEX NAME="lsmg_cfg_enabled_ix" UNIQUE="false" FIELDS="enabled"/>
       </INDEXES>
     </TABLE>

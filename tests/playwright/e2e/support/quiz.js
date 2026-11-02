@@ -57,7 +57,18 @@ async function expandAll(page) {
   const byRole = page.getByRole('button', { name: /Expand all/i })
     .or(page.getByRole('link', { name: /Expand all/i }));
   if (await byRole.count()) {
-    await byRole.first().click().catch(() => {});
+    // Clicked until it has worked: a click that lands before Moodle's form script has bound the
+    // control does nothing, and the sections stay closed. Worked means the control now offers
+    // "Collapse all".
+    const collapse = page.getByRole('button', { name: /Collapse all/i })
+      .or(page.getByRole('link', { name: /Collapse all/i }));
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await byRole.first().click().catch(() => {});
+      if (await collapse.first().isVisible({ timeout: 1000 }).catch(() => false)) {
+        return;
+      }
+      await page.waitForTimeout(500);
+    }
     return;
   }
   const legacy = page.locator('.collapseexpand').first();

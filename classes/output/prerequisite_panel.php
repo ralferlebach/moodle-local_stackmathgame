@@ -55,10 +55,12 @@ class prerequisite_panel implements \renderable, \templatable {
      * Build the panel for an activity.
      *
      * @param int $cmid The course-module ID.
+     * @param int|null $designid The design to judge instead of the stored one - on the settings
+     *     page, the one preselected for an activity that has no saved configuration yet.
      * @return self The renderable.
      */
-    public static function for_cmid(int $cmid): self {
-        return new self(prerequisite_checker::check($cmid));
+    public static function for_cmid(int $cmid, ?int $designid = null): self {
+        return new self(prerequisite_checker::check($cmid, $designid));
     }
 
     /**

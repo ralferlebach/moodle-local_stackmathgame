@@ -39,14 +39,16 @@ its `stackmatheditor:*` events - never at its internal markup:
   so the editor writes every visible editor into its original field and announces
   `stackmatheditor:beforecheck` before the game sends the answer. The native submission is
   suppressed; the answer is sent once, through the game.
-* **A field keeps its editor.** A mode that lays a question out as a scene moves only fields that
-  are themselves visible. A field an editor stands in front of - hidden from sight but kept in the
-  accessibility tree, as the editor does it - stays where the editor placed it, and the check
-  control goes with it. Once a page has shown an editor, its fields stay put for that page, so the
-  editor does not jump after the first check.
-* **Only STACK's own fields move.** A mode recognises them by the name the question engine
-  gives them (`q<usage>:<slot>_<input>`). An editor's internal elements - MathQuill captures
-  keystrokes through a hidden textarea of its own - are never touched.
+* **Fields are never moved apart from their question.** The RPG shows the whole question - text,
+  fields with whatever editor stands in front of them, validation, the check control and Moodle's
+  feedback - together in its panel, exactly as STACK rendered it. Earlier releases moved the
+  fields into the scene, which clipped editor toolbars and long equivalence chains (issue #15).
+  An editor's internal elements - MathQuill captures keystrokes through a hidden textarea of its
+  own - are never touched.
+* **Leaving after a check does not warn.** The game saves through a web service, so it tells
+  Moodle's change checker that the form is clean once the answer is stored and the question
+  shows the stored state. An editor that writes into the original field afterwards marks it as
+  changed again, as any edit does.
 * **Replaced questions are announced.** After every check the game swaps in a freshly rendered
   question and raises Moodle's filter event for it. Release 1.3 of the editor watches the page
   and attaches to the new question by itself.
@@ -289,7 +291,7 @@ make playwright     # browser journeys against a live site
 make load-seed      # seed a course + token for the load tests
 ```
 
-`make check` is a fast local pre-check; GitHub CI is the authoritative release gate.
+`make check` is a fast local pre-check; GitHub CI is the authoritative test run.
 
 
 Maintainers
