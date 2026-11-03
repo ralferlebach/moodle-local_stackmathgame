@@ -9,19 +9,25 @@
 const { expect } = require('@playwright/test');
 const { expandAll } = require('./quiz');
 const { uploadThroughFilepicker } = require('./filepicker');
+const ui = require('./ui');
 
 /**
- * Open the game settings and read the prerequisite panel before changing anything.
+ * Open the game settings of the quiz on screen, through "More" in the quiz's navigation.
  *
- * The panel is the plugin's own verdict on whether this quiz can be played. Reading it here means
- * a misconfiguration fails with the plugin's own explanation, at the step that caused it, instead
- * of three pages later as a missing element in the runtime.
- *
- * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz course-module id.
+ * @param {import('@playwright/test').Page} page The page, on any page of the quiz.
  */
-async function assertNoBlockers(page, cmid) {
-  await page.goto(`/local/stackmathgame/quiz_settings.php?cmid=${cmid}`);
+async function openGameSettings(page) {
+  await ui.secondaryNav(page, 'Game settings');
+  await expect(page.locator('#id_enabled'), 'The game settings did not open').toBeVisible({ timeout: 30000 });
+}
+
+/**
+ * Fail when the game settings report a prerequisite as unmet.
+ *
+ * @param {import('@playwright/test').Page} page The page, on any page of the quiz.
+ */
+async function assertNoBlockers(page) {
+  await openGameSettings(page);
 
   const blockers = page.locator('.smg-prereq-error, tr:has(.badge-danger), .alert-danger').first();
   if (await blockers.count()) {
@@ -34,11 +40,12 @@ async function assertNoBlockers(page, cmid) {
  * Switch the game on and choose a design.
  *
  * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz course-module id.
  * @param {string|RegExp} design The design, matched against the option text.
  */
-async function enableGame(page, cmid, design) {
-  await page.goto(`/local/stackmathgame/quiz_settings.php?cmid=${cmid}`);
+async function enableGame(page, design) {
+  if (!(await page.locator('#id_enabled').isVisible().catch(() => false))) {
+    await openGameSettings(page);
+  }
 
   const enabled = page.locator('#id_enabled');
   await expect(enabled, 'The game settings form has no enable switch').toBeVisible({ timeout: 30000 });
@@ -72,14 +79,17 @@ async function enableGame(page, cmid, design) {
 }
 
 /**
- * Open the flow editor and return the slot numbers it lists.
+ * Open the game flow from the game settings and return the slot numbers it lists.
  *
- * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz course-module id.
+ * @param {import('@playwright/test').Page} page The page, on any page of the quiz.
  * @returns {Promise<number[]>} The slot numbers, in the order shown.
  */
-async function listScenes(page, cmid) {
-  await page.goto(`/local/stackmathgame/flow.php?cmid=${cmid}`);
+async function listScenes(page) {
+  if (!(await page.locator('#id_enabled').isVisible().catch(() => false))) {
+    await openGameSettings(page);
+  }
+  await page.getByRole('link', { name: ui.exactly('Game flow') }).first().click();
+  await ui.settle(page);
   const rows = page.locator('table tbody tr[data-slot]');
   await expect(rows.first(), 'The flow editor lists no scenes').toBeVisible({ timeout: 30000 });
 
@@ -87,10 +97,26 @@ async function listScenes(page, cmid) {
 }
 
 /**
- * Configure one scene's direction card.
+ * Open one scene's direction card from the flow list.
+ *
+ * @param {import('@playwright/test').Page} page The page, on the flow list.
+ * @param {number} slot The slot number.
+ */
+async function openScene(page, slot) {
+  const row = page.locator(`table tbody tr[data-slot="${slot}"]`).first();
+  await expect(row, `The flow list has no row for slot ${slot}`).toBeVisible({ timeout: 30000 });
+  await row.getByRole('link', { name: ui.exactly('Edit') }).first().click();
+  await ui.settle(page);
+  await expect(
+    page.locator('#id_scenetype'),
+    `The direction card for slot ${slot} did not open`
+  ).toBeVisible({ timeout: 30000 });
+}
+
+/**
+ * Configure one scene's direction card, starting from the flow list.
  *
  * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz course-module id.
  * @param {number} slot The slot number.
  * @param {Object} settings What to set.
  * @param {string} [settings.sceneType] The scene type, by option value.
@@ -99,12 +125,8 @@ async function listScenes(page, cmid) {
  * @param {string} [settings.intro] The opening narrative.
  * @param {string} [settings.success] The narrative after a correct answer.
  */
-async function configureScene(page, cmid, slot, settings) {
-  await page.goto(`/local/stackmathgame/flow.php?cmid=${cmid}&slot=${slot}&action=editslot`);
-  await expect(
-    page.locator('#id_scenetype'),
-    `The direction card for slot ${slot} did not open`
-  ).toBeVisible({ timeout: 30000 });
+async function configureScene(page, slot, settings) {
+  await openScene(page, slot);
 
   // Shared with the quiz form: "Expand all" is a button in some versions and a link in others,
   // and a helper that looked for only one of them left the narrative and reward sections closed.
@@ -141,17 +163,19 @@ async function configureScene(page, cmid, slot, settings) {
  * looked exactly like that.
  *
  * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz course-module id.
  * @param {number} slot The slot number.
  * @param {string} selector The field to inspect.
  * @param {string} expected The expected value.
  */
-async function assertScenePersisted(page, cmid, slot, selector, expected) {
-  await page.goto(`/local/stackmathgame/flow.php?cmid=${cmid}&slot=${slot}&action=editslot`);
+async function assertScenePersisted(page, slot, selector, expected) {
+  await openScene(page, slot);
   await expect(
     page.locator(selector).first(),
     `Slot ${slot} did not keep ${selector} across a reload`
   ).toHaveValue(expected, { timeout: 30000 });
+  // Back to the list the way a teacher leaves a form unchanged.
+  await page.locator('#id_cancel').click();
+  await ui.settle(page);
 }
 
 
@@ -166,7 +190,9 @@ async function assertScenePersisted(page, cmid, slot, selector, expected) {
  * @param {string} name The design name the package declares.
  */
 async function importDesignPackage(page, zip, name) {
-  await page.goto('/local/stackmathgame/studio.php?action=import');
+  await ui.openStudio(page);
+  await page.locator('.nav-tabs a, .tabtree a').filter({ hasText: ui.exactly('Import') }).first().click();
+  await ui.settle(page);
   await uploadThroughFilepicker(page, zip);
   await page.click('#id_submitbutton');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
@@ -182,4 +208,5 @@ async function importDesignPackage(page, zip, name) {
 }
 
 module.exports = {
-  importDesignPackage, assertNoBlockers, assertScenePersisted, configureScene, enableGame, listScenes };
+  importDesignPackage, assertNoBlockers, assertScenePersisted, configureScene, enableGame, listScenes,
+  openGameSettings };

@@ -1,7 +1,7 @@
 /**
  * The RPG played like a student plays it, checked against what the question engine stored.
  *
- * re-audit N09. The UI journey (rpg-full-ui.spec.js) builds the game through the interface; this
+ * re-audit N09. The UI journey (game-full-ui.spec.js) builds the game through the interface; this
  * one takes a seeded quiz and concentrates on the play itself, which the UI journey used to fake:
  * it wrote hidden inputs through evaluate(), clicked "check" twice whatever STACK said, and took an
  * attempt summary on the quiz page as proof of a result. Here:
@@ -22,10 +22,11 @@
 
 const { test, expect } = require('@playwright/test');
 const {
-  check, finishAttempt, helper, next, stackField, typeAnswer, typeChain, waitForGame, watchLeaveDialogs,
+  check, finishAttempt, goToQuestion, helper, next, stackField, typeAnswer, typeChain, waitForGame, watchLeaveDialogs,
   waitForValidation: waitForStack,
 } = require('./support/play');
-const auth = require('./support/auth');
+const system = require('./support/system');
+const ui = require('./support/ui');
 
 /** The fixture's questions, slot by slot (tests/fixtures/e2e_verified_questions.xml). */
 const SLOT = { add: 1, expand: 2, cube: 3, equiv: 4 };
@@ -51,26 +52,28 @@ async function waitForValidation(page, slot) {
 }
 
 /**
- * Log in through the login form, with the retries support/auth.js makes for Moodle's one-shot
- * login token.
+ * Sign in - a system function, not under test (support/system.js).
  *
  * @param {import('@playwright/test').Page} page The page.
  * @param {string} username The user.
  * @param {string} password The password.
  */
 async function login(page, username, password) {
-  await auth.login(page, username, password);
+  await system.signIn(page, username, password);
 }
 
 /**
- * Start the attempt and wait for the RPG.
+ * Open the quiz from its course page and start the attempt, as the participant does.
+ *
+ * Opening the course is a system function; from there on everything is clicked.
  *
  * @param {import('@playwright/test').Page} page The page.
- * @param {number} cmid The quiz.
- * @returns {Promise<number>} The attempt id.
+ * @param {Object} seed The seed: courseid and quizname.
+ * @returns {Promise<number>} The attempt id, read from the page's address.
  */
-async function startAttempt(page, cmid) {
-  await page.goto(`/mod/quiz/view.php?id=${cmid}`);
+async function startAttempt(page, seed) {
+  await system.openCourse(page, seed.courseid);
+  await ui.openActivity(page, seed.quizname);
   await page.locator('form[action*="startattempt.php"]').first()
     .locator('button[type="submit"], input[type="submit"]').first().click();
   await page.waitForURL(/attempt\.php/, { waitUntil: 'domcontentloaded' });
@@ -170,7 +173,7 @@ test.describe('the RPG, played and verified against the question engine (re-audi
     const dialogs = watchLeaveDialogs(page);
 
     await login(page, seed.username, seed.password);
-    await startAttempt(page, seed.cmid);
+    await startAttempt(page, seed);
     await expect(page.locator('.smg-rpg-panel .sme-toolbar').first()).toBeVisible();
 
     await wrongThenRight(page, seed, true);
@@ -227,7 +230,7 @@ test.describe('the RPG, played and verified against the question engine (re-audi
     const seed = helper('seed');
     const dialogs = watchLeaveDialogs(page);
     await login(page, seed.username, seed.password);
-    await startAttempt(page, seed.cmid);
+    await startAttempt(page, seed);
     await expect(page.locator('.smg-rpg-panel .sme-toolbar')).toHaveCount(0);
 
     await wrongThenRight(page, seed, false);
@@ -269,7 +272,7 @@ test.describe('the RPG, played and verified against the question engine (re-audi
       const context = await browser.newContext({ viewport: layout.viewport, deviceScaleFactor: layout.deviceScaleFactor });
       const page = await context.newPage();
       await login(page, seed.username, seed.password);
-      const attempt = await startAttempt(page, seed.cmid);
+      const attempt = await startAttempt(page, seed);
       const width = layout.viewport.width;
 
       /**
@@ -287,8 +290,8 @@ test.describe('the RPG, played and verified against the question engine (re-audi
       };
 
       // Free navigation: straight to the equivalence question.
-      await page.goto(`/mod/quiz/attempt.php?attempt=${attempt}&page=${SLOT.equiv - 1}`);
-      await waitForGame(page);
+      // Straight to the chain through Moodle's own quiz navigation, as a participant would jump.
+      await goToQuestion(page, SLOT.equiv);
       const toolbar = page.locator('.smg-rpg-panel .sme-toolbar').first();
       await expect(toolbar).toBeVisible();
       for (const button of await toolbar.locator('.sme-tb-btn').all()) {

@@ -17,28 +17,23 @@
 
 const { expect } = require('@playwright/test');
 const { uploadThroughFilepicker } = require('./filepicker');
+const ui = require('./ui');
 
 /** The category the fixture file declares for its questions. */
 const CATEGORY = 'StackMathGame E2E Fixtures';
 
 /**
- * Create one STACK question in a course's question bank.
+ * Import the fixture questions into the course's question bank, through the interface.
  *
- * Only the fields a working STACK question actually needs are filled. STACK derives an input and
- * a potential response tree from the placeholders in the question text and gives them sensible
- * defaults - the input is compared to its own model answer with AlgEquiv - so a question with one
- * input and one tree needs no further configuration. The preview afterwards is what proves that
- * held: if the defaults ever change, the preview fails and names the question.
+ * Starts on the course page and goes there as a teacher does: "More", "Question bank", then
+ * "Import" in the bank's own navigation.
  *
- * @param {import('@playwright/test').Page} page The page.
- * @param {number} courseid The course id.
- * @param {Object} question The question to create.
- * @param {string} question.name The question name.
- * @param {string} question.text The prompt, without the placeholders.
- * @param {string} question.answer The correct answer, as a Maxima expression.
+ * @param {import('@playwright/test').Page} page The page, on the course.
+ * @param {string} fixture Absolute path of the Moodle XML file.
  */
-async function importQuestions(page, courseid, fixture) {
-  await page.goto(`/question/bank/importquestions/import.php?courseid=${courseid}`);
+async function importQuestions(page, fixture) {
+  await ui.secondaryNav(page, 'Question bank');
+  await ui.tertiaryNav(page, 'Import');
 
   const format = page.locator('#id_format_xml');
   await expect(
@@ -217,58 +212,4 @@ async function applyFilters(scope, page) {
   }
 }
 
-/**
- * Preview a question and confirm the known correct answer is marked correct.
- *
- * This is the check that makes the authoring step meaningful. A question can save cleanly and
- * still be ungradable - a missing tree, a CAS that never answers - and without a preview the
- * failure would surface much later, in the play-through, as a game that refuses to progress.
- *
- * @param {import('@playwright/test').Page} page The page.
- * @param {number} courseid The course id.
- * @param {string} name The question name.
- * @param {string} answer The known correct answer.
- */
-async function previewAndVerify(page, courseid, name, answer) {
-  // Without qperpage: that parameter made Moodle render a page with no filter controls at
-  // all, so every branch below found nothing and the helper returned without filtering - which
-  // looked exactly like the import having failed.
-  await page.goto(`/question/edit.php?courseid=${courseid}`);
-  // The filter row is built by an AMD module after the page loads, so measuring straight after
-  // goto() finds no controls at all - which reads as "this page has no filter" rather than "the
-  // filter is not there yet", and sends you looking for the wrong Moodle version.
-  await page.waitForLoadState('networkidle').catch(() => {});
-  await selectCategory(page, CATEGORY, page);
-  // filter({ hasText }) rather than the :has-text() pseudo-class: the latter takes the name as a
-  // CSS-ish argument, and these names contain spaces and hyphens that it does not handle the way
-  // it looks like it should. The question was on the page every time; the selector was not.
-  const row = page.locator('tr').filter({ hasText: name }).first();
-  await expect(row, `"${name}" is not in the question bank`).toBeVisible({ timeout: 30000 });
-
-  const [preview] = await Promise.all([
-    page.context().waitForEvent('page'),
-    row.locator('a[title*="Preview" i], a:has-text("Preview")').first().click(),
-  ]);
-  await preview.waitForLoadState();
-
-  const input = preview.locator('input[id$="_ans1"]').first();
-  await expect(input, `The preview of "${name}" shows no input`).toBeVisible({ timeout: 30000 });
-
-  // STACK grades only after the student has confirmed how their input was read, so the answer is
-  // submitted twice: the first pass validates, the second is graded.
-  for (const pass of [1, 2]) {
-    await input.fill(answer);
-    await preview.locator('input[type="submit"][name$="submit"], button:has-text("Check")')
-      .first().click();
-    await preview.waitForTimeout(pass === 1 ? 1500 : 3000);
-  }
-
-  await expect(
-    preview.locator('text=/correct|richtig/i').first(),
-    `The known correct answer to "${name}" was not graded correct - the CAS or the question is wrong`
-  ).toBeVisible({ timeout: 30000 });
-
-  await preview.close();
-}
-
-module.exports = { CATEGORY, importQuestions, previewAndVerify, selectCategory };
+module.exports = { CATEGORY, importQuestions, selectCategory };

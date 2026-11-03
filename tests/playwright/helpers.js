@@ -74,7 +74,12 @@ async function loginAs(page, username, password) {
   const pass = form.locator('input[name="password"]');
   await fillStable(user, username);
   await fillStable(pass, password);
-  await form.locator('#loginbtn, button[type="submit"], input[type="submit"]').first().click();
+  // Waited for, not just clicked: a page opened straight after the click overtook the login
+  // request, arrived without a session and showed the login form instead (issue #18).
+  await Promise.all([
+    page.waitForURL((url) => !/\/login\/index\.php/.test(url.toString()), { timeout: 30000 }),
+    form.locator('#loginbtn, button[type="submit"], input[type="submit"]').first().click(),
+  ]);
 }
 
 /**
@@ -206,8 +211,14 @@ async function startGameAttempt(page, cmid) {
     await confirm.click().catch(() => {});
   }
 
-  await page.locator('.que').first().waitFor({ state: 'visible' });
-  await page.locator('.smg-runtime-shell').waitFor({ state: 'attached', timeout: 20000 });
+  // Synchronised on what the student actually sees. The RPG hides the original .que on purpose
+  // and shows the question in its own panel, so waiting for a visible .que timed out there and
+  // passed only on the retry, by luck of timing (issue #18). The shell proves the engine started;
+  // one of the modes' own surfaces proves the mode did.
+  await page.locator('.smg-runtime-shell').waitFor({ state: 'attached', timeout: 60000 });
+  await page.locator(
+    '.smg-rpg-stage:visible, .smg-eg-bubble:visible, .smg-ww-chat:visible, .que[data-smg-controlled="1"]:visible'
+  ).first().waitFor({ state: 'visible', timeout: 60000 });
 }
 
 /**

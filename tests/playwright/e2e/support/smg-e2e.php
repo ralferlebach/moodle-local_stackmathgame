@@ -35,11 +35,14 @@
 
 define('CLI_SCRIPT', true);
 
-$root = getenv('SMG_MOODLE_ROOT') ?: __DIR__ . '/../../../../../..';
-if (!file_exists($root . '/config.php') && file_exists($root . '/public/config.php')) {
-    $root .= '/public';
-}
-require($root . '/config.php');
+// The site is SMG_MOODLE_ROOT, or the Moodle root six levels up when the plugin is installed in
+// place; a tree whose web root is public/ (Moodle 5.1+) keeps config.php there. Resolved inside
+// the require itself, because nothing may change global state before config.php is included.
+require(
+    (getenv('SMG_MOODLE_ROOT') ?: dirname(__DIR__, 6))
+    . (file_exists((getenv('SMG_MOODLE_ROOT') ?: dirname(__DIR__, 6)) . '/config.php') ? '' : '/public')
+    . '/config.php'
+);
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/course/lib.php');
 require_once($CFG->dirroot . '/course/modlib.php');
@@ -102,8 +105,11 @@ if ($command === 'seed') {
     // The review options as the quiz form would default them. create_module() leaves them at 0,
     // which hides every feedback during the attempt - the student would never see what STACK
     // said about an answer, and neither would this journey.
-    foreach (['reviewattempt', 'reviewcorrectness', 'reviewmaxmarks', 'reviewmarks', 'reviewspecificfeedback',
-            'reviewgeneralfeedback', 'reviewrightanswer', 'reviewoverallfeedback'] as $field) {
+    $reviewfields = [
+        'reviewattempt', 'reviewcorrectness', 'reviewmaxmarks', 'reviewmarks', 'reviewspecificfeedback',
+        'reviewgeneralfeedback', 'reviewrightanswer', 'reviewoverallfeedback',
+    ];
+    foreach ($reviewfields as $field) {
         $default = get_config('quiz', $field);
         $DB->set_field('quiz', $field, $default === false ? 0x11110 : (int)$default, ['id' => $cm->instance]);
     }
@@ -133,6 +139,7 @@ if ($command === 'seed') {
         'courseid' => (int)$course->id,
         'cmid' => (int)$cm->coursemodule,
         'quizid' => (int)$quiz->id,
+        'quizname' => (string)$quiz->name,
         'questions' => $added,
         'blockers' => array_column($blockers, 'message'),
     ]);
@@ -182,7 +189,10 @@ if ($command === 'state') {
         'state' => $attempt->state,
         'sumgrades' => $attempt->sumgrades === null ? null : (float)$attempt->sumgrades,
         'slots' => $slots,
-        'profile' => $profile ? ['score' => (int)$profile->score, 'progress' => json_decode((string)$profile->progressjson, true)] : null,
+        'profile' => $profile ? [
+            'score' => (int)$profile->score,
+            'progress' => json_decode((string)$profile->progressjson, true),
+        ] : null,
     ]);
 }
 

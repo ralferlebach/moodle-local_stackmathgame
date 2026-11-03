@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026090252
+
+CI (issue #18) and the browser journeys for all three games.
+
+### Fixed
+- Code checker: `tests/playwright/e2e/support/smg-e2e.php` changed global state before including
+  `config.php` and had two badly formatted control structures and an overlong line.
+- The collaboration suite (`playwright.config.js`) also discovered the UI journeys in `e2e/`,
+  which need their own seed, and failed for a missing participant. It now ignores `e2e/`.
+- The asset test waited for a visible `.que`, which the RPG hides on purpose; it passed only on
+  the retry. It now waits for the game's own surface.
+- Two further retry-only passes in the collaboration suite: `loginAs()` did not wait for the
+  login to arrive, so the next page opened without a session; the accessibility check ran while
+  core's autocomplete was still initialising. Both now wait.
+- RPG: on a phone the question panel covered Boost's "Open block drawer" button, so the quiz
+  navigation could not be opened. The panel now sits below Boost's drawer toggles and the stage
+  keeps its figures in its own stacking context. Found by the 390 px journey.
+
+### Changed
+- The UI journey covers all three games: RPG, Exit Game and Digital Mentor
+  (`e2e/game-full-ui.spec.js`, replacing `rpg-full-ui.spec.js`; `SMG_GAMES` picks the games).
+  Every teacher and participant action goes through the interface from the page the journey is
+  on - question bank import, adding the quiz from the course page, the quiz's "Questions" and
+  "More → Game settings", the game flow and its direction cards, the Game Design Studio, opening
+  and starting the quiz, Moodle's quiz navigation. No address is typed into the browser for any
+  of them.
+- Signing in, switching user and opening the course are system functions
+  (`e2e/support/system.js`) and no longer driven through the login form; `e2e/support/auth.js` is
+  gone. `rpg-verified-play.spec.js` follows the same rule.
+- `.github/e2e-seed.php` creates one course per game and switches Moodle's guided tours off.
+
 ## 2026090251
 
 Re-audit of 2 November 2026 (findings N01, N03-N09) and the red CI run.

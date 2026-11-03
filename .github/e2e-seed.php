@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * CI helper: create the participant, the course and the enrolment for the E2E journey.
+ * CI helper: create the participant, one course per game mode and the enrolments for the E2E journeys.
  *
  * These three used to be driven through the interface. They are site administration, not game
  * building, and they were the most fragile part of the journey: every run created another
@@ -64,26 +64,40 @@ $userid = user_create_user((object) [
     'mnethostid' => $CFG->mnet_localhost_id,
 ], true, false);
 
-$course = create_course((object) [
-    'fullname'  => 'Math adventure ' . $stamp,
-    'shortname' => 'SMGRPG' . $stamp,
-    'category'  => \core_course_category::get_default()->id,
-    'visible'   => 1,
-]);
+// Moodle's guided tours lay an overlay over the course page the first time each user sees it.
+// They are site configuration, not something the journeys test, and an overlay that appears on
+// one run and not the next makes a click land on the tour instead of the page.
+$DB->set_field('tool_usertours_tours', 'enabled', 0);
+\cache_helper::purge_by_definition('tool_usertours', 'tourdata');
 
 $studentrole = (int)$DB->get_field('role', 'id', ['shortname' => 'student'], MUST_EXIST);
-if (!enrol_try_internal_enrol((int)$course->id, (int)$userid, $studentrole)) {
-    fwrite(STDERR, "ERROR: could not enrol $username into course {$course->id}.\n");
-    exit(1);
+
+// One course per game mode. Each journey imports the fixture questions into its own course's bank;
+// sharing one course made the second journey's question chooser offer every question twice.
+$courses = [
+    'SMG_COURSE_ID' => 'RPG',
+    'SMG_COURSE_ID_EXITGAMES' => 'EXIT',
+    'SMG_COURSE_ID_WISEWIZZARD' => 'MENTOR',
+];
+foreach ($courses as $key => $suffix) {
+    $course = create_course((object) [
+        'fullname'  => 'Math adventure ' . $suffix . ' ' . $stamp,
+        'shortname' => 'SMG' . $suffix . $stamp,
+        'category'  => \core_course_category::get_default()->id,
+        'visible'   => 1,
+    ]);
+    if (!enrol_try_internal_enrol((int)$course->id, (int)$userid, $studentrole)) {
+        fwrite(STDERR, "ERROR: could not enrol $username into course {$course->id}.\n");
+        exit(1);
+    }
+    // Verified rather than assumed: a silent enrolment failure was the most expensive bug this
+    // journey ever had, because it surfaced two steps later as "no way to start an attempt".
+    if (!is_enrolled(\context_course::instance((int)$course->id), (int)$userid)) {
+        fwrite(STDERR, "ERROR: $username is not enrolled after enrolment.\n");
+        exit(1);
+    }
+    echo "export $key='" . (int)$course->id . "'\n";
 }
 
-// Verified rather than assumed: a silent enrolment failure was the most expensive bug this
-// journey ever had, because it surfaced two steps later as "no way to start an attempt".
-if (!is_enrolled(\context_course::instance((int)$course->id), (int)$userid)) {
-    fwrite(STDERR, "ERROR: $username is not enrolled after enrolment.\n");
-    exit(1);
-}
-
-echo "export SMG_COURSE_ID='" . (int)$course->id . "'\n";
 echo "export SMG_PLAYER_USER='" . $username . "'\n";
 echo "export SMG_PLAYER_PASS='" . $password . "'\n";

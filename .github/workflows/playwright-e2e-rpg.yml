@@ -1,15 +1,16 @@
-name: Playwright E2E RPG (UI only)
+name: Playwright E2E games (UI only)
 
-# The full authoring and playing workflow, through the Moodle interface and nothing else: an
-# empty site, a course, three STACK questions written in the question bank form, a quiz, the game
-# configuration, a participant, and a play-through to the end of the RPG.
+# The full authoring and playing workflow for all three games - RPG, Exit Game and Digital
+# Mentor - through the Moodle interface: import the STACK questions through the question bank, add
+# the quiz from the course page, fill it, switch the game on, configure every scene, then play it
+# to the end as a participant and finish the attempt.
 #
-# The seeded Playwright suite proves the runtime works. This one proves a person can get there:
-# after the first login nothing is created by seed.php, CLI, web service or SQL. Several defects
-# in this plugin were settings that worked when written to the database and could not be reached
-# through any form - that class of defect is invisible to a seeded test.
+# Signing in and opening the course are system functions, done over HTTP and by address; they are
+# core Moodle and not under test. Everything after that is clicked and typed - no address is ever
+# typed into the browser (tests/playwright/e2e/support/ui.js). Participant, courses (one per game)
+# and enrolments are created by .github/e2e-seed.php beforehand.
 #
-# Manual only. It installs a site and plays an attempt, so it takes minutes and has no business
+# Manual only. It installs a site and plays three attempts, so it takes minutes and has no business
 # running on every push. Its output is a video and an HTML report, produced on success as well as
 # on failure, because the green run is the documentation.
 #
@@ -22,6 +23,10 @@ on:
         description: 'Moodle branch to install'
         required: false
         default: 'MOODLE_405_STABLE'
+      games:
+        description: 'Games to build and play (comma-separated: rpg, exitgames, wisewizzard)'
+        required: false
+        default: 'rpg,exitgames,wisewizzard'
       stackmatheditor:
         # Play the journey with the STACK Math Editor in front of every STACK field. The journey
         # answers through the editor's documented interface - value into the original field,
@@ -39,7 +44,7 @@ on:
 
 jobs:
   e2e-rpg:
-    name: 'RPG, built and played through the UI'
+    name: 'Games, built and played through the UI'
     runs-on: ubuntu-latest
 
     services:
@@ -197,11 +202,11 @@ jobs:
           # which scan 4267 questions, take minutes and prove nothing about this plugin.
           php "$GITHUB_WORKSPACE/plugin/.github/stack-site-init.php"
 
-      - name: Prepare the participant and the course in the backend
+      - name: Prepare the participant and the courses in the backend
         run: |
-          # Participant, course and enrolment are site administration, not game building, and
-          # they were the most fragile part of driving the journey through the browser. The
-          # script verifies the enrolment itself and fails loudly if it did not take.
+          # Participant, one course per game and the enrolments are site administration, not game
+          # building, and they were the most fragile part of driving the journey through the
+          # browser. The script verifies each enrolment itself and fails loudly if it did not take.
           cd moodle
           php "$GITHUB_WORKSPACE/plugin/.github/e2e-seed.php" > /tmp/e2e-seed.env
           sed -n "s/^export \([A-Z_][A-Z_]*\)='\(.*\)'$/\1=\2/p" /tmp/e2e-seed.env >> "$GITHUB_ENV"
@@ -226,7 +231,7 @@ jobs:
           npm install --no-audit --no-fund
           npx playwright install --with-deps chromium
 
-      - name: Build the RPG through the interface and play it
+      - name: Build the games through the interface and play them
         working-directory: plugin/tests/playwright
         env:
           SMG_BASE_URL: http://127.0.0.1:8000
@@ -235,6 +240,7 @@ jobs:
           # The journeys read the question engine's record back through
           # e2e/support/smg-e2e.php, which runs against this site's code (re-audit N09).
           SMG_MOODLE_ROOT: ${{ github.workspace }}/moodle
+          SMG_GAMES: ${{ github.event.inputs.games || 'rpg,exitgames,wisewizzard' }}
         run: npm run e2e:rpg
 
       - name: Upload the recording and the result

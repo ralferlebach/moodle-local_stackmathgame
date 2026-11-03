@@ -41,11 +41,15 @@ async function uploadThroughFilepicker(page, file) {
     const form = page.locator('.fp-upload-form:visible').first();
     await expect(form, 'The upload pane of the file picker did not open').toBeVisible({ timeout: 30000 });
     const input = form.locator('input[type="file"]').first();
-    await input.setInputFiles(file);
-    await expect.poll(
-      () => input.evaluate((el) => (el.files ? el.files.length : 0)),
-      { message: 'The file did not reach the file picker', timeout: 10000 }
-    ).toBe(1);
+    // The picker may rebuild its upload pane just after it opens, replacing the input that was
+    // just filled. The file is set again until the input that is there now holds it.
+    let held = 0;
+    for (let set = 0; set < 10 && held !== 1; set++) {
+      await input.setInputFiles(file);
+      await page.waitForTimeout(500);
+      held = await input.evaluate((el) => (el.files ? el.files.length : 0)).catch(() => 0);
+    }
+    expect(held, 'The file did not reach the file picker').toBe(1);
     await page.getByRole('button', { name: /Upload this file/i }).first().click();
 
     const nofile = page.getByText(/No files attached/i).first();

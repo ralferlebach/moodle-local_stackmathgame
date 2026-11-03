@@ -45,6 +45,14 @@ test.skip(!CMID || !MANAGER, 'Nicht geseedet - tests/playwright/seed.php ausfueh
  * @returns {Promise<void>}
  */
 async function expectAccessible(page, selector) {
+  // Measured once Moodle's scripts have finished. The label selector is core's autocomplete, whose
+  // selection list is briefly an empty listbox while it initialises; axe running in that moment
+  // reported a missing option, and the test passed only on its retry (issue #18).
+  await page.waitForFunction(
+    () => window.M && M.util && Array.isArray(M.util.pending_js) && M.util.pending_js.length === 0,
+    null,
+    { timeout: 30000 }
+  );
   const results = await new AxeBuilder({ page })
     .include(selector)
     .withTags(['wcag2a', 'wcag2aa'])

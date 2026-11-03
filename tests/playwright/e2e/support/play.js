@@ -1,7 +1,7 @@
 /**
  * Playing a STACK question in the RPG the way a student does, for the browser journeys.
  *
- * Shared by rpg-verified-play.spec.js and rpg-full-ui.spec.js (re-audit N09): answers go into the
+ * Shared by rpg-verified-play.spec.js and game-full-ui.spec.js (re-audit N09): answers go into the
  * visible field by keyboard, a check waits for what STACK's configuration calls for and reads the
  * outcome the engine reports, and the question engine's record is read back through
  * smg-e2e.php.
@@ -232,6 +232,31 @@ async function next(page) {
 
 
 /**
+ * Go to a question through Moodle's quiz navigation, as a participant jumps between questions.
+ *
+ * On a narrow screen the navigation sits in the closed block drawer, which is opened first with
+ * its own button.
+ *
+ * @param {import('@playwright/test').Page} page The page, on the attempt.
+ * @param {number} slot The question's number in the navigation.
+ */
+async function goToQuestion(page, slot) {
+  const button = page.locator(`#quiznavbutton${slot}`).first();
+  if (!(await button.isVisible().catch(() => false))) {
+    // By its name: the drawer also holds a "Close block drawer" button with the same target.
+    const drawer = page.getByRole('button', { name: 'Open block drawer' }).first();
+    await expect(drawer, 'The quiz navigation is neither shown nor behind a drawer button').toBeVisible();
+    await drawer.click();
+  }
+  await expect(button, `The quiz navigation has no question ${slot}`).toBeVisible({ timeout: 15000 });
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    button.click(),
+  ]);
+  await waitForGame(page);
+}
+
+/**
  * Submit the attempt from the quiz summary page, as a student does: "Submit all and finish" and
  * its confirmation.
  *
@@ -290,6 +315,7 @@ module.exports = {
   keysFor,
   check,
   finishAttempt,
+  goToQuestion,
   helper,
   next,
   stackField,

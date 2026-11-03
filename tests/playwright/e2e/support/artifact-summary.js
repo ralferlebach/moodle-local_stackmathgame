@@ -49,11 +49,12 @@ function watchForTrouble(page, baseurl) {
   });
 
   page.on('pageerror', (error) => {
-    // Moodle core, not this plugin: adding questions from the bank on the quiz structure page
-    // raises an uncaught error with the bare message "'')" and no stack in Moodle 4.5.15+ (build
-    // 20261030). Checked by switching this plugin's only script on that page off - the error stays.
-    // Only that message on that page is excluded; any other error there still counts.
-    if (error.message === "'')" && /\/mod\/quiz\/edit\.php/.test(page.url())) {
+    // Moodle core, not this plugin: the question bank's filter raises an uncaught error with the
+    // bare message "'')" and no stack in Moodle 4.5.15+ (build 20261030), on the bank's own page and
+    // in the chooser on the quiz structure page. Checked by switching this plugin's only script on
+    // the quiz page off - the error stays - and the bank page loads no script of this plugin at
+    // all. Only that message on those two pages is excluded; any other error there still counts.
+    if (error.message === "'')" && /\/(mod\/quiz|question)\/edit\.php/.test(page.url())) {
       return;
     }
     // With the page and the first frame of the stack: an error whose message is empty - a
@@ -119,14 +120,15 @@ function describeTrouble(collected) {
  * @param {string[]} completed The steps that finished.
  * @param {string} [failed] The step that failed, if any.
  * @param {string} [detail] Extra detail about the failure.
+ * @param {string} [game] The game the journey played, for the heading.
  */
-function writeStepSummary(completed, failed, detail) {
+function writeStepSummary(completed, failed, detail, game) {
   const target = process.env.GITHUB_STEP_SUMMARY;
   if (!target) {
     return;
   }
 
-  const lines = ['# StackMathGame E2E – RPG', ''];
+  const lines = [`# StackMathGame E2E – ${game || 'RPG'}`, ''];
   completed.forEach((step) => lines.push(`✅ ${step}  `));
   if (failed) {
     lines.push(`❌ ${failed}  `);

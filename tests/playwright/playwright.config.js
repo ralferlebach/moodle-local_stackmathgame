@@ -25,6 +25,10 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: '.',
+  // The UI journeys in e2e/ have their own configuration (playwright.e2e.config.js), their own
+  // seed (.github/e2e-seed.php) and their own workflow. Discovered here they ran without that
+  // seed and failed for a missing participant (issue #18).
+  testIgnore: ['e2e/**', 'node_modules/**'],
   timeout: 60000,
   expect: { timeout: 10000 },
   retries: process.env.CI ? 1 : 0,

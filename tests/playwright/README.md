@@ -45,28 +45,36 @@ defect, and a red run for that reason trains people to ignore red runs.
 
 ## The UI-only acceptance journey (`e2e/`)
 
-`e2e/rpg-full-ui.spec.js` is a different kind of test from the rest of this folder.
+`e2e/game-full-ui.spec.js` is a different kind of test from the rest of this folder.
 
-The other specs seed their fixture with `seed.php` and then check one thing. This one builds
-everything through the interface: the participant account, the course, three STACK questions
-written in the question bank form, the quiz, its behaviour, the section heading that makes a
-level, the game settings, every direction card - and then plays the RPG to its end as that
-participant.
+The other specs seed their fixture with `seed.php` and then check one thing. This one builds each
+of the three games - RPG, Exit Game and Digital Mentor - through the interface: it imports the
+STACK fixture questions through the question bank, adds the quiz from the course page, fills it
+from the bank, switches the game on in its settings, configures every direction card - and then
+plays the game to its end as a participant and finishes the attempt.
 
 That is slower and more brittle by nature, and it is the point. A seeded test proves the runtime
 works; it cannot prove a teacher could ever have reached that state. Several defects in this
 plugin were exactly that - a setting that worked when written to the database and could not be
-reached through any form (issue #8, and the stash section that never rendered).
+reached through any form (issue #8, the stash section that never rendered, and the game settings
+missing from the quiz's "More" menu, issue #13).
 
 ### The rule
 
-After the first login, nothing is created outside the browser. No `seed.php`, no CLI script, no
-web service, no SQL, no stored storage state, no imported question file. If a real person would
-click it, Playwright clicks it.
+Everything a teacher or participant does is done through the interface: clicked, typed, chosen -
+from the page the journey is on. No address is ever typed into the browser to reach a page
+(`e2e/support/ui.js`), and answers are typed into the visible field.
 
-The one thing that is still automated is the infrastructure: PostgreSQL, PHP, Node, Chromium,
-Moodle core, the plugin ecosystem, Maxima and an empty Moodle installation. That is the site a
-person would be handed, not the game they build on it.
+Two things are deliberately **not** done through the interface, because they are core Moodle and
+not under test (`e2e/support/system.js`):
+
+* **Signing in and switching user** - the login is posted over HTTP into the browser's cookie jar.
+* **Opening the course** - by its address.
+
+Before the journey, `.github/e2e-seed.php` creates the participant, one course per game and the
+enrolments, and switches Moodle's guided tours off. Afterwards the question engine's record is
+read back through `e2e/support/smg-e2e.php` and compared with what the participant saw - read
+only, it changes nothing.
 
 ### Running it
 
@@ -74,10 +82,14 @@ person would be handed, not the game they build on it.
 # Needs a Moodle with the plugin ecosystem installed and a working STACK CAS.
 cd tests/playwright
 npm install
-SMG_BASE_URL=http://127.0.0.1:8000 SMG_ADMIN_PASS='Admin!23' npm run e2e:rpg
+eval "$(cd /path/to/moodle && php local/stackmathgame/.github/e2e-seed.php)"
+SMG_BASE_URL=http://127.0.0.1:8000 SMG_ADMIN_PASS='Admin!23' SMG_MOODLE_ROOT=/path/to/moodle \
+  SMG_GAMES=rpg,exitgames,wisewizzard npm run e2e:rpg
 ```
 
-In CI it is the **Playwright E2E RPG (UI only)** workflow, started by hand from the Actions tab.
+`SMG_GAMES` picks the games; the default is all three.
+
+In CI it is the **Playwright E2E games (UI only)** workflow, started by hand from the Actions tab.
 It installs its own Moodle, so nothing needs preparing.
 
 ### Output
@@ -106,9 +118,10 @@ If you want to check rather than take this on trust: look at which file the scan
 file through VirusTotal. A single heuristic engine objecting to a minified bundle is a false
 positive; several engines naming a specific family is not, and then it is worth telling me.
 
-### Adding another game mode
+### The game profiles
 
-Everything mode-specific lives in `e2e/support/games/rpg.js`: the design name, the scene type the
-run ends on, how to tell the mode has taken over the page, how to read its counters, and which
-control moves on. A second mode is a second file of that shape plus one line in the spec - the
-journey itself knows nothing about the RPG.
+Everything mode-specific lives in `e2e/support/games/<mode>.js` - `rpg.js`, `exitgames.js`,
+`wisewizzard.js`: the design name, the scene type the run ends on, how to tell the mode has taken
+over the page, how to read its counters, and which control moves on. The journey itself knows
+nothing about any one game; a further mode is a further file of that shape plus one entry in the
+spec's `GAMES` list and a course in the seed.

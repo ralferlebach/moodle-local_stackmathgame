@@ -250,10 +250,13 @@ define(['local_stackmathgame/game_core', 'core_filters/events'], function(GameCo
             // Stage: fixed aspect, capped by the column and by the viewport height, so the bottom
             // row stays on screen however wide the window is. This is the fix for the original's
             // wide-screen bug, where a scene scaled by width alone outgrew the viewport.
-            '.smg-rpg-stage{position:relative;width:100%;margin:0 auto;aspect-ratio:3/2;',
+            '.smg-rpg-stage{position:relative;isolation:isolate;width:100%;margin:0 auto;aspect-ratio:3/2;',
             'max-width:min(1200px,calc((100vh - 210px) * 1.5));overflow:hidden;border-radius:4px;',
             'background:#23452f center/cover no-repeat;container-type:inline-size;}',
-            '.smg-rpg-panel{position:relative;z-index:2;margin:0 auto;',
+            // Below Boost's drawer toggles (z-index 2): at the same level the panel, coming later in
+            // the page, covered "Open block drawer" on a phone, and the quiz navigation could not
+            // be opened at all. The stage isolates its own layers, so its figures stay inside it.
+            '.smg-rpg-panel{position:relative;z-index:1;margin:0 auto;',
             'max-width:min(1200px,calc((100vh - 210px) * 1.5));background:#f7ebd8;',
             'border-radius:0 0 18px 18px;box-shadow:0 4px 12px rgba(0,0,0,.28);padding:14px 26px;',
             'font-size:1.15rem;}',
